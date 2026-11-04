@@ -7,6 +7,8 @@ RESTART_BOT=1
 [ "${1:-}" = "--no-bot" ] && RESTART_BOT=0
 cd "$APP"
 chown -R desk:desk /opt/desk
+chmod 755 /opt/desk /opt/desk/web  # caddy (its own user) must reach the web build; the app dir stays private
+chmod 750 /opt/desk/app
 
 echo "== secrets"
 if [ -f /tmp/desk.env ] && [ ! -f "$APP/.env" ]; then
