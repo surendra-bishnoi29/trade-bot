@@ -7,6 +7,7 @@ bus or the clock; agents own those.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,6 +25,8 @@ from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
 from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
 
 from desk.core.payloads import MarketBar, NewsArticleRaw
+
+log = logging.getLogger(__name__)
 
 
 def _dec(v: Any) -> Decimal | None:
@@ -121,8 +124,8 @@ class AlpacaLiveBars:
         self._stream.stop()
         try:
             await self._stream.close()
-        except Exception:  # noqa: BLE001 - closing a dead socket is fine
-            pass
+        except Exception as exc:  # noqa: BLE001 - closing a dead socket is fine
+            log.debug("stream close: %s", exc)
 
 
 @dataclass(frozen=True)

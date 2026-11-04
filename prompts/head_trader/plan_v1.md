@@ -8,7 +8,7 @@ For each symbol you mention, choose exactly one action:
 
 Quantity: whole shares. For a buy use the suggested quantity from the limits; the risk officer caps it anyway. For a sell, the full position.
 Thesis: two to four sentences a trader would write, in plain words a client can follow: why now (the trigger or setup), the reason and the evidence behind it, what the market may be missing, and how the trade ends (the exit plan in words). This text is shown to the people who own the money.
-Evidence ids: the event ids you relied on, copied from the material. Cite at least two for a buy. Never invent an id. The research team's reports (regime, sectors, technical reads, news states, filings) are in the material with their ids; weigh them and cite them like any other evidence.
+Evidence ids: the event ids you relied on, copied from the material. Cite at least two for a buy. Never invent an id. The research team's reports (regime, sectors, technical reads, model forecasts, news states, filings) are in the material with their ids; weigh them and cite them like any other evidence. A forecast report states the model's own out-of-sample rank correlation and hit rate: trust it in proportion to that record, and never more than the price action and the news in front of you.
 Expected return in percent over the horizon in trading days, 1 to 20. Stop and target as percent distances from entry: stop between 2 and 8, target at least 1.5 times the stop.
 Invalidation: observable conditions that would make you exit before the stop, such as a guidance cut, a failed level, or sentiment flipping.
 Conviction 0 to 1. Below 0.4 means do not buy.

@@ -1,7 +1,7 @@
 """The scorecard: deterministic triage of the universe from stored bars, news scores and alerts.
 
-Not a forecast. It ranks names so the head trader looks at the right ten, and it is replaced by
-tested models in phase 2.
+Not a forecast by itself. It ranks names so the head trader looks at the right ten. When a tested
+model (phase 2) has a champion, its expected return is one of the inputs.
 """
 
 from __future__ import annotations
@@ -39,6 +39,9 @@ class ScoreRow:
     alerts_24h: int = 0
     position_qty: Decimal = Decimal(0)
     position_pnl_pct: float | None = None
+    forecast_5d: float | None = (
+        None  # the champion model's expected 5-session return, when one exists
+    )
     score: float = 0.0
     rank: int = 0
 
@@ -76,6 +79,7 @@ def compute_scorecard(
     alerts: dict[str, int],
     positions: dict[str, tuple[Decimal, Decimal | None]],
     now: datetime,
+    forecasts: dict[str, float] | None = None,
 ) -> list[ScoreRow]:
     rows: dict[str, ScoreRow] = {}
     for symbol, series in bars.items():
@@ -106,6 +110,8 @@ def compute_scorecard(
             items, now - timedelta(days=5)
         )
         row.alerts_24h = alerts.get(symbol, 0)
+        if forecasts and symbol in forecasts:
+            row.forecast_5d = forecasts[symbol]
         if symbol in positions:
             qty, avg_entry = positions[symbol]
             row.position_qty = qty
@@ -119,8 +125,16 @@ def compute_scorecard(
     rvol = _rank_scores(
         {s: (-r.vol_20d if r.vol_20d is not None else None) for s, r in rows.items()}
     )
+    with_forecast = bool(forecasts) and any(r.forecast_5d is not None for r in rows.values())
+    rfc = _rank_scores({s: r.forecast_5d for s, r in rows.items()}) if with_forecast else {}
     for s, r in rows.items():
-        r.score = round(0.4 * r20[s] + 0.2 * r5[s] + 0.3 * rnews[s] + 0.1 * rvol[s], 4)
+        if with_forecast:
+            # the tested model takes a third of the score; the triage inputs share the rest
+            r.score = round(
+                0.3 * rfc[s] + 0.3 * r20[s] + 0.15 * r5[s] + 0.2 * rnews[s] + 0.05 * rvol[s], 4
+            )
+        else:
+            r.score = round(0.4 * r20[s] + 0.2 * r5[s] + 0.3 * rnews[s] + 0.1 * rvol[s], 4)
     ordered = sorted(rows.values(), key=lambda r: r.score, reverse=True)
     for i, r in enumerate(ordered, 1):
         r.rank = i
@@ -135,8 +149,10 @@ def _f(v: float | None, pct: bool = True) -> str:
 
 def render_scorecard(rows: list[ScoreRow], top_n: int = 10) -> str:
     chosen = [r for r in rows if r.rank <= top_n or r.position_qty]
+    with_forecast = any(r.forecast_5d is not None for r in rows)
     lines = [
         "rank symbol close ret1d ret5d ret20d vol20 rvol dHi20 dLo20 sma20 sma50 news1d news5d(n,max) alerts24h position"
+        + (" fcst5d" if with_forecast else "")
     ]
     for r in chosen:
         pos = f"{r.position_qty} ({_f(r.position_pnl_pct)})" if r.position_qty else "-"
@@ -144,6 +160,11 @@ def render_scorecard(rows: list[ScoreRow], top_n: int = 10) -> str:
             f"{r.rank:>2} {r.symbol:<6} {r.last_close} {_f(r.ret_1d)} {_f(r.ret_5d)} {_f(r.ret_20d)} {_f(r.vol_20d)} "
             f"{_f(r.rvol, pct=False)} {_f(r.dist_high_20d)} {_f(r.dist_low_20d)} {_f(r.sma20_rel)} {_f(r.sma50_rel)} "
             f"{r.news_1d:+.2f} {r.news_5d:+.2f}({r.news_count_5d},{r.news_max_impact_5d}) {r.alerts_24h} {pos}"
+            + (f" {_f(r.forecast_5d)}" if with_forecast else "")
+        )
+    if with_forecast:
+        lines.append(
+            "fcst5d: the champion model's expected 5-session return (a third of the score when present)"
         )
     return "\n".join(lines)
 
@@ -153,6 +174,7 @@ async def build_scorecard(
     universe: list[str],
     positions: dict[str, tuple[Decimal, Decimal | None]],
     now: datetime,
+    forecasts: dict[str, float] | None = None,
 ) -> list[ScoreRow]:
     bars: dict[str, list[dict]] = {}
     news: dict[str, list[dict]] = {}
@@ -191,4 +213,15 @@ async def build_scorecard(
     ):
         if e.symbol:
             alerts[e.symbol] = alerts.get(e.symbol, 0) + 1
-    return compute_scorecard(bars, news, alerts, positions, now)
+    if forecasts is None:
+        forecasts = {}
+        for e in await db.recent_events(
+            [Topics.RESEARCH_REPORT], now - timedelta(hours=24), limit=400, until=now
+        ):
+            p = e.payload
+            if p.get("kind") == "forecast" and p.get("symbol") and p["symbol"] not in forecasts:
+                try:
+                    forecasts[p["symbol"]] = float((p.get("data") or {}).get("exp_ret"))
+                except (TypeError, ValueError):
+                    continue
+    return compute_scorecard(bars, news, alerts, positions, now, forecasts or None)

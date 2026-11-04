@@ -478,7 +478,7 @@ async def research_digest(
         if (
             symbol
             and symbol.upper() in wanted
-            and kind in ("technical", "news", "filing", "fundamental", "event")
+            and kind in ("technical", "forecast", "news", "filing", "fundamental", "event")
         ):
             lines.append(line(e))
     return "\n".join(lines) if lines else "no research reports yet"

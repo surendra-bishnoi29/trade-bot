@@ -105,7 +105,7 @@ def parse_submissions(data: dict[str, Any], symbol: str, cik: str) -> list[Filin
         accepted = recent.get("acceptanceDateTime", [None] * len(forms))[i]
         filed = recent.get("filingDate", [None] * len(forms))[i]
         if accepted:
-            filed_at = datetime.fromisoformat(str(accepted).replace("Z", "+00:00"))
+            filed_at = datetime.fromisoformat(str(accepted).replace("Z", "+00:00"))  # noqa: FURB162
             if filed_at.tzinfo is None:
                 filed_at = filed_at.replace(tzinfo=UTC)
         else:

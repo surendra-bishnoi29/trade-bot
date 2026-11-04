@@ -189,6 +189,7 @@ def create_app(
             "regime",
             "sector",
             "technical",
+            "forecast",
             "news",
             "filing",
             "macro",

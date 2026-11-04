@@ -61,6 +61,16 @@ uv run desk replay --day 2026-11-03 --feed-gap 15:00-15:15   # withhold bars: th
 
 The replayer feeds the day's minute bars to the agents under a driven clock, the simulated broker fills at the next bar with slippage and commission always on, theses live in memory, and the journal is read as of the simulated time and never written. The report lists cycles, fills, theses, costs and drawdown.
 
+## Training the forecaster (phase 2)
+
+```bash
+uv run desk features audit                 # recompute, correlation and shuffle checks: no feature may know the future
+uv run desk train --horizon 5              # features -> audit -> walk-forward -> after-cost backtest -> registry
+uv run desk models                         # every trained model, its out-of-sample record and who is champion
+```
+
+`desk train` refuses a frame that fails the lookahead audit, and a model becomes champion only through the promotion gate (300 or more out-of-sample predictions, positive rank correlation, hit rate at least 50%, no regression against the incumbent). With a champion in the registry the forecaster agent publishes a `forecast` report per name after every quant screen, with the model's own record in the text, and the scorecard gives the expected return a third of its weight. Without one the desk runs exactly as before. Model files live under `data/models` (git-ignored); retrain weekly after the close on Friday.
+
 ## Running the interface locally
 
 ```bash

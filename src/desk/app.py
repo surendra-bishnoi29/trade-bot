@@ -19,6 +19,7 @@ from desk.agents.cycle import CycleScheduler, SwingCycle
 from desk.agents.data_agent import DataAgent
 from desk.agents.execution import ExecutionAgent
 from desk.agents.filings import FilingAnalyst
+from desk.agents.forecaster import ForecastAnalyst
 from desk.agents.fundamentals import FundamentalAnalyst
 from desk.agents.head_trader import HeadTrader
 from desk.agents.macro import MacroStrategist
@@ -77,6 +78,7 @@ class Desk:
     commands: CommandAgent | None = None
     brief: DailyBriefAgent | None = None
     screen: QuantScreen | None = None
+    forecaster: ForecastAnalyst | None = None
     news_analyst: NewsAnalyst | None = None
     filings: FilingAnalyst | None = None
     macro: MacroStrategist | None = None
@@ -228,6 +230,8 @@ class Desk:
             else:
                 log.info("fundamental and events analysts off: set DESK_FINNHUB_API_KEY (free)")
             desk.screen = QuantScreen(bus, clock, db, universe, back_office, head=head, cycle=cycle)
+            desk.forecaster = ForecastAnalyst(bus, clock, db, universe)
+            desk.forecaster.start()
             desk.data = DataAgent(bus, clock, db, market, universe)
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
             desk.watcher = WatcherAgent(

@@ -177,6 +177,77 @@ async def _evaluate(days: int) -> None:
         await db.close()
 
 
+async def _train(horizon: int, days: int, *, store: bool = True) -> None:
+    from datetime import UTC, datetime
+
+    from desk.forecast.train import train_pipeline
+    from desk.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.database_url)
+    await db.open()
+    try:
+        result = await train_pipeline(
+            db,
+            datetime.now(UTC),
+            list(settings.core_universe),
+            horizon=horizon,
+            days=days,
+            models_dir=settings.models_dir,
+            store_features=store,
+        )
+        print(result["report"])
+    finally:
+        await db.close()
+
+
+async def _features(action: str, days: int) -> None:
+    from datetime import UTC, datetime
+
+    from desk.features.audit import audit, render
+    from desk.features.daily import build_frame
+    from desk.forecast.train import frame_rows, load_bars
+    from desk.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.database_url)
+    await db.open()
+    try:
+        now = datetime.now(UTC)
+        bars = await load_bars(db, list(settings.core_universe), days, as_of=now)
+        frame = build_frame(bars)
+        if action == "audit":
+            print(render(audit(bars, frame)))
+        else:
+            n = await db.upsert_features(frame_rows(frame, now))
+            print(f"feature store: {n} rows over {frame['session'].nunique()} sessions")
+    finally:
+        await db.close()
+
+
+async def _models() -> None:
+    from desk.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.database_url)
+    await db.open()
+    try:
+        rows = await db.models("swing")
+        if not rows:
+            print("no models yet: run `desk train`")
+        for r in rows:
+            p = (r["metrics"] or {}).get("pooled") or {}
+            ic = p.get("ic")
+            print(
+                f"{r['model_id']:<32} {r['status']:<9} horizon {r['horizon']}d through {r['trained_through']} "
+                f"ic {ic:+.3f} hit {p.get('hit', 0):.0%} n {p.get('n', 0)}  {r['note']}"
+                if ic is not None
+                else f"{r['model_id']:<32} {r['status']:<9} horizon {r['horizon']}d through {r['trained_through']}  {r['note']}"
+            )
+    finally:
+        await db.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     truststore.inject_into_ssl()  # websockets and urllib use the system trust store, like the browser does
     load_dotenv()
@@ -198,6 +269,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     evaluate.add_argument("--days", type=int, default=30)
     sub.add_parser("prompts", help="list the prompt files and their versions")
+    train = sub.add_parser(
+        "train", help="build features, audit for lookahead, walk-forward a forecaster, register it"
+    )
+    train.add_argument("--horizon", type=int, default=5, help="sessions ahead (1, 5 or 20)")
+    train.add_argument("--days", type=int, default=400, help="daily bars of history to use")
+    train.add_argument("--no-store", action="store_true", help="do not write the feature store")
+    features = sub.add_parser("features", help="the point-in-time feature store")
+    features.add_argument("action", choices=["build", "audit"])
+    features.add_argument("--days", type=int, default=400)
+    sub.add_parser("models", help="list trained forecasters and the champion")
     replay = sub.add_parser(
         "replay", help="replay one past session through the agents with a simulated broker"
     )
@@ -227,6 +308,12 @@ def main(argv: list[str] | None = None) -> int:
         from desk.core.prompts import render_registry
 
         print(render_registry())
+    elif args.command == "train":
+        asyncio.run(_train(args.horizon, args.days, store=not args.no_store))
+    elif args.command == "features":
+        asyncio.run(_features(args.action, args.days))
+    elif args.command == "models":
+        asyncio.run(_models())
     return 0
 
 

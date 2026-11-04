@@ -11,6 +11,7 @@ export const TEAM: AgentInfo[] = [
   { key: "head_trader", label: "Head trader", role: "plans the book, answers questions" },
   { key: "cycle", label: "Swing cycle", role: "scorecard, plan, challenge, orders" },
   { key: "quant_analyst", label: "Quant analyst", role: "scorecard and a technical read per name" },
+  { key: "forecaster", label: "Forecaster", role: "tested model: expected 5-day return per name" },
   { key: "regime", label: "Regime strategist", role: "trend, breadth and volatility of the tape" },
   { key: "sector", label: "Sector specialist", role: "leaders and laggards across sectors" },
   { key: "news_analyst", label: "News analyst", role: "tone and themes per name from the scored news" },

@@ -3,6 +3,7 @@ import { ago } from "../format";
 
 const ANALYST: Record<string, string> = {
   quant_analyst: "Quant analyst",
+  forecaster: "Forecaster",
   regime: "Regime strategist",
   sector: "Sector specialist",
   news_analyst: "News analyst",
@@ -93,6 +94,7 @@ export function Research({ reports, now }: { reports: Report[] | null; now: numb
               <tr>
                 <th>Name</th>
                 <th>Technical read</th>
+                <th>Forecast</th>
                 <th>News</th>
                 <th>Filings</th>
                 <th>Fundamentals</th>
@@ -108,6 +110,7 @@ export function Research({ reports, now }: { reports: Report[] | null; now: numb
                       <b>{s}</b>
                     </td>
                     <td>{cell(rs.find((r) => r.kind === "technical"))}</td>
+                    <td>{cell(rs.find((r) => r.kind === "forecast"))}</td>
                     <td>{cell(rs.find((r) => r.kind === "news"))}</td>
                     <td>{cell(rs.find((r) => r.kind === "filing"))}</td>
                     <td>{cell(rs.find((r) => r.kind === "fundamental"))}</td>

@@ -24,6 +24,21 @@ def _month_bounds(t: datetime) -> tuple[datetime, datetime]:
     return start, end
 
 
+def _jsonable(value):
+    """JSON cannot carry NaN or infinity; models report them as nulls."""
+    import math
+
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+        return None
+    if hasattr(value, "item"):  # numpy scalars
+        return _jsonable(value.item())
+    return value
+
+
 class Database:
     def __init__(self, url: str, *, min_size: int = 1, max_size: int = 5) -> None:
         # every connection speaks UTC, so timestamptz values never come back in the server's local zone
@@ -190,6 +205,89 @@ class Database:
                 "ON CONFLICT (key) DO NOTHING",
                 (key, kind, model, Jsonb(response)),
             )
+
+    # ---- feature store and model registry ----
+
+    async def upsert_features(self, rows: list[dict]) -> int:
+        if not rows:
+            return 0
+        async with self.pool.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.executemany(
+                    """
+                    INSERT INTO features_daily (symbol, session, computed_at, features, targets)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (symbol, session) DO UPDATE SET
+                        computed_at = EXCLUDED.computed_at, features = EXCLUDED.features, targets = EXCLUDED.targets
+                    """,
+                    [
+                        (
+                            r["symbol"],
+                            r["session"],
+                            r["computed_at"],
+                            Jsonb(r["features"]),
+                            Jsonb(r["targets"]),
+                        )
+                        for r in rows
+                    ],
+                )
+            return len(rows)
+
+    async def features_count(self) -> int:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute("SELECT count(*) FROM features_daily")
+            return int((await cur.fetchone())[0])
+
+    async def register_model(
+        self,
+        model_id: str,
+        kind: str,
+        horizon: int,
+        trained_through,
+        path: str,
+        metrics: dict,
+        status: str,
+        note: str = "",
+    ) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "INSERT INTO models (model_id, kind, horizon, trained_through, path, metrics, status, note) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (model_id) DO UPDATE SET "
+                "metrics = EXCLUDED.metrics, status = EXCLUDED.status, note = EXCLUDED.note",
+                (
+                    model_id,
+                    kind,
+                    horizon,
+                    trained_through,
+                    path,
+                    Jsonb(_jsonable(metrics)),
+                    status,
+                    note,
+                ),
+            )
+
+    async def set_model_status(self, model_id: str, status: str) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "UPDATE models SET status = %s WHERE model_id = %s", (status, model_id)
+            )
+
+    async def champion(self, kind: str, horizon: int) -> dict | None:
+        rows = await self.models(kind, horizon=horizon, status="champion", limit=1)
+        return rows[0] if rows else None
+
+    async def models(
+        self, kind: str, *, horizon: int | None = None, status: str | None = None, limit: int = 20
+    ) -> list[dict]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT model_id, kind, horizon, trained_at, trained_through, path, metrics, status, note FROM models "
+                "WHERE kind = %s AND (%s::int IS NULL OR horizon = %s) AND (%s::text IS NULL OR status = %s) "
+                "ORDER BY trained_at DESC LIMIT %s",
+                (kind, horizon, horizon, status, status, limit),
+            )
+            cols = [d.name for d in cur.description]
+            return [dict(zip(cols, r, strict=True)) for r in await cur.fetchall()]
 
     async def bar_counts(self) -> dict[str, int]:
         async with self.pool.connection() as conn:

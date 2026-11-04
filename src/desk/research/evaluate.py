@@ -163,8 +163,10 @@ async def evaluate(db: Database, now: datetime, days: int = 30) -> dict[str, Any
 
 def render(result: dict[str, Any]) -> str:
     lines = [
-        f"EVALUATION {result['since']:%Y-%m-%d} to {result['until']:%Y-%m-%d}: "
-        f"{result['calls']} calls over {result['sessions_covered']} sessions"
+        (
+            f"EVALUATION {result['since']:%Y-%m-%d} to {result['until']:%Y-%m-%d}: "
+            f"{result['calls']} calls over {result['sessions_covered']} sessions"
+        )
     ]
     if not result["scores"]:
         lines.append(

@@ -74,3 +74,26 @@ CREATE TABLE IF NOT EXISTS llm_cache (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     response   JSONB NOT NULL
 );
+
+-- The feature store: point-in-time features per name and session, targets kept apart
+CREATE TABLE IF NOT EXISTS features_daily (
+    symbol      TEXT        NOT NULL,
+    session     DATE        NOT NULL,
+    computed_at TIMESTAMPTZ NOT NULL,
+    features    JSONB       NOT NULL,
+    targets     JSONB       NOT NULL,
+    PRIMARY KEY (symbol, session)
+);
+
+-- Trained models and their out-of-sample record; one champion per kind and horizon
+CREATE TABLE IF NOT EXISTS models (
+    model_id        TEXT PRIMARY KEY,
+    kind            TEXT        NOT NULL,
+    horizon         INT         NOT NULL,
+    trained_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    trained_through DATE        NOT NULL,
+    path            TEXT        NOT NULL,
+    metrics         JSONB       NOT NULL,
+    status          TEXT        NOT NULL,
+    note            TEXT        NOT NULL DEFAULT ''
+);
