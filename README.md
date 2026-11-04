@@ -92,6 +92,16 @@ uv run desk models                         # every trained model, its out-of-sam
 
 `desk train` refuses a frame that fails the lookahead audit, and a model becomes champion only through the promotion gate (300 or more out-of-sample predictions, positive rank correlation, hit rate at least 50%, no regression against the incumbent). With a champion in the registry the forecaster agent publishes a `forecast` report per name after every quant screen, with the model's own record in the text, and the scorecard gives the expected return a third of its weight. Without one the desk runs exactly as before. Model files live under `data/models` (git-ignored); retrain weekly after the close on Friday.
 
+## HTTPS
+
+The interface runs on plain HTTP at the VM's address until a domain exists. When one points at the VM:
+
+```bash
+sudo bash /opt/desk/app/deploy/enable-https.sh desk.example.com
+```
+
+Caddy obtains and renews the certificate by itself and redirects HTTP to HTTPS; later deploys keep the domain. Port 443 is open on the host firewall and must be open in the Oracle security list too (same place as port 80).
+
 ## Operations (phase 5)
 
 On the server, systemd timers do the routine work and report to Telegram:

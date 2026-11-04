@@ -32,7 +32,7 @@ def _criterion(
 async def graduation(
     db: Database, now: datetime, *, drawdown_limit_pct: float = 5.0
 ) -> dict[str, Any]:
-    start = await db.first_event_at()
+    start = await db.first_event_at(Topics.SYSTEM_RESTARTED)  # the desk's first start
     span_days = (now - start).days if start else 0
     sessions = await db.sessions_seen(start or now, now) if start else []
     month_ago = now - timedelta(days=LOOKBACK_DAYS)

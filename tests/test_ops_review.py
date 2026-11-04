@@ -136,7 +136,7 @@ class FakeJournal:
             }
         ]
 
-    async def first_event_at(self):
+    async def first_event_at(self, type=None):
         return self.first
 
     async def sessions_seen(self, since, until):

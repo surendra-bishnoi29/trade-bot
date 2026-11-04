@@ -12,11 +12,13 @@ for a in "$@"; do
   esac
 done
 cd "$APP"
-if [ "$PULL" = 1 ]; then
+if [ "$PULL" = 1 ] && [ -z "${DESK_INSTALL_REEXEC:-}" ]; then
   echo "== git: origin/main"
   sudo -u desk -H git -C "$APP" fetch --quiet origin
   sudo -u desk -H git -C "$APP" reset --quiet --hard origin/main
   sudo -u desk -H git -C "$APP" log --oneline -1
+  # bash reads a script as it runs it: the pull may have changed this file, so run the fresh copy
+  DESK_INSTALL_REEXEC=1 exec bash "$APP/deploy/remote-install.sh" "$@"
 fi
 chown -R desk:desk /opt/desk
 chmod 755 /opt/desk /opt/desk/web  # caddy (its own user) must reach the web build; the app dir stays private
@@ -46,7 +48,11 @@ install -m 644 deploy/systemd/desk-bot.service deploy/systemd/desk-api.service \
   deploy/systemd/desk-healthcheck.service deploy/systemd/desk-healthcheck.timer \
   deploy/systemd/desk-drill.service deploy/systemd/desk-drill.timer /etc/systemd/system/
 mkdir -p /opt/desk/health /opt/desk/backups && chown desk:desk /opt/desk/backups
-install -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
+if [ -s /etc/caddy/desk-domain ]; then
+  sed "s/DESK_DOMAIN_PLACEHOLDER/$(cat /etc/caddy/desk-domain)/" deploy/Caddyfile.https > /etc/caddy/Caddyfile
+else
+  install -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
+fi
 systemctl daemon-reload
 systemctl enable --now desk-backup.timer desk-train.timer desk-healthcheck.timer desk-drill.timer >/dev/null
 systemctl enable desk-bot desk-api caddy >/dev/null

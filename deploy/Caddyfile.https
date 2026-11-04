@@ -1,0 +1,17 @@
+# The interface over HTTPS: Caddy fetches and renews the certificate for the domain by itself.
+# Installed by deploy/enable-https.sh, which writes the domain into /etc/caddy/desk-domain so later
+# deploys keep it. HTTP requests are redirected to HTTPS by Caddy automatically.
+DESK_DOMAIN_PLACEHOLDER {
+	encode gzip
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle /ws {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle {
+		root * /opt/desk/web
+		try_files {path} /index.html
+		file_server
+	}
+}

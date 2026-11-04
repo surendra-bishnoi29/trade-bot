@@ -472,9 +472,12 @@ class Database:
             )
             return [(r[0], Decimal(str(r[1]))) for r in await cur.fetchall()]
 
-    async def first_event_at(self) -> datetime | None:
+    async def first_event_at(self, type: str | None = None) -> datetime | None:
         async with self.pool.connection() as conn:
-            cur = await conn.execute("SELECT min(occurred_at) FROM events")
+            cur = await conn.execute(
+                "SELECT min(occurred_at) FROM events WHERE (%s::text IS NULL OR type = %s)",
+                (type, type),
+            )
             row = await cur.fetchone()
             return row[0] if row else None
 

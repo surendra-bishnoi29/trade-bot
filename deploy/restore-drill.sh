@@ -30,13 +30,13 @@ if ! sudo -u postgres createdb -O desk "$SCRATCH"; then
   send "🚨 Backup drill: cannot create the scratch database"
   exit 1
 fi
-if ! gunzip -c "$latest" | sudo -u desk psql -q -v ON_ERROR_STOP=1 "$SCRATCH" >/dev/null 2>/tmp/desk-drill.err; then
+if ! gunzip -c "$latest" | sudo -u postgres psql -q -v ON_ERROR_STOP=1 "$SCRATCH" >/dev/null 2>/tmp/desk-drill.err; then
   echo "DRILL FAILED: restore errors: $(tail -3 /tmp/desk-drill.err)"
   send "🚨 Backup drill FAILED restoring $(basename "$latest"): $(tail -1 /tmp/desk-drill.err)"
   sudo -u postgres dropdb --if-exists "$SCRATCH" >/dev/null 2>&1
   exit 1
 fi
-counts=$(sudo -u desk psql -tA "$SCRATCH" -c "select 'events '||count(*) from events union all select 'bars '||count(*) from bars union all select 'theses '||count(*) from theses" | tr '\n' ' ')
+counts=$(sudo -u postgres psql -tA "$SCRATCH" -c "select 'events '||count(*) from events union all select 'bars '||count(*) from bars union all select 'theses '||count(*) from theses" | tr '\n' ' ')
 live=$(sudo -u desk psql -tA desk -c "select count(*) from events")
 sudo -u postgres dropdb --if-exists "$SCRATCH" >/dev/null 2>&1
 echo "DRILL OK: $(basename "$latest") ($size, ${age_h}h old) restored: $counts; live events $live"
