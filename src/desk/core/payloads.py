@@ -292,6 +292,7 @@ class CyclePlanPayload(Payload):
     plan: CyclePlan
     challenge: Challenge | None = None
     final_actions: list[dict[str, Any]] = Field(default_factory=list)
+    prompt_versions: dict[str, str] = Field(default_factory=dict)
 
 
 @payload_for(Topics.THESIS_CHALLENGE)

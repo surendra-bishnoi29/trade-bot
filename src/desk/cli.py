@@ -162,6 +162,21 @@ async def _replay(args: argparse.Namespace) -> None:
         print(json.dumps(report.as_dict(), default=str))
 
 
+async def _evaluate(days: int) -> None:
+    from datetime import UTC, datetime
+
+    from desk.research.evaluate import evaluate, render
+    from desk.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.database_url)
+    await db.open()
+    try:
+        print(render(await evaluate(db, datetime.now(UTC), days=days)))
+    finally:
+        await db.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     truststore.inject_into_ssl()  # websockets and urllib use the system trust store, like the browser does
     load_dotenv()
@@ -178,6 +193,11 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run", action="store_true", help="plan and challenge, but place no orders"
     )
     sub.add_parser("theses", help="list recent theses")
+    evaluate = sub.add_parser(
+        "evaluate", help="score the analysts and the head trader against what prices did"
+    )
+    evaluate.add_argument("--days", type=int, default=30)
+    sub.add_parser("prompts", help="list the prompt files and their versions")
     replay = sub.add_parser(
         "replay", help="replay one past session through the agents with a simulated broker"
     )
@@ -201,6 +221,12 @@ def main(argv: list[str] | None = None) -> int:
         asyncio.run(_theses())
     elif args.command == "replay":
         asyncio.run(_replay(args))
+    elif args.command == "evaluate":
+        asyncio.run(_evaluate(args.days))
+    elif args.command == "prompts":
+        from desk.core.prompts import render_registry
+
+        print(render_registry())
     return 0
 
 

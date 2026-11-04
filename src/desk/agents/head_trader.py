@@ -9,7 +9,6 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, timedelta
 from decimal import Decimal
-from pathlib import Path
 from typing import Any
 
 import anthropic
@@ -19,7 +18,7 @@ from ulid import ULID
 from desk.agents.back_office import BackOffice
 from desk.agents.base import BaseAgent
 from desk.bus.base import Bus
-from desk.core import calendar
+from desk.core import calendar, prompts
 from desk.core.clock import Clock
 from desk.core.config import Settings
 from desk.core.events import Event, Topics
@@ -35,12 +34,6 @@ from desk.core.payloads import (
 from desk.storage.db import Database
 
 log = logging.getLogger(__name__)
-PROMPTS = Path(__file__).resolve().parents[3] / "prompts"
-PROMPT_PATH = PROMPTS / "head_trader" / "v1.md"
-PLAN_PROMPT_PATH = PROMPTS / "head_trader" / "plan_v1.md"
-SKEPTIC_PROMPT_PATH = PROMPTS / "skeptic" / "v1.md"
-BRIEF_PROMPT_PATH = PROMPTS / "head_trader" / "brief_v1.md"
-MORNING_PROMPT_PATH = PROMPTS / "head_trader" / "morning_v1.md"
 FALLBACK_HEADERS = {"anthropic-beta": "server-side-fallback-2026-07-01"}
 FALLBACK_BODY = {"fallbacks": "default"}
 
@@ -75,11 +68,11 @@ class HeadTrader(BaseAgent):
         self.cache = None  # an LLMCache during replays; live cycles are never cached
         self.material_rows: list = []  # the scorecard rows behind the material, set by the cycle
         self.model = model
-        self.static_prompt = PROMPT_PATH.read_text()
-        self.plan_prompt = PLAN_PROMPT_PATH.read_text()
-        self.skeptic_prompt = SKEPTIC_PROMPT_PATH.read_text()
-        self.brief_prompt = BRIEF_PROMPT_PATH.read_text()
-        self.morning_prompt = MORNING_PROMPT_PATH.read_text()
+        self.static_prompt = prompts.load("head_trader")
+        self.plan_prompt = prompts.load("plan")
+        self.skeptic_prompt = prompts.load("skeptic")
+        self.brief_prompt = prompts.load("brief")
+        self.morning_prompt = prompts.load("morning")
         self.current_cycle_id: str | None = None  # set by the cycle so progress events can name it
         self._scores: dict[str, asyncio.Queue[Event]] = {}
         self._decisions: dict[str, asyncio.Future[Event]] = {}
@@ -765,3 +758,7 @@ class HeadTrader(BaseAgent):
         if self.cache is not None:
             await self.cache.put(key, "morning", self.model, note.model_dump(mode="json"))
         return note
+
+    @staticmethod
+    def prompt_versions() -> dict[str, str]:
+        return prompts.registry()

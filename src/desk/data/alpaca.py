@@ -115,7 +115,7 @@ class AlpacaLiveBars:
             await on_bar(bar_to_model(bar, "1m"))
 
         self._stream.subscribe_bars(handler, *symbols)
-        await self._stream._run_forever()  # noqa: SLF001 - run() would start its own event loop
+        await self._stream._run_forever()
 
     async def stop(self) -> None:
         self._stream.stop()

@@ -331,6 +331,7 @@ class SwingCycle(BaseAgent):
                     plan=plan,
                     challenge=challenge,
                     final_actions=[a.as_dict() for a in actions],
+                    prompt_versions=self.head.prompt_versions(),
                 ),
                 book="swing",
                 caused_by=started,

@@ -141,7 +141,7 @@ class Edgar:
         req = urllib.request.Request(
             url, headers={"User-Agent": self.user_agent, "Accept": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 - fixed https hosts
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
             return json.load(resp)
 
     async def tickers(self) -> dict[str, str]:
