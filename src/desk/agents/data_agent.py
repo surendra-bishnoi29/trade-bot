@@ -56,7 +56,11 @@ class DataAgent(BaseAgent):
         )
 
         latest_daily = await self.db.latest_bar_ts("1d")
-        if latest_daily is not None:
+        earliest_daily = await self.db.earliest_bar_ts("1d")
+        # incremental only when the stored history already reaches back as far as asked
+        if latest_daily is not None and (
+            earliest_daily is not None and earliest_daily <= daily_start + timedelta(days=7)
+        ):
             daily_start = max(daily_start, latest_daily - timedelta(days=3))
         latest_minute = await self.db.latest_bar_ts("1m")
         if latest_minute is not None:

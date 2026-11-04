@@ -173,21 +173,29 @@ class WalkForwardResult:
         return "\n".join(lines)
 
 
+MAX_FOLDS = 24  # about two years of monthly folds; longer histories use longer folds
+SHUFFLE_FOLDS = 8  # the shuffled-target control runs on this many folds, evenly spaced
+
+
 def walk_forward(
     frame: pd.DataFrame,
     horizon: int,
     *,
     warmup: int = 120,
-    step: int = 21,
+    step: int | None = None,
     shuffle_control: bool = True,
 ) -> WalkForwardResult:
     target = f"fwd_{horizon}"
     sessions = sorted(frame["session"].unique())
+    if step is None:
+        step = max(21, (len(sessions) - warmup) // MAX_FOLDS)
     result = WalkForwardResult(horizon=horizon)
     preds: list[pd.DataFrame] = []
     shuffled_preds: list[pd.DataFrame] = []
     rng = np.random.default_rng(11)
-    for fold in walk_forward_folds(sessions, warmup=warmup, step=step):
+    folds = walk_forward_folds(sessions, warmup=warmup, step=step)
+    shuffle_every = max(1, len(folds) // SHUFFLE_FOLDS)
+    for i, fold in enumerate(folds):
         train = training_rows(frame, horizon, fold.train_as_of)
         test = frame[
             (frame["session"] >= fold.test_start)
@@ -208,7 +216,7 @@ def walk_forward(
             }
         )
         preds.append(pred)
-        if shuffle_control:
+        if shuffle_control and i % shuffle_every == 0:
             shuffled = train.copy()
             shuffled[target] = rng.permutation(shuffled[target].to_numpy())
             sp = SwingForecaster(horizon).fit(shuffled).predict(test)

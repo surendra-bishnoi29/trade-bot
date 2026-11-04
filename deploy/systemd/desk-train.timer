@@ -1,0 +1,9 @@
+[Unit]
+Description=Retrain the forecaster every Saturday after the week's bars are complete
+
+[Timer]
+OnCalendar=Sat *-*-* 02:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -110,7 +110,7 @@ async def _theses() -> None:
         await desk.stop()
 
 
-async def _backfill() -> None:
+async def _backfill(daily_sessions: int | None = None) -> None:
     from desk.agents.data_agent import DataAgent
     from desk.app import Desk
 
@@ -129,6 +129,8 @@ async def _backfill() -> None:
             AlpacaMarketData(key, secret),
             list(settings.core_universe),
         )
+        if daily_sessions:
+            agent.daily_sessions = daily_sessions
         print(await agent.backfill())
         print(await desk.db.bar_counts())
     finally:
@@ -258,7 +260,10 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--no-console", action="store_true", help="run headless")
     ask = sub.add_parser("ask", help="one question to the head trader, then exit")
     ask.add_argument("question")
-    sub.add_parser("backfill", help="load price history for the universe")
+    backfill = sub.add_parser("backfill", help="load price history for the universe")
+    backfill.add_argument(
+        "--daily-sessions", type=int, help="how many sessions of daily bars to hold (default 250)"
+    )
     cycle = sub.add_parser("cycle", help="run one swing cycle now")
     cycle.add_argument(
         "--dry-run", action="store_true", help="plan and challenge, but place no orders"
@@ -295,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "ask":
         asyncio.run(_ask(args.question))
     elif args.command == "backfill":
-        asyncio.run(_backfill())
+        asyncio.run(_backfill(args.daily_sessions))
     elif args.command == "cycle":
         asyncio.run(_cycle(args.dry_run))
     elif args.command == "theses":

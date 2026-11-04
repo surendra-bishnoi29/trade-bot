@@ -64,6 +64,7 @@ The replayer feeds the day's minute bars to the agents under a driven clock, the
 ## Training the forecaster (phase 2)
 
 ```bash
+uv run desk backfill --daily-sessions 1300   # five years of daily bars: a model needs more than one
 uv run desk features audit                 # recompute, correlation and shuffle checks: no feature may know the future
 uv run desk train --horizon 5              # features -> audit -> walk-forward -> after-cost backtest -> registry
 uv run desk models                         # every trained model, its out-of-sample record and who is champion

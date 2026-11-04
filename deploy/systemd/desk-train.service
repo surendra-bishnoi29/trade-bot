@@ -1,0 +1,11 @@
+[Unit]
+Description=Trading desk weekly forecaster training
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=desk
+Group=desk
+WorkingDirectory=/opt/desk/app
+EnvironmentFile=/opt/desk/app/.env
+ExecStart=/opt/desk/app/.venv/bin/desk train --horizon 5 --days 1300
