@@ -487,20 +487,91 @@ class CycleScheduler(BaseAgent):
         future = sorted(c for c in candidates if c[0] > now)
         return future[0]
 
+    SLICE_SECONDS = 60.0
+    MAX_LATE_HOURS = 10  # a cycle missed longer ago than this is not worth running late
+
+    def missed_slot(self, now: datetime) -> tuple[datetime, str] | None:
+        """The most recent scheduled slot that has passed, if it passed within MAX_LATE_HOURS."""
+        candidates: list[tuple[datetime, str]] = []
+        for day in calendar.last_sessions(now.date(), 3):
+            open_at, close_at = calendar.session_bounds(day)
+            candidates.append((open_at - timedelta(minutes=60), "pre_market"))
+            if self.settings.cycle_mid_session:
+                candidates.append((open_at + timedelta(hours=3), "mid_session"))
+            candidates.append((close_at + timedelta(minutes=10), "post_close"))
+        past = sorted((c for c in candidates if c[0] <= now), reverse=True)
+        if not past or now - past[0][0] > timedelta(hours=self.MAX_LATE_HOURS):
+            return None
+        return past[0]
+
+    @staticmethod
+    def may_run_late(trigger: str, now: datetime) -> bool:
+        """A late pre-market or mid-session cycle only makes sense while the market is still open;
+        a late post-close review is fine any time."""
+        return trigger == "post_close" or calendar.is_open(now)
+
+    async def catch_up(self) -> bool:
+        """After a start: run the most recent scheduled cycle if the journal shows it never happened."""
+        now = self.clock.now()
+        slot = self.missed_slot(now)
+        if slot is None:
+            return False
+        at, trigger = slot
+        plans = await self.cycle.db.recent_events([Topics.CYCLE_PLAN], at, limit=50)
+        if any(e.payload.get("trigger") == trigger for e in plans):
+            return False
+        if not self.may_run_late(trigger, now):
+            log.warning(
+                "missed cycle %s due at %s: market closed now, skipping", trigger, at.isoformat()
+            )
+            return False
+        log.warning("missed cycle %s due at %s: running it now", trigger, at.isoformat())
+        await self._run(trigger)
+        return True
+
     async def run_forever(self) -> None:
+        """Sleeps in short slices and re-reads the wall clock, so a machine that was asleep or a long
+        stall cannot skip a cycle silently: a due cycle runs as soon as the desk is awake."""
+        try:
+            await self.catch_up()
+        except Exception as exc:  # noqa: BLE001 - catching up must not stop the schedule
+            log.error("catch-up failed: %s", exc)
+        at, trigger = self.next_run(self.clock.now())
+        log.info("next cycle: %s at %s", trigger, at.isoformat())
         while True:
             now = self.clock.now()
-            at, trigger = self.next_run(now)
+            if now < at:
+                await self.clock.sleep(
+                    min(self.SLICE_SECONDS, max(1.0, (at - now).total_seconds()))
+                )
+                continue
+            late = (now - at).total_seconds()
+            if late > 15 * 60 and not self.may_run_late(trigger, now):
+                log.warning(
+                    "cycle %s is %.0f minutes late and the market is closed: skipped",
+                    trigger,
+                    late / 60,
+                )
+            else:
+                if late > 15 * 60:
+                    log.warning(
+                        "cycle %s is %.0f minutes late (the desk was away): running now",
+                        trigger,
+                        late / 60,
+                    )
+                await self._run(trigger)
+            at, trigger = self.next_run(self.clock.now())
             log.info("next cycle: %s at %s", trigger, at.isoformat())
-            await self.clock.sleep(max(1.0, (at - now).total_seconds()))
-            self.last_cycle_at = self.clock.now()
-            try:
-                result = await self.cycle.run(trigger)
-                log.info("cycle %s: %s", trigger, result.render().splitlines()[-1])
-                if self.on_result is not None:
-                    self.on_result(result)
-            except Exception as exc:  # noqa: BLE001 - the schedule must survive a failed cycle
-                log.error("scheduled cycle failed: %s", exc)
+
+    async def _run(self, trigger: str) -> None:
+        self.last_cycle_at = self.clock.now()
+        try:
+            result = await self.cycle.run(trigger)
+            log.info("cycle %s: %s", trigger, result.render().splitlines()[-1])
+            if self.on_result is not None:
+                self.on_result(result)
+        except Exception as exc:  # noqa: BLE001 - the schedule must survive a failed cycle
+            log.error("scheduled cycle failed: %s", exc)
 
     async def handle(self, event: Event) -> None:
         if (

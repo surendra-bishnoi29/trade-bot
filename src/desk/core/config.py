@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -65,6 +66,15 @@ class Settings(BaseSettings):
         0  # 0 = scheduled cycles only; N = also every N minutes while the market is open
     )
     min_conviction_with_concern: float = 0.5  # a buy the skeptic has a concern about needs this
+
+    # operations (slice 4: the desk runs on a server)
+    require_redis: bool = (
+        False  # production: refuse to start without Redis instead of the in-memory bus
+    )
+    alpaca_feed: Literal["iex", "sip"] = "iex"  # sip needs the paid Alpaca data plan
+    telegram_bot_token: SecretStr | None = None
+    telegram_chat_id: str | None = None
+    heartbeat_minutes: int = 5
 
     # unprefixed on purpose: the Anthropic SDK reads ANTHROPIC_API_KEY itself
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

@@ -6,10 +6,14 @@ import asyncio
 import contextlib
 import logging
 from dataclasses import dataclass, field
+from datetime import date
 
 import redis.asyncio as aioredis
+from alpaca.data.enums import DataFeed
 
 from desk.agents.back_office import BackOffice
+from desk.agents.base import BaseAgent
+from desk.agents.commands import CommandAgent
 from desk.agents.cycle import CycleScheduler, SwingCycle
 from desk.agents.data_agent import DataAgent
 from desk.agents.execution import ExecutionAgent
@@ -19,15 +23,17 @@ from desk.agents.news_agent import NewsAgent, NewsScorer
 from desk.agents.prices import PriceCache
 from desk.agents.risk_officer import RiskLimits, RiskOfficer
 from desk.agents.swing_strategy import SwingStrategy
+from desk.agents.telegram import TelegramNotifier
 from desk.agents.watcher import WatcherAgent
 from desk.bus.base import Bus
 from desk.bus.memory import InMemoryBus
 from desk.bus.redis_streams import RedisStreamsBus
 from desk.console import ConsoleAgent
+from desk.core import calendar, sdnotify
 from desk.core.clock import LiveClock
 from desk.core.config import Settings
 from desk.core.events import Topics
-from desk.core.payloads import KillSwitch
+from desk.core.payloads import Heartbeat, KillSwitch, SystemRestarted
 from desk.data.alpaca import AlpacaLiveBars, AlpacaMarketData, AlpacaTrading
 from desk.storage.db import Database
 from desk.storage.persister import Persister
@@ -62,6 +68,9 @@ class Desk:
     strategy: SwingStrategy
     cycle: SwingCycle
     scheduler: CycleScheduler | None = None
+    commands: CommandAgent | None = None
+    telegram: TelegramNotifier | None = None
+    ops: Ops | None = None
     data: DataAgent | None = None
     watcher: WatcherAgent | None = None
     tasks: list[asyncio.Task[None]] = field(default_factory=list)
@@ -79,6 +88,10 @@ class Desk:
         if await _redis_reachable(settings.redis_url):
             bus: Bus = RedisStreamsBus(settings.redis_url, clock)
             log.info("bus: redis streams at %s", settings.redis_url)
+        elif settings.require_redis:
+            raise SystemExit(
+                f"redis is required in production and not reachable at {settings.redis_url}"
+            )
         else:
             bus = InMemoryBus(clock)
             log.warning(
@@ -150,9 +163,23 @@ class Desk:
             cycle,
         )
         console.commands = desk.console_commands()
+        desk.commands = CommandAgent(bus, clock, console.commands, head)
+        desk.commands.start()
+        if settings.telegram_bot_token and settings.telegram_chat_id:
+            desk.telegram = TelegramNotifier(
+                bus,
+                clock,
+                settings.telegram_bot_token.get_secret_value(),
+                settings.telegram_chat_id,
+            )
+            desk.telegram.start()
+            log.info("telegram notifier on")
         if live:
             desk.data = DataAgent(bus, clock, db, market, universe)
-            desk.watcher = WatcherAgent(bus, clock, db, AlpacaLiveBars(key, secret), universe)
+            feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
+            desk.watcher = WatcherAgent(
+                bus, clock, db, AlpacaLiveBars(key, secret, feed=feed), universe
+            )
             desk.scheduler = CycleScheduler(bus, clock, cycle, strategy, settings)
             desk.scheduler.start()
             head.scheduler = desk.scheduler
@@ -235,8 +262,15 @@ class Desk:
             self.tasks.append(asyncio.create_task(self.news.run_forever(), name="news"))
         if self.scheduler is not None:
             self.tasks.append(asyncio.create_task(self.scheduler.run_forever(), name="scheduler"))
+        self.ops = Ops(self.bus, self.clock)
+        await self.ops.announce_start(self)
+        self.tasks.append(asyncio.create_task(self.ops.heartbeat(self), name="heartbeat"))
+        interval = sdnotify.watchdog_interval()
+        if interval is not None:
+            self.tasks.append(asyncio.create_task(self.ops.watchdog(interval), name="watchdog"))
         for task in self.tasks:
             task.add_done_callback(_report_crash)
+        sdnotify.ready()
 
     async def stop(self) -> None:
         if self.watcher is not None:
@@ -255,3 +289,75 @@ def _report_crash(task: asyncio.Task[None]) -> None:
     exc = task.exception()
     if exc is not None:
         log.error("task %s crashed: %s: %s", task.get_name(), type(exc).__name__, exc)
+
+
+class Ops(BaseAgent):
+    """Operational events: the start announcement, heartbeats, and systemd watchdog pings."""
+
+    name = "ops"
+    topics = ()
+
+    def __init__(self, bus: Bus, clock: LiveClock) -> None:
+        super().__init__(bus, clock)
+        self._morning_sent: date | None = None
+
+    async def announce_start(self, desk: Desk) -> None:
+        now = self.clock.now()
+        last_bar = await desk.db.latest_bar_ts("1m")
+        gap = (now - last_bar).total_seconds() if last_bar is not None else None
+        actions = []
+        if desk.data is not None:
+            actions.append("backfill the bars missed while away")
+        actions.append("reconcile orders and positions with the broker")
+        actions.append("restore the risk state from the journal")
+        if desk.scheduler is not None:
+            actions.append("run the last scheduled cycle if the journal shows it never ran")
+        await self.emit(
+            Topics.SYSTEM_RESTARTED,
+            SystemRestarted(
+                started_at=now,
+                last_bar_at=last_bar,
+                gap_seconds=gap,
+                during_session=calendar.is_open(now),
+                actions=actions,
+            ),
+        )
+
+    def snapshot(self, desk: Desk) -> Heartbeat:
+        now = self.clock.now()
+        last = max(desk.prices.last_at.values(), default=None)
+        feed_age = (now - last).total_seconds() if last is not None else None
+        next_cycle = ""
+        if desk.scheduler is not None:
+            at, trigger = desk.scheduler.next_run(now)
+            next_cycle = f"{trigger} at {at:%H:%M} UTC"
+        degraded = calendar.is_open(now) and (feed_age is None or feed_age > 600)
+        morning = False
+        if calendar.is_session(now.date()) and now.hour >= 12 and self._morning_sent != now.date():
+            self._morning_sent = now.date()
+            morning = True
+        return Heartbeat(
+            status="degraded" if degraded else "ok",
+            feed_age_seconds=feed_age,
+            kill_switch=desk.risk.state.kill_switch,
+            open_theses=len(desk.strategy.theses),
+            next_cycle=next_cycle,
+            morning=morning,
+        )
+
+    async def heartbeat(self, desk: Desk) -> None:
+        while True:
+            try:
+                beat = self.snapshot(desk)
+                await self.emit(Topics.SYSTEM_HEARTBEAT, beat)
+                sdnotify.status(
+                    f"{beat.status}; kill switch {'on' if beat.kill_switch else 'off'}; next {beat.next_cycle}"
+                )
+            except Exception as exc:  # noqa: BLE001 - a heartbeat must never stop
+                log.warning("heartbeat failed: %s", exc)
+            await self.clock.sleep(max(30.0, desk.settings.heartbeat_minutes * 60.0))
+
+    async def watchdog(self, interval: float) -> None:
+        while True:
+            sdnotify.watchdog()
+            await self.clock.sleep(interval)

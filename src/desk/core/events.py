@@ -62,6 +62,12 @@ class Topics:
     CYCLE_PLAN = "cycle.plan"
     CONSOLE_QUESTION = "console.question"
     CONSOLE_ANSWER = "console.answer"
+    CONSOLE_ANSWER_DELTA = "console.answer.delta"
+    CONSOLE_PROGRESS = "console.progress"
+    DESK_COMMAND = "desk.command"
+    DESK_COMMAND_RESULT = "desk.command.result"
+    SYSTEM_RESTARTED = "system.restarted"
+    SYSTEM_HEARTBEAT = "system.heartbeat"
 
     @classmethod
     def all(cls) -> list[str]:

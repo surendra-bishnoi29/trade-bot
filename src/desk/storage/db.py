@@ -124,7 +124,11 @@ class Database:
                     """
                     INSERT INTO bars (symbol, interval, ts, open, high, low, close, volume, vwap, trade_count, source, ingested_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT DO NOTHING
+                    ON CONFLICT (symbol, interval, ts) DO UPDATE SET
+                        open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
+                        close = EXCLUDED.close, volume = EXCLUDED.volume, vwap = EXCLUDED.vwap,
+                        trade_count = EXCLUDED.trade_count, source = EXCLUDED.source,
+                        ingested_at = EXCLUDED.ingested_at
                     """,
                     rows,
                 )

@@ -197,6 +197,8 @@ class ResearchRequest(Payload):
 class ConsoleMessage(Payload):
     session_id: str
     text: str
+    request_id: str = ""  # set when the question came through the api service
+    user: str = ""
 
 
 for _t in (Topics.CONSOLE_QUESTION, Topics.CONSOLE_ANSWER):
@@ -296,3 +298,60 @@ class CyclePlanPayload(Payload):
 class ChallengePayload(Payload):
     cycle_id: str
     challenge: Challenge
+
+
+# ---- operations and the api service (slice 4) ----
+
+
+@payload_for(Topics.SYSTEM_RESTARTED)
+class SystemRestarted(Payload):
+    """Once per start: how long the desk was away and what it does to close the gap."""
+
+    started_at: datetime
+    last_bar_at: datetime | None = None
+    gap_seconds: float | None = None
+    during_session: bool = False
+    actions: list[str] = Field(default_factory=list)
+
+
+@payload_for(Topics.SYSTEM_HEARTBEAT)
+class Heartbeat(Payload):
+    status: Literal["ok", "degraded"] = "ok"
+    feed_age_seconds: float | None = None
+    kill_switch: bool = False
+    open_theses: int = 0
+    next_cycle: str = ""
+    morning: bool = False  # the first heartbeat of a trading day, worth a message
+
+
+@payload_for(Topics.DESK_COMMAND)
+class DeskCommand(Payload):
+    """A request to the bot from the api service or another client."""
+
+    request_id: str
+    command: Literal["ask", "cycle", "plan", "kill", "resume", "status", "theses"]
+    args: str = ""
+    user: str = ""
+    role: Literal["operator", "viewer", "system"] = "operator"
+
+
+@payload_for(Topics.DESK_COMMAND_RESULT)
+class DeskCommandResult(Payload):
+    request_id: str
+    command: str
+    ok: bool
+    text: str = ""
+
+
+@payload_for(Topics.CONSOLE_PROGRESS)
+class ConsoleProgress(Payload):
+    request_id: str
+    stage: Literal["thinking", "tool", "done", "error"]
+    detail: str = ""
+
+
+@payload_for(Topics.CONSOLE_ANSWER_DELTA)
+class ConsoleDelta(Payload):
+    request_id: str
+    seq: int
+    text: str

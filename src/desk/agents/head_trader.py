@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import UTC, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -411,7 +412,16 @@ class HeadTrader(BaseAgent):
 
     # ---- the conversation ----
 
-    async def ask(self, question: str, *, max_iterations: int = 8) -> str:
+    async def ask(
+        self,
+        question: str,
+        *,
+        max_iterations: int = 8,
+        on_text: Callable[[str], Awaitable[None]] | None = None,
+        on_progress: Callable[[str, str], Awaitable[None]] | None = None,
+    ) -> str:
+        """Answer a question with the tools. Text streams to on_text as it is written; on_progress hears
+        which tools run between turns. Returns the final answer."""
         runner = self.client.beta.messages.tool_runner(
             model=self.model,
             max_tokens=4000,
@@ -433,8 +443,19 @@ class HeadTrader(BaseAgent):
             output_config={"effort": "medium"},
             betas=["server-side-fallback-2026-07-01"],
             extra_body={"fallbacks": "default"},
+            stream=True,
         )
-        final = await runner.until_done()
+        final: Any = None
+        async for stream in runner:
+            async for event in stream:
+                if event.type == "text" and on_text is not None and event.text:
+                    await on_text(event.text)
+            final = await stream.get_final_message()
+            tools_used = [b.name for b in final.content if b.type == "tool_use"]
+            if tools_used and on_progress is not None:
+                await on_progress("tool", ", ".join(tools_used))
+        if final is None:
+            return "(no answer)"
         usage = final.usage
         self.last_usage = {
             "input": usage.input_tokens,

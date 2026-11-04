@@ -1,0 +1,9 @@
+[Unit]
+Description=Trading desk nightly database backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=desk
+Group=desk
+ExecStart=/bin/bash -c 'pg_dump desk | gzip > /opt/desk/backups/desk-$(date -u +%%F).sql.gz && find /opt/desk/backups -name "desk-*.sql.gz" -mtime +14 -delete'

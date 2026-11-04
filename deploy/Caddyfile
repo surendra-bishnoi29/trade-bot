@@ -1,0 +1,17 @@
+# The interface: Caddy serves the built web app and proxies the api. Plain HTTP on the VM's address for
+# now. To switch on HTTPS, replace ":80" with the domain name (for example desk.example.com) and reload:
+# Caddy fetches and renews the certificate by itself.
+:80 {
+	encode gzip
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle /ws {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle {
+		root * /opt/desk/web
+		try_files {path} /index.html
+		file_server
+	}
+}
