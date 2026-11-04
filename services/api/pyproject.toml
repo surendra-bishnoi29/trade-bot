@@ -1,0 +1,26 @@
+[project]
+name = "desk-api"
+version = "0.1.0"
+description = "The trading desk's interface backend: a mediator between the browser and the bot"
+requires-python = ">=3.12"
+dependencies = [
+    "desk",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "bcrypt>=4.1",
+    "itsdangerous>=2.2",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+desk-api = "desk_api.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/desk_api"]
+
+[tool.uv.sources]
+desk = { workspace = true }

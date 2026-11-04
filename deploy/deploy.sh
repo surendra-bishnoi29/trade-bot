@@ -11,5 +11,5 @@ rsync -az --delete \
   --exclude .git --exclude .venv --exclude node_modules --exclude logs --exclude .env \
   --exclude '__pycache__' --exclude .pytest_cache --exclude .ruff_cache --exclude 'web/dist' \
   --exclude graphify-out --exclude .DS_Store \
-  --rsync-path="sudo rsync" --chown=desk:desk ./ "$HOST":/opt/desk/app/
+  --rsync-path="sudo rsync" ./ "$HOST":/opt/desk/app/
 ssh -t "$HOST" "sudo bash /opt/desk/app/deploy/remote-install.sh ${1:-}"

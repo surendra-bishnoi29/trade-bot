@@ -20,7 +20,7 @@ dependencies = [
 desk = "desk.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.2", "pytest-asyncio>=0.23", "ruff>=0.5"]
+dev = ["pytest>=8.2", "pytest-asyncio>=0.23", "ruff>=0.5", "httpx>=0.27"]
 
 [build-system]
 requires = ["hatchling"]
@@ -33,6 +33,12 @@ packages = ["src/desk"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+
+[tool.uv.workspace]
+members = ["services/api"]
+
+[tool.uv]
+default-groups = []
 
 [tool.ruff]
 line-length = 100
