@@ -1,0 +1,496 @@
+<title>Desk Technical Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Patrick+Hand&display=swap">
+<style>
+/* Layout: one long Excalidraw-style canvas on a dotted grid. HLD and LLD diagrams are rough.js SVGs drawn from layout specs; tables and notes are CSS sketch cards. */
+:root{
+  --paper:#fffdf6; --ink:#1e1e1e; --ink-soft:#5f5b52; --grid:#d9d5c8; --shadow:rgba(30,30,30,.18);
+  --c-red:#ffc9c9; --c-orange:#ffd8a8; --c-yellow:#fff3bf; --c-green:#b2f2bb; --c-teal:#c3fae8;
+  --c-blue:#a5d8ff; --c-violet:#d0bfff; --c-pink:#fcc2d7; --c-gray:#e9ecef; --accent:#e03131;
+  --font-hand:'Kalam','Segoe Print','Bradley Hand','Comic Sans MS',cursive;
+  --font-body:'Patrick Hand','Segoe Print','Comic Sans MS',cursive;
+  --font-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141414; --ink:#e6e6ea; --ink-soft:#b3b3bb; --grid:#2b2b2b; --shadow:rgba(0,0,0,.55);
+    --c-red:#5a2a2a; --c-orange:#5a4324; --c-yellow:#56501f; --c-green:#24472e; --c-teal:#1f4640;
+    --c-blue:#243d57; --c-violet:#3a2f5c; --c-pink:#55293c; --c-gray:#2f3338; --accent:#ff6b6b; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141414; --ink:#e6e6ea; --ink-soft:#b3b3bb; --grid:#2b2b2b; --shadow:rgba(0,0,0,.55);
+  --c-red:#5a2a2a; --c-orange:#5a4324; --c-yellow:#56501f; --c-green:#24472e; --c-teal:#1f4640;
+  --c-blue:#243d57; --c-violet:#3a2f5c; --c-pink:#55293c; --c-gray:#2f3338; --accent:#ff6b6b; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; color:var(--ink); background-color:var(--paper);
+  background-image:radial-gradient(var(--grid) 1.3px, transparent 1.5px); background-size:24px 24px;
+  font-family:var(--font-body); font-size:18px; line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:28px 56px;
+}
+.page{max-width:1240px; margin:0 auto; display:grid; gap:56px}
+h1,h2,h3{font-family:var(--font-hand); font-weight:700; line-height:1.15; margin:0; text-wrap:balance}
+h1{font-size:clamp(36px, 6vw, 60px)}
+h2{font-size:clamp(26px, 4vw, 34px)}
+h3{font-size:20px}
+p{margin:0; max-width:68ch}
+.hl{background:linear-gradient(transparent 58%, var(--c-yellow) 58%, var(--c-yellow) 92%, transparent 92%); padding:0 .15em}
+.eyebrow{font-family:var(--font-hand); font-size:14px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-soft)}
+header{display:grid; gap:14px}
+.sub{font-size:20px; max-width:72ch}
+.legend{display:flex; flex-wrap:wrap; gap:10px 16px; font-family:var(--font-hand); font-size:14px; margin-top:6px}
+.legend span{display:inline-flex; align-items:center; gap:7px}
+.legend i{width:16px; height:16px; border:1.5px solid var(--ink); border-radius:40% 60% 50% 50%/50% 40% 60% 50%; display:inline-block; transform:rotate(-6deg)}
+section{display:grid; gap:20px}
+.uline{width:min(320px, 60%); height:14px; display:block; margin-top:-6px}
+.dia{overflow-x:auto; padding-bottom:6px}
+.dia svg{width:100%; height:auto; display:block}
+svg text{font-family:var(--font-hand); fill:var(--ink)}
+.notes{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; align-items:start}
+.notes.wide{grid-template-columns:repeat(auto-fit, minmax(300px, 1fr))}
+.note{
+  font-family:var(--font-hand); font-size:15px; line-height:1.32; padding:14px 16px; min-width:0;
+  border:2px solid var(--ink); border-radius:255px 15px 225px 15px/15px 225px 15px 255px;
+  box-shadow:3px 4px 0 var(--shadow); background:var(--c-yellow);
+}
+.note b{display:block; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; margin-bottom:5px}
+.note ul,.note ol{margin:4px 0 0; padding-left:18px}
+.note li{margin:2px 0}
+.notes > :nth-child(3n+1){transform:rotate(-1.2deg)}
+.notes > :nth-child(3n+2){transform:rotate(.9deg)}
+.notes > :nth-child(3n){transform:rotate(-.5deg)}
+.f-red{background:var(--c-red)} .f-orange{background:var(--c-orange)} .f-yellow{background:var(--c-yellow)} .f-green{background:var(--c-green)}
+.f-teal{background:var(--c-teal)} .f-blue{background:var(--c-blue)} .f-violet{background:var(--c-violet)} .f-pink{background:var(--c-pink)} .f-gray{background:var(--c-gray)}
+.tbl-wrap{overflow-x:auto}
+.sk-table{border:2px solid var(--ink); border-radius:12px 255px 14px 225px/225px 14px 255px 12px; box-shadow:3px 4px 0 var(--shadow); background:var(--paper); overflow:hidden; min-width:640px}
+table{border-collapse:collapse; width:100%; font-family:var(--font-hand); font-size:15px}
+th,td{border-bottom:1.5px dashed var(--ink-soft); padding:9px 12px; text-align:left; vertical-align:top}
+tr:last-child td{border-bottom:none}
+th{background:var(--c-gray); font-weight:700; font-size:13.5px; letter-spacing:.06em; text-transform:uppercase}
+td:first-child{font-weight:700; white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums; white-space:nowrap}
+pre.pack{
+  margin:0; font-family:var(--font-mono); font-size:12.5px; line-height:1.45; white-space:pre; overflow-x:auto;
+  padding:14px 16px; border:2px dashed var(--ink); border-radius:14px 255px 12px 225px/225px 12px 255px 14px;
+  background:var(--c-gray); box-shadow:3px 4px 0 var(--shadow);
+}
+.two{display:grid; grid-template-columns:1fr 1fr; gap:22px; align-items:start}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+.two > *{min-width:0}
+footer{font-family:var(--font-hand); font-size:14px; color:var(--ink-soft); border-top:2px dashed var(--ink-soft); padding-top:14px}
+a{color:inherit}
+a:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{transition:none !important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="wobble" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="page">
+
+<header>
+  <div class="eyebrow">bot-trading · technical design v0.3 · 2026-11-03</div>
+  <h1>Desk <span class="hl">Technical Design</span></h1>
+  <p class="sub">How the desk processes information, how it stores time-bounded data so a backtest can never peek at the future, how each LLM call is built so the expensive part is read from cache, and what a day costs in tokens. The HLD is one diagram; the LLD is the six that follow. The companion document is docs/04-technical-design.md.</p>
+  <div class="legend">
+    <span><i style="background:var(--c-teal)"></i>data and features</span>
+    <span><i style="background:var(--c-blue)"></i>research and prompt layers</span>
+    <span><i style="background:var(--c-yellow)"></i>decisions, LLM reasoning</span>
+    <span><i style="background:var(--c-red)"></i>risk</span>
+    <span><i style="background:var(--c-orange)"></i>intraday hot path</span>
+    <span><i style="background:var(--c-violet)"></i>storage</span>
+    <span><i style="background:var(--c-green)"></i>learning, replay, savings</span>
+    <span><i style="background:var(--c-gray)"></i>infrastructure</span>
+    <span><i style="background:var(--c-pink)"></i>rules and notes</span>
+  </div>
+</header>
+
+<section>
+  <h2>HLD · how information is processed</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>Every fact, whether a price bar, a filing or a headline, passes through the same seven stages. The cold path may take minutes and may call an LLM. The hot path runs bar by bar in memory and never does.</p>
+  <div class="dia"><svg id="d-hld" viewBox="0 0 1320 540" style="min-width:1100px" role="img" aria-label="Seven-stage processing pipeline from sources to learning, with the intraday hot path below it"></svg></div>
+</section>
+
+<section>
+  <h2>LLD · time-bounded storage</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>One rule governs every table: a fact carries a valid time, when it was true in the world, and a knowledge time, when the desk could have known it. Every read that feeds a decision or a backtest is "as of knowledge time T".</p>
+  <div class="dia"><svg id="d-store" viewBox="0 0 1320 560" style="min-width:1100px" role="img" aria-label="Storage tiers from Redis to Parquet, and the main tables with their valid and knowledge time columns"></svg></div>
+  <div class="tbl-wrap"><div class="sk-table"><table>
+    <thead><tr><th>Table</th><th>Valid time</th><th>Knowledge time</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>events</td><td>occurred_at</td><td>ingested_at</td><td>Append-only audit trail and the source for replay. Corrections are new events.</td></tr>
+      <tr><td>bars</td><td>ts, the bar start</td><td>ingested_at</td><td>Only completed bars. Continuous aggregates build 5m, 15m, 1h and 1d from 1m.</td></tr>
+      <tr><td>features</td><td>as_of, the bar close</td><td>inputs known at or before as_of</td><td>Versioned, so a feature change never rewrites history silently.</td></tr>
+      <tr><td>fundamentals_facts</td><td>period_end</td><td>filed_at</td><td>First-reported values are kept. A restatement is a new row with a later filed_at.</td></tr>
+      <tr><td>estimates_snapshots</td><td>fiscal_period</td><td>snapshot_at</td><td>Daily snapshots of consensus; revision features are deltas between them.</td></tr>
+      <tr><td>calendar_events</td><td>scheduled_at</td><td>known_at</td><td>An earnings date as it was known on each day. A changed date is a new row.</td></tr>
+      <tr><td>macro_series</td><td>period</td><td>released_at, vintage</td><td>ALFRED vintages, so a revised CPI print cannot leak backwards.</td></tr>
+      <tr><td>news_articles, news_scores</td><td>published_at</td><td>knowledge_at</td><td>Backfilled history gets publication time plus a modelled delay, never the backfill time.</td></tr>
+      <tr><td>news_state</td><td>as_of</td><td>as_of</td><td>Rolling 1h and 1d aggregates; strategies and evidence packs read these, not articles.</td></tr>
+      <tr><td>forecasts, research_reports, theses</td><td>as_of, created_at</td><td>same</td><td>Everything the head trader relied on, by id.</td></tr>
+      <tr><td>llm_calls, llm_cache</td><td>created_at</td><td>same</td><td>Every call's tokens and cost; identical prompts are served from cache.</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<section>
+  <h2>LLD · point in time, drawn</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>The same four facts, read as of September 15. Green marks are visible, red marks arrived later and are invisible, even though they describe an earlier period.</p>
+  <div class="dia"><svg id="d-pit" viewBox="0 0 1200 400" style="min-width:900px" role="img" aria-label="Timeline showing which facts are visible as of a chosen date based on their knowledge time"></svg></div>
+</section>
+
+<section>
+  <h2>LLD · the bus and the replayer</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>One Redis stream per topic. Each agent is a consumer group, so instances share work and every agent sees every event. The persister writes to PostgreSQL, which is the system of record. The replayer feeds history back onto the same streams under a simulated clock.</p>
+  <div class="dia"><svg id="d-bus" viewBox="0 0 1240 500" style="min-width:1000px" role="img" aria-label="Redis stream with collector, consumer groups, acknowledgement, dead-letter stream, persister to PostgreSQL, and the replayer"></svg></div>
+  <div class="notes wide">
+    <div class="note f-pink"><b>Idempotency rules</b><ul><li>ULID event ids, time-sortable and unique</li><li>natural unique keys such as (symbol, interval, ts) with ON CONFLICT DO NOTHING</li><li>explicit XACK after the handler commits</li><li>pending entries reclaimed with XAUTOCLAIM after a crash</li><li>dead-letter stream after three failed deliveries, with an alert</li><li>every handler tolerates seeing the same event twice</li></ul></div>
+    <div class="note f-green"><b>Replay is the backtester</b>SELECT from events ordered by occurred_at, publish onto the same streams, advance the SimClock. Agents run unchanged. The execution adapter becomes the simulated broker. LLM calls hit the output cache, so replaying a month costs nothing in tokens unless a prompt changed.</div>
+  </div>
+</section>
+
+<section>
+  <h2>LLD · how the LLM gets its context</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>An LLM never sees raw data. It sees an evidence pack, a compact deterministic summary with the numbers already computed and every item cited by id. Prompts are built in three layers, most stable first, so the expensive part is read from cache.</p>
+  <div class="dia"><svg id="d-prompt" viewBox="0 0 1320 540" style="min-width:1100px" role="img" aria-label="Three prompt layers with cache breakpoints, the structured output, what never goes in, and the model tiering from Haiku to Opus to batch and output cache"></svg></div>
+  <h3>An evidence pack, about 600 tokens</h3>
+  <pre class="pack">SYMBOL AAPL  AS_OF 2026-11-02T21:05Z  HORIZON weeks  BOOK swing
+POSITION none   OPEN_THESIS none
+PRICE 268.40  RET 1d +0.8% 5d +2.1% 21d -3.4% 63d +9.0%   VOL21 22% (pct 41)   RVOL 1.1
+VALUATION  pe_fwd 29.1 (sector median 24.0, own 5y z +0.6)  ev_ebitda 21.8  fcf_yield 3.4%
+QUALITY    roic 41%  net_debt_ebitda 0.3  accruals -1.2%  piotroski 7
+GROWTH     rev_yoy +6.2%  eps_yoy +9.1%  3y_cagr rev +5.0%
+ESTIMATES  fy1_eps 8.12 (rev 1m +0.9%, breadth +7/-2)  rating 4.1/5  target 292 (+8.8%)
+EARNINGS   next 2027-01-28 (known 2026-10-30)  last surprise eps +3.1% rev +1.0%  reaction +2.4%
+OWNERSHIP  inst 61% (q/q +0.4)  short 0.8% float  insiders 90d: 2 sells (routine, 10b5-1)
+EVENTS (ids)  ev_01J9X... 8-K 2.02 results 2026-10-30
+NEWS_STATE 1d score +0.21 count 14 max_impact medium   top: ev_01J9Y... "services growth" (0.6, +)
+ANALYST_SCORES self: brier 0.21 hit 0.56 (regime: low-vol uptrend)</pre>
+  <h3>Call anatomy per route</h3>
+  <div class="tbl-wrap"><div class="sk-table"><table>
+    <thead><tr><th>Route</th><th>Model</th><th>Effort</th><th>Input cached</th><th>Input new</th><th>Output</th><th>Calls per day</th></tr></thead>
+    <tbody>
+      <tr><td>News scoring</td><td>Haiku 5.5</td><td>low</td><td class="num">1.5K</td><td class="num">0.8K</td><td class="num">150</td><td class="num">about 600</td></tr>
+      <tr><td>News escalation</td><td>Opus 5.5</td><td>medium</td><td class="num">3K</td><td class="num">1.5K</td><td class="num">300</td><td class="num">about 30</td></tr>
+      <tr><td>Analyst report</td><td>Opus 5.5</td><td>medium</td><td class="num">5K</td><td class="num">2K</td><td class="num">500</td><td class="num">about 100</td></tr>
+      <tr><td>Head trader decision</td><td>Opus 5.5</td><td>high</td><td class="num">8K</td><td class="num">4K</td><td class="num">800 + thinking</td><td class="num">about 55</td></tr>
+      <tr><td>Skeptic challenge</td><td>Opus 5.5</td><td>high</td><td class="num">8K</td><td class="num">3K</td><td class="num">600 + thinking</td><td class="num">about 35</td></tr>
+      <tr><td>Analyst deep dive</td><td>Opus 5.5</td><td>medium</td><td class="num">5K</td><td class="num">2K + 3K tool results</td><td class="num">600</td><td class="num">about 10</td></tr>
+      <tr><td>Intraday playbook</td><td>Opus 5.5</td><td>high</td><td class="num">8K</td><td class="num">6K</td><td class="num">1.5K</td><td class="num">1</td></tr>
+      <tr><td>Post-mortem</td><td>Opus 5.5, batch</td><td>medium</td><td class="num">5K</td><td class="num">2K</td><td class="num">400</td><td class="num">about 10</td></tr>
+      <tr><td>Filing or transcript</td><td>Opus 5.5, batch</td><td>medium</td><td class="num">3K</td><td class="num">15K</td><td class="num">1K</td><td class="num">about 2</td></tr>
+      <tr><td>Memory consolidation</td><td>Haiku 5.5, batch</td><td>low</td><td class="num">2K</td><td class="num">4K</td><td class="num">800</td><td class="num">about 40</td></tr>
+      <tr><td>Knowledge page rebuild</td><td>Opus 5.5, batch</td><td>medium</td><td class="num">3K</td><td class="num">4K</td><td class="num">800</td><td class="num">about 15</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<section>
+  <h2>LLD · agent memory, borrowed from Hindsight</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>The desk's experience memory is built on our own PostgreSQL, borrowing the parts of Hindsight's architecture that fit: typed memories, consolidated observations with evidence, standing knowledge pages, and four-way retrieval. The difference is that every read is as of knowledge time, so a replay sees exactly the beliefs the desk held at the time, and structured facts never become memories.</p>
+  <div class="dia"><svg id="d-mem" viewBox="0 0 1320 600" style="min-width:1100px" role="img" aria-label="Agent memory: writers feed typed memories, nightly consolidation produces versioned observations and knowledge pages, and readers recall as of a point in time"></svg></div>
+  <div class="tbl-wrap"><div class="sk-table"><table>
+    <thead><tr><th>Memory type</th><th>What it holds</th><th>Written by</th><th>Read by</th></tr></thead>
+    <tbody>
+      <tr><td>World memory</td><td>A durable qualitative fact about a company, sector, market or source</td><td>analysts, head trader, humans</td><td>recall at decision time</td></tr>
+      <tr><td>Experience memory</td><td>What the desk did and what happened</td><td>reviewer, head trader</td><td>recall, post-mortems</td></tr>
+      <tr><td>Observation</td><td>A belief consolidated from several memories, with evidence ids, a proof count and a version chain by known_at</td><td>nightly consolidation</td><td>recall, page rebuilds</td></tr>
+      <tr><td>Knowledge page</td><td>A standing answer to a fixed question, rebuilt only when its scope changed</td><td>page builder</td><td>prompt layer 2 at boot</td></tr>
+      <tr><td>Directive</td><td>A rule a human gave the desk, highest trust, never consolidated away</td><td>humans</td><td>every reader</td></tr>
+    </tbody>
+  </table></div></div>
+  <div class="notes wide">
+    <div class="note f-violet"><b>Operations</b><ul><li><em>remember</em>: structured records stored verbatim; free text extracted by Haiku into memories with entities and times</li><li><em>recall(as_of)</em>: filter by known_at first, then four arms, rank fusion, rerank, pack to 800 tokens; no LLM</li><li><em>consolidate(scope)</em>: nightly on the Batch API; a contradiction is a new version that records the change</li><li><em>rebuild_pages(scope)</em>: only pages whose scope changed</li><li><em>reflect</em>: weekly, Opus, in the review ritual</li></ul></div>
+    <div class="note f-green"><b>Replay and evaluation</b>Observations and pages are versioned by known_at, so a replay at time T reads the beliefs the desk actually held at T with no rebuild. A backtest over a period the desk never traded starts with empty memory and fills it from the replayed journal. Every backtest and paper month runs twice, with memory and without, and the difference is reported. If memory does not pay for itself after costs, it stays evidence-only and does not feed conviction.</div>
+  </div>
+</section>
+
+<section>
+  <h2>What a day costs</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>Estimates at the phase 3 to 5 scale: a core of 30 swing names, a daily intraday watchlist of 20, free-tier news volume. The naive design puts raw data in long prompts, uses Opus for everything, caches nothing and asks for prose.</p>
+  <div class="dia"><svg id="d-cost" viewBox="0 0 1200 440" style="min-width:900px" role="img" aria-label="Bar chart comparing estimated daily token cost per route for a naive design versus the engineered design"></svg></div>
+  <div class="notes wide">
+    <div class="note f-gray"><b>Assumptions, re-check at signup</b>Opus 5.5 at $4 per million input tokens, $20 per million output, cache reads $0.20 per million. Haiku 5.5 at $0.10 and $0.50, cache reads assumed at a tenth of input. Cache writes assumed at 1.25 times input. Batch API half price. Thinking tokens bill as output. Market data $0 until phase 5, then about $99 per month. One small VM at $20 to $40 per month. Replays about $0 through the output cache.</div>
+    <div class="note f-green"><b>Levers, in the order they pay off</b><ol><li>evidence packs and structured outputs</li><li>prompt caching with stable prefixes</li><li>Haiku for bulk work, Opus for judgment</li><li>Batch API overnight</li><li>output cache by prompt hash</li><li>effort tuned per route</li><li>per-route daily call budgets with alerts; the head trader is the first budget we set</li></ol></div>
+  </div>
+</section>
+
+<section>
+  <h2>Hot path · from bar close to order</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>The intraday loop is deterministic and in memory. News interpretation runs beside it and lands in the news state the strategy reads on the next bar.</p>
+  <div class="dia"><svg id="d-hot" viewBox="0 0 1300 440" style="min-width:1000px" role="img" aria-label="Sequence diagram from Alpaca WebSocket through collector, bus, feature store, intraday strategy, risk officer and execution to the Alpaca API with millisecond budgets"></svg></div>
+  <div class="tbl-wrap"><div class="sk-table"><table>
+    <thead><tr><th>Step</th><th>Where</th><th>Budget</th></tr></thead>
+    <tbody>
+      <tr><td>Bar arrives, normalized, published</td><td>collector</td><td class="num">5 ms</td></tr>
+      <tr><td>Feature update, ring buffers, incremental indicators</td><td>feature store</td><td class="num">10 ms</td></tr>
+      <tr><td>Setup evaluation against the playbook</td><td>intraday strategy</td><td class="num">5 ms</td></tr>
+      <tr><td>Risk rules from in-memory limits and cached positions</td><td>risk officer</td><td class="num">10 ms</td></tr>
+      <tr><td>Order submission</td><td>execution, alpaca-py</td><td class="num">100 to 300 ms</td></tr>
+      <tr><td>Bar close to order sent</td><td></td><td class="num">about 150 to 350 ms, budget 1 s</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<footer>Companion to docs/04-technical-design.md and the desk overview page. Prices and limits are estimates from late 2026 and are re-checked at signup. Nothing here is code yet.</footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function(){
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs){ var e = document.createElementNS(NS, tag); for (var k in attrs) if (attrs[k] !== undefined) e.setAttribute(k, attrs[k]); return e; }
+  function makeShim(){
+    function mk(d, o){
+      var p = el('path', { d: d, stroke: o.stroke || '#000', 'stroke-width': o.strokeWidth || 1.5, fill: (o.fill && o.fillStyle !== 'none') ? o.fill : 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', filter: 'url(#wobble)' });
+      if (o.strokeLineDash) p.setAttribute('stroke-dasharray', o.strokeLineDash.join(' '));
+      var g = el('g', {}); g.appendChild(p); return g;
+    }
+    return { svg: function(){ return {
+      rectangle: function(x,y,w,h,o){ return mk('M'+x+' '+y+'h'+w+'v'+h+'h'+(-w)+'Z', o); },
+      line: function(x1,y1,x2,y2,o){ return mk('M'+x1+' '+y1+'L'+x2+' '+y2, o); },
+      polygon: function(pts,o){ return mk('M'+pts.map(function(p){return p.join(' ');}).join('L')+'Z', o); },
+      ellipse: function(x,y,w,h,o){ return mk('M'+(x-w/2)+' '+y+'a'+(w/2)+' '+(h/2)+' 0 1 0 '+w+' 0a'+(w/2)+' '+(h/2)+' 0 1 0 '+(-w)+' 0', o); },
+      circle: function(x,y,d,o){ return this.ellipse(x,y,d,d,o); },
+      curve: function(pts,o){ var d='M'+pts[0].join(' '); for (var i=1;i<pts.length;i++) d+='L'+pts[i].join(' '); return mk(d,o); }
+    }; } };
+  }
+  var R = window.rough || makeShim();
+  function tokens(){
+    var cs = getComputedStyle(document.documentElement);
+    function g(n){ return cs.getPropertyValue(n).trim(); }
+    return { ink:g('--ink'), soft:g('--ink-soft'), paper:g('--paper'), accent:g('--accent'),
+      red:g('--c-red'), orange:g('--c-orange'), yellow:g('--c-yellow'), green:g('--c-green'), teal:g('--c-teal'),
+      blue:g('--c-blue'), violet:g('--c-violet'), pink:g('--c-pink'), gray:g('--c-gray') };
+  }
+  function seedOf(){ var h = 2166136261; for (var i=0;i<arguments.length;i++){ h ^= Math.floor(arguments[i]*7+13); h = Math.imul(h, 16777619) >>> 0; } return (h % 100000) + 1; }
+  function base(T, extra){ var o = { roughness:1.15, bowing:1.1, stroke:T.ink, strokeWidth:1.5, fillStyle:'solid', hachureGap:7, fillWeight:0.9, hachureAngle:-41 }; for (var k in extra) if (extra[k] !== undefined) o[k] = extra[k]; return o; }
+  function labelBlock(svg, cx, cy, title, lines, o){
+    o = o || {}; lines = lines || [];
+    var ts = o.ts || 15, ls = o.ls || 12.5, th = title ? ts*1.3 : 0, lh = ls*1.3;
+    var total = th + lines.length*lh, y = cy - total/2;
+    var t = el('text', { x:cx, 'text-anchor': o.anchor || 'middle' });
+    if (o.rot) t.setAttribute('transform', 'rotate('+o.rot+' '+cx+' '+cy+')');
+    if (o.color) t.setAttribute('fill', o.color);
+    if (title){ y += th/2; var s = el('tspan', { x:cx, y:y, 'font-size':ts, 'font-weight':700, 'dominant-baseline':'middle' }); s.textContent = title; t.appendChild(s); y += th/2; }
+    lines.forEach(function(ln){ y += lh/2; var s2 = el('tspan', { x:cx, y:y, 'font-size':ls, 'dominant-baseline':'middle' }); s2.textContent = ln; t.appendChild(s2); y += lh/2; });
+    svg.appendChild(t);
+    if (o.bg){ try { var b = t.getBBox(); var r = el('rect', { x:b.x-4, y:b.y-2, width:b.width+8, height:b.height+4, fill:o.bg, rx:3, opacity:0.92 }); svg.insertBefore(r, t); } catch(e){} }
+    return t;
+  }
+  function box(rc, svg, T, x,y,w,h, o){
+    o = o || {};
+    var g = rc.rectangle(x,y,w,h, base(T, { fill: o.fill || T.gray, fillStyle: o.fillStyle || 'solid', strokeLineDash: o.dashed ? [7,5] : undefined, strokeWidth: o.sw, seed: seedOf(x,y,w,h) }));
+    if (o.rot) g.setAttribute('transform', 'rotate('+o.rot+' '+(x+w/2)+' '+(y+h/2)+')');
+    svg.appendChild(g);
+    if (o.title || o.lines) labelBlock(svg, x+w/2, y+h/2, o.title, o.lines, { ts:o.ts, ls:o.ls, rot:o.rot, color:o.color, bg:o.bg });
+    return g;
+  }
+  function note(rc, svg, T, x,y,w,h, lines, o){ o = o || {}; box(rc, svg, T, x,y,w,h, { fill:o.fill || T.yellow, rot:(o.rot === undefined ? -2 : o.rot), title:o.title, lines:lines, ts:o.ts || 13, ls:o.ls || 12, dashed:o.dashed }); }
+  function head(rc, svg, T, x, y, ang, L){ L = L || 12; var A = Math.PI/7; var p1 = [x - L*Math.cos(ang-A), y - L*Math.sin(ang-A)], p2 = [x - L*Math.cos(ang+A), y - L*Math.sin(ang+A)]; svg.appendChild(rc.polygon([[x,y],p1,p2], base(T, { fill:T.ink, fillStyle:'solid', seed:seedOf(x,y,L) }))); }
+  function arrow(rc, svg, T, x1,y1,x2,y2, o){
+    o = o || {};
+    var opts = base(T, { strokeWidth: o.width || 1.6, strokeLineDash: o.dashed ? [7,6] : undefined, stroke: o.stroke, seed: seedOf(x1,y1,x2,y2) });
+    var g, dx, dy, sx, sy;
+    if (o.via){ g = rc.curve([[x1,y1],[o.via[0],o.via[1]],[x2,y2]], opts); dx = x2-o.via[0]; dy = y2-o.via[1]; sx = o.via[0]-x1; sy = o.via[1]-y1; }
+    else { g = rc.line(x1,y1,x2,y2,opts); dx = x2-x1; dy = y2-y1; sx = dx; sy = dy; }
+    svg.appendChild(g);
+    head(rc, svg, T, x2, y2, Math.atan2(dy,dx), o.hl);
+    if (o.both) head(rc, svg, T, x1, y1, Math.atan2(-sy,-sx), o.hl);
+    if (o.label){
+      var mx = o.via ? (0.25*x1 + 0.5*o.via[0] + 0.25*x2) : (x1+x2)/2, my = o.via ? (0.25*y1 + 0.5*o.via[1] + 0.25*y2) : (y1+y2)/2;
+      labelBlock(svg, mx + (o.lx || 0), my + (o.ly === undefined ? -11 : o.ly), null, [o.label], { ls:o.lsize || 12, color:T.soft, anchor:o.lanchor || 'middle', bg:T.paper });
+    }
+    return g;
+  }
+  function text(svg, x, y, str, o){ o = o || {}; var t = el('text', { x:x, y:y, 'font-size':o.size || 14, 'text-anchor':o.anchor || 'middle', 'font-weight':o.weight || 400, 'dominant-baseline':'middle' }); if (o.color) t.setAttribute('fill', o.color); if (o.rot) t.setAttribute('transform', 'rotate('+o.rot+' '+x+' '+y+')'); t.textContent = str; svg.appendChild(t); return t; }
+
+  var D = {};
+
+  D['d-hld'] = function(rc, svg, T){
+    text(svg, 30, 26, 'COLD PATH · research and swing · minutes, LLM calls allowed', { size:14, weight:700, anchor:'start' });
+    var stages = [['1 · SOURCES',['Alpaca · EDGAR · FRED','news · calendars'],T.teal],['2 · INGEST',['normalize, validate, dedup','stamp occurred_at','and ingested_at'],T.teal],['3 · BUS',['Redis Streams','one stream per topic'],T.gray],['4 · PERSIST',['append-only events','table, Timescale'],T.violet],['5 · DERIVE',['features, point in time','text → scored events'],T.teal],['6 · RESEARCH',['forecasts from models','reports from LLM analysts'],T.blue],['7 · DECIDE',['head trader → theses,','order.intent'],T.yellow],['8 · CONTROL, EXECUTE',['risk → execution','→ back office'],T.red]];
+    stages.forEach(function(s,i){ var x = 30 + 162*i; box(rc, svg, T, x,60,148,96, { fill:s[2], title:s[0], ts:13, lines:s[1], ls:11.5 }); if (i < 7) arrow(rc, svg, T, x+148,108,x+162,108, { hl:9 }); });
+    box(rc, svg, T, 840,230,310,70, { fill:T.green, title:'9 · LEARN', ts:13, lines:['reviewer grades trades, scores analysts,','calibrates forecasts, retrains models'], ls:11.5 });
+    arrow(rc, svg, T, 1238,156,1150,255, { via:[1255,240], hl:10 });
+    arrow(rc, svg, T, 840,255,900,156, { via:[850,200], hl:10, label:'credibility weights, promoted models', lx:-150, ly:0, lsize:11 });
+    note(rc, svg, T, 30,190,300,80, ['Two clocks on every event:','occurred_at is the world,','ingested_at is the desk.'], { fill:T.pink, rot:-2 });
+    note(rc, svg, T, 354,190,300,80, ['Nothing is ever updated or','deleted. A correction is a','new event with a later time.'], { fill:T.pink, rot:1.5 });
+    text(svg, 30, 368, 'HOT PATH · intraday · under one second, no LLM call', { size:14, weight:700, anchor:'start' });
+    var hot = [['1-MINUTE BAR',[],T.teal,354,120],['FEATURE STORE',['in-memory ring buffers,','incremental indicators'],T.teal,510,180],['INTRADAY STRATEGY',['setups the playbook allows'],T.orange,726,170],['RISK OFFICER',['in-memory limits'],T.red,932,150],['EXECUTION',['alpaca-py → broker'],T.gray,1118,150]];
+    hot.forEach(function(h,i){ box(rc, svg, T, h[3],400,h[4],60, { fill:h[2], title:h[0], ts:12.5, lines:h[1], ls:11 }); if (i < 4) arrow(rc, svg, T, h[3]+h[4],430,hot[i+1][3],430, { hl:9 }); });
+    arrow(rc, svg, T, 428,156,414,400, { label:'market.bar.1m', lanchor:'start', lx:10, ly:0, lsize:11.5 });
+    text(svg, 736, 490, 'bar close to order sent: about 150 to 350 ms · budget 1 second', { size:13, color:T.soft });
+  };
+
+  D['d-store'] = function(rc, svg, T){
+    var tiers = [['REDIS STREAMS',['live events, one stream per topic','MAXLEN trims to about 24 hours'],T.gray,'hachure'],['POSTGRESQL + TIMESCALE',['uncompressed, last 30 days','hypertables, continuous aggregates'],T.violet,'solid'],['COMPRESSED CHUNKS',['same rows, about 10x smaller','kept forever: the audit trail'],T.violet,'solid'],['PARQUET LAKE + DUCKDB',['nightly export by date and symbol','training and research only'],T.green,'solid']];
+    var links = ['persister', 'compression policy', 'nightly export'];
+    tiers.forEach(function(t,i){ var y = 40 + 130*i; box(rc, svg, T, 30,y,270,90, { fill:t[2], fillStyle:t[3], title:t[0], ts:13.5, lines:t[1], ls:11, bg:(t[3]==='hachure'?T.paper:undefined) }); if (i < 3) arrow(rc, svg, T, 165,y+90,165,y+130, { label:links[i], lanchor:'start', lx:10, ly:0, lsize:11.5 }); });
+    var cards = [
+      ['events',['valid: occurred_at · known: ingested_at','append-only, ULID ids, correlation ids'],T.violet],
+      ['bars',['valid: ts (bar start) · known: ingested_at','PK (symbol, interval, ts), completed only'],T.violet],
+      ['features',['valid: as_of (bar close) · versioned','built only from inputs known ≤ as_of'],T.violet],
+      ['fundamentals_facts',['valid: period_end · known: filed_at','first-reported kept, restatement = new row'],T.violet],
+      ['estimates_snapshots',['known: snapshot_at (daily)','revisions = deltas between snapshots'],T.violet],
+      ['calendar_events',['valid: scheduled_at · known: known_at','a changed earnings date is a new row'],T.violet],
+      ['macro_series',['valid: period · known: released_at','ALFRED vintages, revisions never leak back'],T.violet],
+      ['news_articles · news_scores',['valid: published_at · known: knowledge_at','embedding for dedup, scores never overwrite'],T.violet],
+      ['news_state',['valid: as_of · rolling 1h and 1d','what strategies and evidence packs read'],T.violet],
+      ['forecasts',['valid: as_of · model_id, trained_through','quantiles, p_up, attributions'],T.violet],
+      ['research_reports · theses',['valid: as_of / created_at','evidence ids, invalidation, updates'],T.violet],
+      ['orders · fills · positions',['valid: ts','every risk rule result with its numbers'],T.violet],
+      ['llm_calls · llm_cache',['every call: tokens, cost, latency','cache by prompt hash → replays free'],T.violet],
+      ['analyst_scores · weights',['window_end · brier, hit rate, IC','feeds the daily prompt layer'],T.violet]
+    ];
+    cards.forEach(function(c,i){ var col = i % 3, row = Math.floor(i/3); var x = 340 + 330*col, y = 40 + 106*row; box(rc, svg, T, x,y,300,88, { fill:c[2], title:c[0], ts:13, lines:c[1], ls:10.5 }); });
+    note(rc, svg, T, 1000,464,300,88, ['UTC in storage, Eastern at the edges.','One injected Clock: Live or Sim.','No datetime.now() anywhere.'], { fill:T.pink, rot:-2, title:'EVERY TABLE', ts:12.5, ls:11 });
+  };
+
+  D['d-pit'] = function(rc, svg, T){
+    var Tx = 550;
+    svg.appendChild(rc.rectangle(Tx,40,600,290, base(T, { fill:T.gray, fillStyle:'hachure', hachureGap:9, fillWeight:0.6, strokeWidth:0.6, seed:21 })));
+    text(svg, 860, 58, 'unknown at T', { size:12, color:T.soft });
+    arrow(rc, svg, T, 60,330,1150,330, { width:2.2 });
+    var months = [['Jul 1',100],['Aug 1',280],['Sep 1',460],['Oct 1',640],['Nov 1',820],['Dec 1',1000]];
+    months.forEach(function(m){ svg.appendChild(rc.line(m[1],324,m[1],336, base(T, { strokeWidth:1.2, seed:seedOf(m[1]) }))); text(svg, m[1], 350, m[0], { size:11.5, color:T.soft }); });
+    svg.appendChild(rc.line(Tx,40,Tx,330, base(T, { strokeWidth:2, stroke:T.accent, strokeLineDash:[8,6], seed:3 })));
+    text(svg, Tx, 26, 'read as of T = Sep 15', { size:14, weight:700, color:T.accent });
+    function mark(x, y, fill, label, anchor){ svg.appendChild(rc.rectangle(x-6,y-6,12,12, base(T, { fill:fill, fillStyle:'solid', seed:seedOf(x,y) }))); text(svg, anchor === 'end' ? x-12 : x+12, y, label, { size:11.5, anchor:anchor || 'start' }); }
+    var rows = [
+      [80, 'Q2 revenue, period ends Jun 30', [[280, T.green, 'filed Aug 1 → visible'], [721, T.red, 'restated Oct 15 → invisible at T']]],
+      [140, 'Q3 earnings date', [[466, T.green, 'announced Sep 2 as Oct 22 → visible'], [640, T.red, 'changed Oct 1 to Oct 29 → invisible']]],
+      [200, 'news article', [[544, T.green, 'published Sep 14 + 2 min delay → visible'], [934, T.gray, 'fetched by backfill Nov 20: not its knowledge time']]],
+      [260, 'CPI for August', [[520, T.green, 'released Sep 11 → visible'], [694, T.red, 'revised Oct 10 → invisible']]]
+    ];
+    rows.forEach(function(r){ text(svg, 62, r[0], r[1], { size:13, weight:700, anchor:'start' }); svg.appendChild(rc.line(60,r[0]+16,1140,r[0]+16, base(T, { strokeWidth:0.6, strokeLineDash:[3,6], seed:seedOf(r[0]) }))); r[2].forEach(function(m){ mark(m[0], r[0], m[1], m[2]); }); });
+    note(rc, svg, T, 900,120,260,74, ['A read at T sees only facts','whose knowledge time is','at or before T.'], { rot:-2, ts:12.5, ls:12 });
+  };
+
+  D['d-bus'] = function(rc, svg, T){
+    box(rc, svg, T, 30,60,200,70, { fill:T.teal, title:'COLLECTOR', ts:13.5, lines:['one event per fact','validated, deduplicated'], ls:11 });
+    arrow(rc, svg, T, 230,95,300,95, { label:'XADD', ly:-10 });
+    svg.appendChild(rc.rectangle(300,60,620,70, base(T, { fill:T.gray, fillStyle:'hachure', hachureGap:8, fillWeight:0.8, strokeWidth:2, seed:42 })));
+    labelBlock(svg, 610, 95, 'desk:market.bar.1m  (one stream per topic, MAXLEN trimmed)', ['[01JA…] [01JB…] [01JC…] [01JD…] …  entries are events, in order'], { ts:14, ls:12, bg:T.paper });
+    var groups = [['group: features',['XREADGROUP → handle → XACK'],T.teal,300],['group: strategy',['XREADGROUP → handle → XACK'],T.orange,500],['group: persister',['writes every event to PostgreSQL'],T.violet,700]];
+    groups.forEach(function(g){ box(rc, svg, T, g[3],230,180,66, { fill:g[2], title:g[0], ts:13, lines:g[1], ls:10.5 }); arrow(rc, svg, T, g[3]+90,130,g[3]+90,230, { both:true, hl:9 }); });
+    text(svg, 610, 185, 'every group sees every event; instances of one agent share its group', { size:11.5, color:T.soft });
+    note(rc, svg, T, 920,160,290,96, ['Crash mid-handling? The entry','stays pending. On restart,','XAUTOCLAIM hands it back.','Handlers are idempotent.'], { fill:T.pink, rot:2 });
+    box(rc, svg, T, 920,300,290,56, { fill:T.red, dashed:true, title:'DEAD-LETTER STREAM', ts:12.5, lines:['after 3 failed deliveries, with an alert'], ls:10.5 });
+    arrow(rc, svg, T, 680,270,920,322, { dashed:true, hl:9 });
+    box(rc, svg, T, 700,390,180,70, { fill:T.violet, title:'events TABLE', ts:13, lines:['append-only; ON CONFLICT','DO NOTHING on event_id'], ls:10.5 });
+    arrow(rc, svg, T, 790,296,790,390, { label:'insert', lanchor:'start', lx:8, ly:0, lsize:11 });
+    box(rc, svg, T, 30,230,200,66, { fill:T.green, dashed:true, title:'SIMULATED BROKER', ts:12.5, lines:['swapped in for replays','fills with a slippage model'], ls:10.5 });
+    box(rc, svg, T, 30,390,260,80, { fill:T.green, title:'REPLAYER + SimClock', ts:13.5, lines:['SELECT … ORDER BY occurred_at','publishes onto the same streams'], ls:10.5 });
+    arrow(rc, svg, T, 700,425,290,430, { dashed:true, label:'history', ly:-10 });
+    arrow(rc, svg, T, 200,390,330,130, { via:[270,250], label:'XADD (replay)', lx:40, ly:0, lsize:11 });
+    box(rc, svg, T, 330,390,180,70, { fill:T.yellow, title:'llm_cache', ts:13, lines:['prompt hash → output','replay tokens: $0'], ls:10.5 });
+  };
+
+  D['d-prompt'] = function(rc, svg, T){
+    box(rc, svg, T, 30,40,430,100, { fill:T.blue, title:'LAYER 1 · STATIC · 2 to 4K tokens', ts:13.5, lines:['role and rules · output schema','factor glossary · house style','changes only with a prompt version'], ls:11.5 });
+    svg.appendChild(rc.line(30,152,460,152, base(T, { strokeWidth:1.6, stroke:T.accent, strokeLineDash:[6,5], seed:51 })));
+    text(svg, 470, 152, 'cache breakpoint', { size:11.5, anchor:'start', color:T.accent, weight:700 });
+    box(rc, svg, T, 30,165,430,95, { fill:T.blue, title:'LAYER 2 · DAILY · 1 to 2K · cached all day', ts:13.5, lines:['regime brief · macro calendar','credibility weights · risk budget · universe','identical for every call today'], ls:11.5 });
+    svg.appendChild(rc.line(30,272,460,272, base(T, { strokeWidth:1.6, stroke:T.accent, strokeLineDash:[6,5], seed:52 })));
+    text(svg, 470, 272, 'cache breakpoint', { size:11.5, anchor:'start', color:T.accent, weight:700 });
+    box(rc, svg, T, 30,288,430,110, { fill:T.yellow, title:'LAYER 3 · VOLATILE · 1 to 3K · not cached', ts:13.5, lines:['the evidence pack for this symbol:','feature summary, forecasts, news ids,','calendar, position, thesis state'], ls:11.5 });
+    arrow(rc, svg, T, 245,398,245,420, { hl:9 });
+    box(rc, svg, T, 30,420,430,70, { fill:T.green, title:'STRUCTURED OUTPUT · pydantic schema', ts:13.5, lines:['150 to 800 tokens, max_tokens capped','cites event ids, never restates the facts'], ls:11.5 });
+    text(svg, 470, 95, 'read from cache at about 5% of the input price', { size:11.5, anchor:'start', color:T.soft });
+    text(svg, 470, 215, 'written once a day, then read from cache', { size:11.5, anchor:'start', color:T.soft });
+    note(rc, svg, T, 520,40,380,110, ['raw bars or full articles','chat history or the journal','other symbols’ data','timestamps inside cached layers'], { fill:T.pink, rot:-1.5, title:'WHAT NEVER GOES IN', ts:12.5, ls:12 });
+    note(rc, svg, T, 520,170,380,100, ['No conversation. Each call gets','exactly the slice it needs from','the database and returns a schema.','Context never grows over time.'], { rot:1, title:'STATELESS CALLS', ts:12.5, ls:12 });
+    note(rc, svg, T, 520,290,380,130, ['old news → numbers in news_state','thesis: last 3 updates verbatim, rest summarized','retrieval pulls at most a handful of items','hard token caps per pack section'], { rot:-1, title:'WHY IT STAYS SMALL', ts:12.5, ls:12 });
+    box(rc, svg, T, 940,40,350,90, { fill:T.teal, title:'HAIKU 5.5 · bulk', ts:13.5, lines:['news relevance and sentiment,','dedup assist · effort low'], ls:11.5 });
+    arrow(rc, svg, T, 1115,130,1115,180, { label:'escalate: confidence < 0.6 or high impact', lanchor:'start', lx:10, ly:0, lsize:11 });
+    box(rc, svg, T, 940,180,350,100, { fill:T.yellow, title:'OPUS 5.5 · judgment', ts:13.5, lines:['analyst reports, head trader,','post-mortems · adaptive thinking','effort medium or high'], ls:11.5 });
+    box(rc, svg, T, 940,310,350,80, { fill:T.violet, dashed:true, title:'BATCH API · overnight, half price', ts:13.5, lines:['backfills, transcripts,','post-mortems, news backlog'], ls:11.5 });
+    box(rc, svg, T, 940,420,350,70, { fill:T.green, title:'OUTPUT CACHE', ts:13.5, lines:['model + prompt version + hash','replays and duplicates cost $0'], ls:11.5 });
+    note(rc, svg, T, 520,432,380,62, ['agent loop, at most 5 read-only, clock-aware tool','calls; asked for by the head trader; replays exactly'], { fill:T.green, rot:1, title:'DEEP-DIVE MODE', ts:12.5, ls:11 });
+  };
+
+  D['d-mem'] = function(rc, svg, T){
+    text(svg, 130, 36, 'WRITERS', { size:14, weight:700 });
+    var writers = [['PERFORMANCE REVIEWER',['experience memories'],T.green],['ANALYSTS',['world memories, 1 or 2 per report'],T.blue],['HEAD TRADER',['rationale and lessons'],T.yellow],['HUMANS',['directives, highest trust'],T.pink]];
+    writers.forEach(function(w,i){ var y = 60 + 76*i; box(rc, svg, T, 30,y,200,56, { fill:w[2], title:w[0], ts:12, lines:w[1], ls:10.5 }); arrow(rc, svg, T, 230,y+28,300,y+28, { hl:9 }); });
+    box(rc, svg, T, 300,60,250,284, { fill:T.violet, title:'MEMORIES', ts:16, lines:['world · experience · directive','occurred_at and known_at','entities, links, embedding, tsvector','one bank per agent, one desk bank','document_id makes writes idempotent'], ls:11.5 });
+    box(rc, svg, T, 600,60,250,284, { fill:T.teal, title:'RECALL (as_of)', ts:16, lines:['1 filter: known_at ≤ T, bank, tags','2 semantic · keyword · graph · temporal','3 reciprocal rank fusion, k = 60','4 local cross-encoder rerank','5 pack to 800 tokens, whole items','no LLM call, cold path only'], ls:11.5 });
+    arrow(rc, svg, T, 550,200,600,200, { hl:9, label:'as-of first', ly:-10, lsize:11 });
+    box(rc, svg, T, 900,60,350,284, { fill:T.yellow, title:'READERS', ts:16, lines:['layer 2 at boot: knowledge pages','layer 3 at decision: recall ≤ 800 tokens','head trader, skeptic, analysts','weekly reflect in the review ritual','memory is evidence, cited by id','never the risk officer'], ls:11.5 });
+    arrow(rc, svg, T, 850,200,900,200, { hl:9 });
+    arrow(rc, svg, T, 425,344,425,390, { hl:9, label:'new memories', lanchor:'start', lx:8, ly:0, lsize:11 });
+    box(rc, svg, T, 300,390,250,70, { fill:T.green, title:'CONSOLIDATE', ts:13, lines:['nightly, per scope, Haiku on the Batch API','a contradiction is a new version'], ls:10.5 });
+    arrow(rc, svg, T, 550,425,600,425, { hl:9 });
+    box(rc, svg, T, 600,390,250,70, { fill:T.violet, title:'OBSERVATIONS', ts:13, lines:['evidence ids, proof count,','version chain by known_at'], ls:10.5 });
+    arrow(rc, svg, T, 725,390,725,344, { hl:9, label:'recalled too', lanchor:'start', lx:8, ly:0, lsize:11 });
+    arrow(rc, svg, T, 850,425,900,425, { hl:9, label:'rebuild_pages', ly:-10, lsize:11 });
+    box(rc, svg, T, 900,390,350,70, { fill:T.violet, title:'KNOWLEDGE PAGES', ts:13, lines:['standing answers, rebuilt only when','their scope changed; built_from_known_at'], ls:10.5 });
+    arrow(rc, svg, T, 1075,390,1075,344, { hl:9, label:'DB read, no LLM', lanchor:'start', lx:8, ly:0, lsize:11 });
+    note(rc, svg, T, 30,390,250,96, ['Structured facts are not','memories. Bars, fundamentals','and macro stay in the','bitemporal tables.'], { fill:T.pink, rot:-2 });
+    note(rc, svg, T, 300,500,950,80, ['borrowed: typed memories, observations with evidence, knowledge pages, four-way retrieval with rank fusion, token-budget packing, scoped consolidation','added: the as-of filter before ranking, beliefs versioned by known_at, trust levels, structured facts kept structured, replay without rebuild'], { fill:T.green, rot:0.5, title:'BORROWED FROM HINDSIGHT · ADDED BY US', ts:12.5, ls:11 });
+  };
+
+  D['d-cost'] = function(rc, svg, T){
+    var baseY = 360, scale = 20;
+    svg.appendChild(rc.line(100,40,100,baseY, base(T, { strokeWidth:1.6, seed:61 })));
+    svg.appendChild(rc.line(100,baseY,1150,baseY, base(T, { strokeWidth:1.6, seed:62 })));
+    [0,4,8,12,16].forEach(function(v){ var y = baseY - v*scale; svg.appendChild(rc.line(94,y,106,y, base(T, { strokeWidth:1.2, seed:seedOf(v) }))); text(svg, 84, y, '$' + v, { size:11.5, anchor:'end', color:T.soft }); });
+    text(svg, 60, 30, 'per day', { size:11.5, anchor:'start', color:T.soft });
+    var routes = [['News scoring',7.2,0.10],['Escalation',0,0.40],['Analyst reports',10,1.9],['Head trader',15,4.2],['Skeptic',0,1.9],['Deep dives',0,0.8],['Playbook',0.5,0.1],['Post-mortems',1.0,0.15],['Filings',0.6,0.1],['Memory',0,1.5]];
+    routes.forEach(function(r,i){
+      var gx = 120 + 102*i;
+      if (r[1] > 0){ var h1 = r[1]*scale; svg.appendChild(rc.rectangle(gx,baseY-h1,42,h1, base(T, { fill:T.gray, fillStyle:'hachure', hachureGap:6, seed:seedOf(gx,1) }))); text(svg, gx+21, baseY-h1-10, '$'+r[1].toFixed(r[1] < 1 ? 2 : 1), { size:10.5, color:T.soft }); }
+      else { text(svg, gx+21, baseY-12, 'n/a', { size:10.5, color:T.soft }); }
+      var h2 = Math.max(r[2]*scale, 2); svg.appendChild(rc.rectangle(gx+50,baseY-h2,42,h2, base(T, { fill:T.green, fillStyle:'solid', seed:seedOf(gx,2) })));
+      text(svg, gx+71, baseY-h2-10, '$'+r[2].toFixed(2), { size:10.5, color:T.soft });
+      text(svg, gx+46, 380, r[0], { size:11 });
+    });
+    svg.appendChild(rc.rectangle(820,36,14,14, base(T, { fill:T.gray, fillStyle:'hachure', hachureGap:4, seed:71 }))); text(svg, 842, 43, 'naive: raw data, no caching, Opus everywhere, prose', { size:11.5, anchor:'start' });
+    svg.appendChild(rc.rectangle(820,60,14,14, base(T, { fill:T.green, fillStyle:'solid', seed:72 }))); text(svg, 842, 67, 'engineered: packs, caching, Haiku tier, batch, output cache', { size:11.5, anchor:'start' });
+    text(svg, 640, 418, 'naive about $34 per day · engineered about $12 per day · estimates at the phase 3 to 5 scale', { size:13, weight:700 });
+  };
+
+  D['d-hot'] = function(rc, svg, T){
+    var lanes = [['Alpaca WS',90,T.gray],['Collector',250,T.teal],['Bus',410,T.gray],['Feature Store',570,T.teal],['Intraday Strategy',730,T.orange],['Risk Officer',890,T.red],['Execution',1050,T.gray],['Alpaca API',1210,T.gray]];
+    lanes.forEach(function(l){ box(rc, svg, T, l[1]-65,30,130,40, { fill:l[2], title:l[0], ts:12.5 }); svg.appendChild(rc.line(l[1],70,l[1],400, base(T, { strokeWidth:1, strokeLineDash:[5,6], seed:seedOf(l[1]) }))); });
+    var msgs = [[0,1,'bar closes (WebSocket)'],[1,2,'market.bar.1m · XADD · 5 ms'],[2,3,'XREADGROUP'],[3,2,'features.intraday.ready · 10 ms'],[2,4,'XREADGROUP'],[4,2,'order.intent · 5 ms'],[2,5,'XREADGROUP'],[5,2,'risk.approved · 10 ms'],[2,6,'XREADGROUP'],[6,7,'POST order · 100 to 300 ms']];
+    msgs.forEach(function(m,i){ var y = 95 + 30*i; var x1 = lanes[m[0]][1], x2 = lanes[m[1]][1]; arrow(rc, svg, T, x1,y,x2,y, { hl:9, label:m[2], ly:-9, lsize:11 }); });
+    text(svg, 650, 420, 'bar close → order sent: about 150 to 350 ms · budget 1 s · no LLM on this path; news state updates beside it', { size:13, weight:700 });
+  };
+
+  function renderAll(){
+    var T = tokens();
+    Object.keys(D).forEach(function(id){
+      var svg = document.getElementById(id); if (!svg) return;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      D[id](R.svg(svg), svg, T);
+    });
+    var ul = document.querySelectorAll('svg.uline');
+    for (var i = 0; i < ul.length; i++){ var s = ul[i]; while (s.firstChild) s.removeChild(s.firstChild); s.appendChild(R.svg(s).line(4,7,316,8, base(T, { roughness:2.2, strokeWidth:2.4, stroke:T.accent, seed:100+i }))); }
+  }
+  renderAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(renderAll);
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  if (mq.addEventListener) mq.addEventListener('change', renderAll); else if (mq.addListener) mq.addListener(renderAll);
+  new MutationObserver(renderAll).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
+})();
+</script>

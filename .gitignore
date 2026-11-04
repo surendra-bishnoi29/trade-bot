@@ -1,0 +1,21 @@
+# secrets and local state
+.env
+*.local.json
+data/
+logs/
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+# os / editors
+.DS_Store
+.idea/
+.vscode/
+.claude/settings.local.json
+graphify-out/
+node_modules/

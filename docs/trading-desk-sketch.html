@@ -1,0 +1,546 @@
+<title>Autonomous Trading Desk</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Patrick+Hand&display=swap">
+<style>
+/* Layout: one long Excalidraw-style canvas on a dotted grid. Diagrams are rough.js SVGs drawn from layout specs; notes and tables are CSS sketch cards with wobbly borders. */
+:root{
+  --paper:#fffdf6; --ink:#1e1e1e; --ink-soft:#5f5b52; --grid:#d9d5c8; --shadow:rgba(30,30,30,.18);
+  --c-red:#ffc9c9; --c-orange:#ffd8a8; --c-yellow:#fff3bf; --c-green:#b2f2bb; --c-teal:#c3fae8;
+  --c-blue:#a5d8ff; --c-violet:#d0bfff; --c-pink:#fcc2d7; --c-gray:#e9ecef; --accent:#e03131;
+  --font-hand:'Kalam','Segoe Print','Bradley Hand','Comic Sans MS',cursive;
+  --font-body:'Patrick Hand','Segoe Print','Comic Sans MS',cursive;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141414; --ink:#e6e6ea; --ink-soft:#b3b3bb; --grid:#2b2b2b; --shadow:rgba(0,0,0,.55);
+    --c-red:#5a2a2a; --c-orange:#5a4324; --c-yellow:#56501f; --c-green:#24472e; --c-teal:#1f4640;
+    --c-blue:#243d57; --c-violet:#3a2f5c; --c-pink:#55293c; --c-gray:#2f3338; --accent:#ff6b6b; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141414; --ink:#e6e6ea; --ink-soft:#b3b3bb; --grid:#2b2b2b; --shadow:rgba(0,0,0,.55);
+  --c-red:#5a2a2a; --c-orange:#5a4324; --c-yellow:#56501f; --c-green:#24472e; --c-teal:#1f4640;
+  --c-blue:#243d57; --c-violet:#3a2f5c; --c-pink:#55293c; --c-gray:#2f3338; --accent:#ff6b6b; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; color:var(--ink); background-color:var(--paper);
+  background-image:radial-gradient(var(--grid) 1.3px, transparent 1.5px); background-size:24px 24px;
+  font-family:var(--font-body); font-size:18px; line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:28px 56px;
+}
+.page{max-width:1240px; margin:0 auto; display:grid; gap:56px}
+h1,h2,h3{font-family:var(--font-hand); font-weight:700; line-height:1.15; margin:0; text-wrap:balance}
+h1{font-size:clamp(36px, 6vw, 60px)}
+h2{font-size:clamp(26px, 4vw, 34px)}
+h3{font-size:20px}
+p{margin:0; max-width:68ch}
+.hl{background:linear-gradient(transparent 58%, var(--c-yellow) 58%, var(--c-yellow) 92%, transparent 92%); padding:0 .15em}
+.eyebrow{font-family:var(--font-hand); font-size:14px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-soft)}
+header{display:grid; gap:14px}
+.sub{font-size:20px; max-width:72ch}
+.legend{display:flex; flex-wrap:wrap; gap:10px 16px; font-family:var(--font-hand); font-size:14px; margin-top:6px}
+.legend span{display:inline-flex; align-items:center; gap:7px}
+.legend i{width:16px; height:16px; border:1.5px solid var(--ink); border-radius:40% 60% 50% 50%/50% 40% 60% 50%; display:inline-block; transform:rotate(-6deg)}
+section{display:grid; gap:20px}
+.uline{width:min(320px, 60%); height:14px; display:block; margin-top:-6px}
+.dia{overflow-x:auto; padding-bottom:6px}
+.dia svg{width:100%; height:auto; display:block}
+svg text{font-family:var(--font-hand); fill:var(--ink)}
+.notes{display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:18px; align-items:start}
+.notes.big{grid-template-columns:repeat(auto-fit, minmax(240px, 1fr))}
+.notes.wide{grid-template-columns:repeat(auto-fit, minmax(300px, 1fr))}
+.note{
+  font-family:var(--font-hand); font-size:15px; line-height:1.32; padding:14px 16px; min-width:0;
+  border:2px solid var(--ink); border-radius:255px 15px 225px 15px/15px 225px 15px 255px;
+  box-shadow:3px 4px 0 var(--shadow); background:var(--c-yellow);
+}
+.note b{display:block; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; margin-bottom:5px}
+.note strong{font-size:19px; display:block; margin-bottom:4px}
+.note ul{margin:4px 0 0; padding-left:18px}
+.note li{margin:2px 0}
+.notes > :nth-child(3n+1){transform:rotate(-1.2deg)}
+.notes > :nth-child(3n+2){transform:rotate(.9deg)}
+.notes > :nth-child(3n){transform:rotate(-.5deg)}
+.f-red{background:var(--c-red)} .f-orange{background:var(--c-orange)} .f-yellow{background:var(--c-yellow)} .f-green{background:var(--c-green)}
+.f-teal{background:var(--c-teal)} .f-blue{background:var(--c-blue)} .f-violet{background:var(--c-violet)} .f-pink{background:var(--c-pink)} .f-gray{background:var(--c-gray)}
+.tbl-wrap{overflow-x:auto}
+.sk-table{border:2px solid var(--ink); border-radius:12px 255px 14px 225px/225px 14px 255px 12px; box-shadow:3px 4px 0 var(--shadow); background:var(--paper); overflow:hidden; min-width:620px}
+table{border-collapse:collapse; width:100%; font-family:var(--font-hand); font-size:15px}
+th,td{border-bottom:1.5px dashed var(--ink-soft); padding:9px 12px; text-align:left; vertical-align:top}
+tr:last-child td{border-bottom:none}
+th{background:var(--c-gray); font-weight:700; font-size:13.5px; letter-spacing:.06em; text-transform:uppercase}
+td:first-child{font-weight:700; white-space:nowrap}
+.two{display:grid; grid-template-columns:1fr 1fr; gap:22px; align-items:start}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+.two > *{min-width:0}
+.arrow-note{font-family:var(--font-hand); font-size:15px; color:var(--ink-soft)}
+footer{font-family:var(--font-hand); font-size:14px; color:var(--ink-soft); border-top:2px dashed var(--ink-soft); padding-top:14px}
+code{font-family:'Kalam',monospace; font-size:.95em; background:var(--c-gray); padding:0 4px; border-radius:4px}
+a{color:inherit}
+a:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{transition:none !important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="wobble" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="page">
+
+<header>
+  <div class="eyebrow">bot-trading · design sketch v0.3 · 2026-11-03</div>
+  <h1>The <span class="hl">Autonomous Trading Desk</span></h1>
+  <p class="sub">One head-trader agent runs a research team, an independent risk officer approves or vetoes every order, and an execution agent buys and sells US equities on its own. Two books, swing and intraday. Paper trading first, live trading on measured results. This page is the whiteboard version of the four design documents in the repository.</p>
+  <div class="legend">
+    <span><i style="background:var(--c-blue)"></i>research and analysis</span>
+    <span><i style="background:var(--c-yellow)"></i>decisions, LLM reasoning</span>
+    <span><i style="background:var(--c-red)"></i>risk</span>
+    <span><i style="background:var(--c-orange)"></i>books and strategies</span>
+    <span><i style="background:var(--c-teal)"></i>data and features</span>
+    <span><i style="background:var(--c-green)"></i>learning and replay</span>
+    <span><i style="background:var(--c-violet)"></i>storage</span>
+    <span><i style="background:var(--c-gray)"></i>infrastructure</span>
+    <span><i style="background:var(--c-pink)"></i>notes</span>
+  </div>
+</header>
+
+<section>
+  <h2>1. The mental model: a trading desk</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>Think of it as a real desk. The head trader asks the team for research, weighs it, forms a thesis and decides. The risk officer sits beside the head trader, not under it. The journal explains every order after the fact. Nobody calls anybody; every arrow below is an event on a bus.</p>
+  <div class="dia"><svg id="d-desk" viewBox="0 0 1200 640" style="min-width:900px" role="img" aria-label="The desk: research team, head trader, two books, risk officer, execution, back office, reviewer and journal connected by events"></svg></div>
+</section>
+
+<section>
+  <h2>2. What we decided</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <div class="notes big">
+    <div class="note f-blue"><b>Market · decided</b><strong>US equities</strong>NYSE and Nasdaq stocks and ETFs. Deepest data, free paper trading on Alpaca, richest news and fundamentals coverage.</div>
+    <div class="note f-green"><b>Autonomy · decided</b><strong>Level 1: paper, autonomous</strong>Real-time decisions with simulated fills and no money at risk. Graduation to live trading on measured results only.</div>
+    <div class="note f-orange"><b>Horizon · decided</b><strong>Both books</strong>Swing: positions held days to weeks. Intraday: minutes to hours, flat before the close. Shared data, risk and learning; separate strategies and budgets.</div>
+    <div class="note f-violet"><b>Budget · decided</b><strong>No ceiling, free tiers first</strong>Every data source starts on its free tier and is upgraded only when a defined trigger is hit. Claude Opus 5.5 for every reasoning agent from the start.</div>
+    <div class="note f-yellow"><b>Team design · decided</b><strong>Ten LLM roles, one anatomy</strong>Each reasoning agent is a role prompt, its own evidence, read-only tools, an output schema, a memory and a scorecard. Analysts work independently; a skeptic argues against every draft thesis; deep dives get a five-call tool budget. Risk, execution and features stay deterministic.</div>
+  </div>
+  <h3>Assumptions applied until you say otherwise</h3>
+  <div class="notes">
+    <div class="note f-gray"><b>A1 · stack</b>Python 3.12 with asyncio. Standard for trading, machine learning and the Anthropic SDK.</div>
+    <div class="note f-gray"><b>A2 · prediction target</b>Return distributions and direction probability, never a single price. Swing at 1, 5 and 20 days; intraday at 15, 30 and 60 minutes.</div>
+    <div class="note f-gray"><b>A3 · universe</b>Swing: about 30 liquid large caps across all 11 sectors. Intraday: 10 to 20 names picked pre-market from the 500 most liquid, plus SPY and QQQ.</div>
+    <div class="note f-gray"><b>A4 · intraday means</b>Minute-scale decisions. Not sub-second, not market making. LLM latency is seconds.</div>
+    <div class="note f-gray"><b>A5 · short selling</b>Allowed in both books in paper, with separate caps.</div>
+    <div class="note f-gray"><b>A6 · instruments</b>Stocks and ETFs only in v1. Options data is a factor, not something we trade.</div>
+    <div class="note f-gray"><b>A7 · paper capital</b>Set the paper account to the capital you actually intend to deploy, so sizing and day-trader rules are realistic.</div>
+    <div class="note f-gray"><b>A8 · event bus</b>Redis Streams from phase 1, in-memory bus for tests. Persistence, replay and consumer groups from day one.</div>
+    <div class="note f-gray"><b>A9 · system of record</b>PostgreSQL with TimescaleDB for everything operational; Parquet plus DuckDB for research.</div>
+    <div class="note f-gray"><b>A10 · models</b>Claude Opus 5.5 for head trader, analysts and post-mortems. Claude Haiku 5.5 for bulk news scoring. LightGBM for the first forecasters.</div>
+    <div class="note f-gray"><b>A11 · deployment</b>Docker Compose on a local machine while building; a small cloud VM once paper trading runs every day.</div>
+    <div class="note f-gray"><b>A12 · retraining</b>Weekly walk-forward retraining. A challenger is promoted only if it beats the incumbent out of sample.</div>
+  </div>
+  <h3>Still open</h3>
+  <div class="notes">
+    <div class="note f-green"><b>O1 · resolved · market data</b>Alpaca Market Data Basic (free) gives the full consolidated minute-bar history since 2016 for everything older than 15 minutes, which is all a backtest needs. First paid upgrade: Algo Trader Plus when live paper intraday trading starts.</div>
+    <div class="note f-pink"><b>O2 · alert channel</b>Slack, Telegram or email for alerts and the daily brief?</div>
+    <div class="note f-pink"><b>O3 · graduation thresholds</b>Confirm the proposed paper-to-live criteria in the roadmap section.</div>
+    <div class="note f-pink"><b>O4 · team</b>Who else works on this, and in what role?</div>
+  </div>
+</section>
+
+<section>
+  <h2>3. Two books, one desk</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>The books differ most in how the LLM takes part. In the swing book the head trader reasons on every decision. In the intraday book it writes a playbook before the open and a deterministic strategy executes bar by bar. No LLM call ever sits between a bar and an order.</p>
+  <div class="dia"><svg id="d-books" viewBox="0 0 1200 470" style="min-width:900px" role="img" aria-label="Swing book loop with the LLM on every decision, intraday book loop with the LLM only in the pre-market playbook and on news shocks"></svg></div>
+  <div class="tbl-wrap"><div class="sk-table"><table>
+    <thead><tr><th></th><th>Swing book</th><th>Intraday book</th></tr></thead>
+    <tbody>
+      <tr><td>Holding period</td><td>2 to 30 trading days</td><td>Minutes to hours, flat by 15:55 ET</td></tr>
+      <tr><td>Decision cadence</td><td>Daily cycle plus event-triggered re-evaluation</td><td>Every 1-minute bar, inside a pre-market playbook</td></tr>
+      <tr><td>Who decides</td><td>Head trader forms a thesis; Swing Strategy turns it into orders</td><td>Head trader writes the playbook; Intraday Strategy executes deterministically</td></tr>
+      <tr><td>Inputs that matter</td><td>Forecast ensemble, fundamentals, revisions, news and sentiment, macro regime, sector, calendar</td><td>Opening range, VWAP, relative volume, gaps, order flow, news shocks, internals, key levels, release windows</td></tr>
+      <tr><td>LLM in the loop</td><td>Yes, on every decision</td><td>Pre-market and on news shocks only</td></tr>
+      <tr><td>Universe</td><td>Static core of about 30 names</td><td>Dynamic daily watchlist of 10 to 20 names</td></tr>
+      <tr><td>Capital</td><td>Weekly risk budget set by the head trader</td><td>Smaller separate budget; a daily loss limit halts the book</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<section>
+  <h2>4. A day on the desk</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>All times US Eastern, driven by the exchange calendar so holidays and early closes are handled. The swing cycle for the next session starts right after today's close.</p>
+  <div class="dia"><svg id="d-day" viewBox="0 0 1300 330" style="min-width:1000px" role="img" aria-label="Timeline of the desk's day from the 16:05 cycle start through overnight bulk work, the pre-market playbook, the session and the 16:00 reconciliation"></svg></div>
+</section>
+
+<section>
+  <h2>5. Technical architecture</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>Collectors publish onto one event bus. Every agent subscribes to the topics it needs and publishes what it produces. The stores keep an append-only record of all of it. Backtesting is the same system fed by a replayer under a simulated clock, with a simulated broker swapped in.</p>
+  <div class="dia"><svg id="d-arch" viewBox="0 0 1320 760" style="min-width:1100px" role="img" aria-label="Technical architecture: data collectors, the Redis Streams event bus, agent rows, stores, the broker, the replayer and the LLM policy"></svg></div>
+  <h3>The payloads every agent speaks</h3>
+  <div class="notes wide">
+    <div class="note f-blue"><b>ResearchReport · every analyst</b><ul><li>analyst, symbol or market-wide, horizon</li><li>stance bullish / bearish / neutral, conviction 0 to 1</li><li>summary in three sentences at most</li><li>evidence: event ids, one line each</li><li>risks, and invalidation conditions</li><li>optional structured numbers</li></ul></div>
+    <div class="note f-blue"><b>Forecast · each model and the ensemble</b><ul><li>model id, trained-through date, symbol, horizon</li><li>expected return, quantiles 5 / 25 / 50 / 75 / 95</li><li>p(up), p(move beyond threshold)</li><li>top five feature attributions</li><li>confidence from the model's own calibration</li></ul></div>
+    <div class="note f-yellow"><b>OrderIntent · head trader or strategy</b><ul><li>symbol, book, side, target position</li><li>order type, limit price, time in force</li><li>thesis id, urgency</li><li>rationale event ids</li></ul></div>
+    <div class="note f-red"><b>RiskDecision · risk officer</b><ul><li>intent id, decision approved / modified / rejected</li><li>approved quantity</li><li>every rule evaluated, with pass or fail and the numbers</li><li>reason</li></ul></div>
+  </div>
+</section>
+
+<section>
+  <h2>6. The swing cycle, stage by stage</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>Each stage has a timeout and a rule for incomplete data. Missing research lowers conviction; missing bars or a failed decision stage fails the cycle, keeps existing positions and sends nothing new.</p>
+  <div class="dia"><svg id="d-state" viewBox="0 0 1240 270" style="min-width:1000px" role="img" aria-label="Swing cycle state machine from planned through collecting, researching, forecasting, deciding, risk review, queued, executing, monitoring and closed, with timeouts"></svg></div>
+  <div class="notes wide">
+    <div class="note f-pink"><b>Events that wake the head trader outside the schedule</b><ul><li>scored news with impact above threshold on a held or watched name</li><li>a macro release surprising by more than one standard deviation</li><li>a thesis invalidation observed by the Swing Strategy</li><li>a risk limit breach</li><li>a trading halt on a held name</li></ul>A re-evaluation is a mini cycle: refresh only the analysts whose domain changed, decide, risk review, execute.</div>
+    <div class="note f-teal"><b>Intraday loop, every minute</b>Bar arrives, Feature Store computes intraday features, Intraday Strategy checks the setups the playbook allows for that name, emits an order intent, risk officer approves inside the book's budget, execution sends. Haiku-scored news updates a per-symbol news state that the strategy reads on the next bar.</div>
+  </div>
+</section>
+
+<section>
+  <h2>7. Thesis, risk officer, autonomy</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <div class="two">
+    <div class="note f-yellow" style="transform:rotate(-.8deg)"><b>Thesis · the trader's memory</b>Every swing position exists because of a stored thesis, updated as evidence arrives and closed with a post-mortem.<ul><li>symbol, book, direction, status</li><li>narrative: why we are in this trade</li><li>evidence: reports and forecasts by event id</li><li>expected return, horizon, target price</li><li>invalidation: price-based stop, evidence-based (guidance cut, sentiment flip, sector breakdown), time-based maximum hold</li><li>size rationale, and every update</li></ul>Price and time invalidation are checked every bar by the strategy. Evidence invalidation is judged by the head trader. The desk sells when the reason it bought stops being true.</div>
+    <div class="note f-red" style="transform:rotate(.7deg)"><b>Risk officer · deterministic, versioned, logged</b><ul><li><em>Per order:</em> fat-finger bounds, price band, share of 20-day volume, no orders in halts or auctions, order rate limit</li><li><em>Per position:</em> max position as a share of equity, max loss per trade, volatility-scaled sizing</li><li><em>Per book:</em> gross and net caps, daily loss halt, open position cap, intraday flat by 15:55</li><li><em>Portfolio:</em> exposure caps, sector concentration, factor crowding, drawdown ladder (de-risk, then halt), day-trader rule, margin cap</li><li><em>Kill switch:</em> manual or automatic on daily loss, drawdown, stale data, broker disconnect, repeated rejects. Closing orders only while engaged.</li></ul>It never consults an LLM.</div>
+  </div>
+  <div class="dia"><svg id="d-ladder" viewBox="0 0 640 340" style="min-width:520px" role="img" aria-label="Autonomy ladder with four steps from research desk to live within limits; paper autonomous is where we start"></svg></div>
+</section>
+
+<section>
+  <h2>8. The learning loop</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>The desk measures itself. Closed trades are graded, analysts earn or lose credibility, forecasts are checked for calibration, and models are only promoted when they beat what is already running.</p>
+  <div class="dia"><svg id="d-loop" viewBox="0 0 760 430" style="min-width:600px" role="img" aria-label="Learning loop: trades close, post-mortem, analyst credibility, head trader prompt weights, forecast calibration, weekly retraining"></svg></div>
+</section>
+
+<section>
+  <h2>9. What moves a stock</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>Twelve factor families, more than three hundred individual factors in the catalogue. Each has a horizon, an update frequency, a data source and an owning agent. Structured data becomes point-in-time features; unstructured text becomes structured, scored events through the LLM analysts.</p>
+  <div class="dia"><svg id="d-map" viewBox="0 0 1320 820" style="min-width:1000px" role="img" aria-label="Mind map of the twelve factor families around the question what moves a stock"></svg></div>
+  <div class="notes wide">
+    <div class="note f-green"><b>v1 build order</b>Returns, moving averages, RSI, MACD, volatility, relative volume, gaps, opening range, VWAP · valuation, growth, margins, surprises, revisions, short interest, insiders · earnings and dividend calendar, expirations · news relevance, novelty, polarity, impact, call tone · sector relative strength and peers · rates path, CPI, payrolls, ISM, credit, dollar, oil · index trend, VIX, breadth, put-call, seasonality · beta and factor loadings · the full intraday set.</div>
+    <div class="note f-pink"><b>Pitfalls the catalogue is built around</b>First-reported fundamentals, not restated. Earnings dates as known at the time. Vendor publication timestamps for news, never our fetch time. Delisted names kept in history. Lagged releases such as short interest and 13F aligned to their release date.</div>
+  </div>
+</section>
+
+<section>
+  <h2>10. Stack and vendors</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <div class="notes">
+    <div class="note f-gray"><b>Language and schemas</b>Python 3.12, asyncio, pydantic v2 for every event payload and LLM output. Prompts are versioned files, never inline strings.</div>
+    <div class="note f-violet"><b>Bus and storage</b>Redis Streams. PostgreSQL with TimescaleDB and pgvector. Parquet with DuckDB for research. MLflow for models. Disk, later S3, for documents.</div>
+    <div class="note f-blue"><b>Models</b>LightGBM for tabular forecasts, statsmodels and arch for volatility, PyTorch later only if it earns its place.</div>
+    <div class="note f-yellow"><b>LLM</b>Anthropic Python SDK. Opus 5.5 with adaptive thinking for decisions, Haiku 5.5 for bulk scoring. Structured outputs, prompt caching, Batch API overnight, stop-reason checks with server-side fallback.</div>
+    <div class="note f-teal"><b>Data feeds · free first</b>Alpaca Basic for price history, delayed quotes, paper execution and Benzinga news. EDGAR for filings and as-filed fundamentals. FRED for macro. Finnhub and FMP free tiers for calendars and estimate snapshots. FINRA, CFTC, CBOE for positioning. Upgrade triggers: real-time SIP for live intraday paper, estimate revision history, transcripts, options history.</div>
+    <div class="note f-gray"><b>Operations</b>APScheduler on the exchange calendar, alpaca-py broker adapter, OpenTelemetry with Prometheus and Grafana, pytest with replay fixtures, Docker Compose.</div>
+  </div>
+</section>
+
+<section>
+  <h2>11. Roadmap</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <p>Durations assume one or two people working on it most days. Every phase ends with a review before the next starts.</p>
+  <div class="dia"><svg id="d-road" viewBox="0 0 1300 330" style="min-width:1000px" role="img" aria-label="Roadmap path from design through foundation, quant research, research team, head trader and risk, paper trading, to live"></svg></div>
+  <div class="notes wide">
+    <div class="note f-green"><b>Proposed gate from paper to live approval</b><ul><li>at least 3 months and 60 trading days of uninterrupted paper operation</li><li>swing book positive after costs with drawdown inside the limit; intraday book positive after costs or switched off</li><li>forecast calibration within tolerance, zero risk-rule bypasses, incidents trending down</li><li>paper fills reconciled against the broker every day without manual fixes</li></ul></div>
+    <div class="note f-orange"><b>Phase 1 exit test</b>A scripted signal produces a paper order whose journal entry links intent, risk decision, submission and fill. One historical day replays through the bus with identical agent code. Stale data or a broker disconnect engages the kill switch and alerts.</div>
+  </div>
+</section>
+
+<section>
+  <h2>12. Risks and how the design answers them</h2>
+  <svg class="uline" viewBox="0 0 320 14" aria-hidden="true"></svg>
+  <div class="tbl-wrap"><div class="sk-table"><table>
+    <thead><tr><th>Risk</th><th>Defense built into the design</th></tr></thead>
+    <tbody>
+      <tr><td>Lookahead bias</td><td>Two timestamps on every event, clock-aware agents, first-reported fundamentals, replay through the same code</td></tr>
+      <tr><td>Overfitting</td><td>Walk-forward only, challenger versus incumbent promotion, few parameters, costs always on</td></tr>
+      <tr><td>LLM overconfidence</td><td>Structured outputs with cited evidence, credibility weights, deterministic risk officer above every decision</td></tr>
+      <tr><td>Weak, decaying signals</td><td>Ensemble across independent families, regime awareness, honest after-cost reporting, permission to do nothing</td></tr>
+      <tr><td>Data gaps</td><td>Per-collector validation, staleness alarms, fail-safe policies that skip rather than guess</td></tr>
+      <tr><td>Cost of data and LLM calls</td><td>Haiku for bulk, Batch API overnight, prompt caching, output cache on replay, daily spend alerts</td></tr>
+      <tr><td>Broker or feed outage</td><td>Kill switch on disconnect, closing-only mode, reconciliation on reconnect</td></tr>
+      <tr><td>Regulatory rules</td><td>Day-trader and short-sale rules encoded in the risk officer and exercised in paper</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<footer>Companion to docs/00-decisions.md, 01-architecture.md, 02-factors.md and 03-roadmap.md in the bot-trading repository. Nothing here is code yet; it is the agreed shape of the desk before phase 1 starts.</footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function(){
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs){ var e = document.createElementNS(NS, tag); for (var k in attrs) if (attrs[k] !== undefined) e.setAttribute(k, attrs[k]); return e; }
+
+  // Fallback renderer if rough.js did not load: plain shapes through a displacement filter.
+  function makeShim(){
+    function mk(d, o){
+      var p = el('path', { d: d, stroke: o.stroke || '#000', 'stroke-width': o.strokeWidth || 1.5, fill: (o.fill && o.fillStyle !== 'none') ? o.fill : 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', filter: 'url(#wobble)' });
+      if (o.strokeLineDash) p.setAttribute('stroke-dasharray', o.strokeLineDash.join(' '));
+      var g = el('g', {}); g.appendChild(p); return g;
+    }
+    return { svg: function(){ return {
+      rectangle: function(x,y,w,h,o){ return mk('M'+x+' '+y+'h'+w+'v'+h+'h'+(-w)+'Z', o); },
+      line: function(x1,y1,x2,y2,o){ return mk('M'+x1+' '+y1+'L'+x2+' '+y2, o); },
+      polygon: function(pts,o){ return mk('M'+pts.map(function(p){return p.join(' ');}).join('L')+'Z', o); },
+      ellipse: function(x,y,w,h,o){ return mk('M'+(x-w/2)+' '+y+'a'+(w/2)+' '+(h/2)+' 0 1 0 '+w+' 0a'+(w/2)+' '+(h/2)+' 0 1 0 '+(-w)+' 0', o); },
+      circle: function(x,y,d,o){ return this.ellipse(x,y,d,d,o); },
+      curve: function(pts,o){ var d='M'+pts[0].join(' '); for (var i=1;i<pts.length;i++) d+='L'+pts[i].join(' '); return mk(d,o); }
+    }; } };
+  }
+  var R = window.rough || makeShim();
+
+  function tokens(){
+    var cs = getComputedStyle(document.documentElement);
+    function g(n){ return cs.getPropertyValue(n).trim(); }
+    return { ink:g('--ink'), soft:g('--ink-soft'), paper:g('--paper'), accent:g('--accent'),
+      red:g('--c-red'), orange:g('--c-orange'), yellow:g('--c-yellow'), green:g('--c-green'), teal:g('--c-teal'),
+      blue:g('--c-blue'), violet:g('--c-violet'), pink:g('--c-pink'), gray:g('--c-gray') };
+  }
+  function seedOf(){ var h = 2166136261; for (var i=0;i<arguments.length;i++){ h ^= Math.floor(arguments[i]*7+13); h = Math.imul(h, 16777619) >>> 0; } return (h % 100000) + 1; }
+  function base(T, extra){ var o = { roughness:1.15, bowing:1.1, stroke:T.ink, strokeWidth:1.5, fillStyle:'solid', hachureGap:7, fillWeight:0.9, hachureAngle:-41 }; for (var k in extra) if (extra[k] !== undefined) o[k] = extra[k]; return o; }
+
+  function labelBlock(svg, cx, cy, title, lines, o){
+    o = o || {}; lines = lines || [];
+    var ts = o.ts || 15, ls = o.ls || 12.5, th = title ? ts*1.3 : 0, lh = ls*1.3;
+    var total = th + lines.length*lh, y = cy - total/2;
+    var t = el('text', { x:cx, 'text-anchor': o.anchor || 'middle' });
+    if (o.rot) t.setAttribute('transform', 'rotate('+o.rot+' '+cx+' '+cy+')');
+    if (o.color) t.setAttribute('fill', o.color);
+    if (title){ y += th/2; var s = el('tspan', { x:cx, y:y, 'font-size':ts, 'font-weight':700, 'dominant-baseline':'middle' }); s.textContent = title; t.appendChild(s); y += th/2; }
+    lines.forEach(function(ln){ y += lh/2; var s2 = el('tspan', { x:cx, y:y, 'font-size':ls, 'dominant-baseline':'middle' }); s2.textContent = ln; t.appendChild(s2); y += lh/2; });
+    svg.appendChild(t);
+    if (o.bg){ try { var b = t.getBBox(); var r = el('rect', { x:b.x-4, y:b.y-2, width:b.width+8, height:b.height+4, fill:o.bg, rx:3, opacity:0.92 }); svg.insertBefore(r, t); } catch(e){} }
+    return t;
+  }
+  function box(rc, svg, T, x,y,w,h, o){
+    o = o || {};
+    var g = rc.rectangle(x,y,w,h, base(T, { fill: o.fill || T.gray, fillStyle: o.fillStyle || 'solid', strokeLineDash: o.dashed ? [7,5] : undefined, strokeWidth: o.sw, seed: seedOf(x,y,w,h) }));
+    if (o.rot) g.setAttribute('transform', 'rotate('+o.rot+' '+(x+w/2)+' '+(y+h/2)+')');
+    svg.appendChild(g);
+    if (o.title || o.lines) labelBlock(svg, x+w/2, y+h/2, o.title, o.lines, { ts:o.ts, ls:o.ls, rot:o.rot, color:o.color });
+    return g;
+  }
+  function note(rc, svg, T, x,y,w,h, lines, o){ o = o || {}; box(rc, svg, T, x,y,w,h, { fill:o.fill || T.yellow, rot:(o.rot === undefined ? -2 : o.rot), title:o.title, lines:lines, ts:o.ts || 13, ls:o.ls || 12 }); }
+  function head(rc, svg, T, x, y, ang, L){ L = L || 12; var A = Math.PI/7; var p1 = [x - L*Math.cos(ang-A), y - L*Math.sin(ang-A)], p2 = [x - L*Math.cos(ang+A), y - L*Math.sin(ang+A)]; svg.appendChild(rc.polygon([[x,y],p1,p2], base(T, { fill:T.ink, fillStyle:'solid', seed:seedOf(x,y,L) }))); }
+  function arrow(rc, svg, T, x1,y1,x2,y2, o){
+    o = o || {};
+    var opts = base(T, { strokeWidth: o.width || 1.6, strokeLineDash: o.dashed ? [7,6] : undefined, seed: seedOf(x1,y1,x2,y2) });
+    var g, dx, dy, sx, sy;
+    if (o.via){ g = rc.curve([[x1,y1],[o.via[0],o.via[1]],[x2,y2]], opts); dx = x2-o.via[0]; dy = y2-o.via[1]; sx = o.via[0]-x1; sy = o.via[1]-y1; }
+    else { g = rc.line(x1,y1,x2,y2,opts); dx = x2-x1; dy = y2-y1; sx = dx; sy = dy; }
+    svg.appendChild(g);
+    head(rc, svg, T, x2, y2, Math.atan2(dy,dx), o.hl);
+    if (o.both) head(rc, svg, T, x1, y1, Math.atan2(-sy,-sx), o.hl);
+    if (o.label){
+      var mx = o.via ? (0.25*x1 + 0.5*o.via[0] + 0.25*x2) : (x1+x2)/2, my = o.via ? (0.25*y1 + 0.5*o.via[1] + 0.25*y2) : (y1+y2)/2;
+      labelBlock(svg, mx + (o.lx || 0), my + (o.ly === undefined ? -11 : o.ly), null, [o.label], { ls:o.lsize || 12, color:T.soft, anchor:o.lanchor || 'middle', bg:T.paper });
+    }
+    return g;
+  }
+  function text(svg, x, y, str, o){ o = o || {}; var t = el('text', { x:x, y:y, 'font-size':o.size || 14, 'text-anchor':o.anchor || 'middle', 'font-weight':o.weight || 400, 'dominant-baseline':'middle' }); if (o.color) t.setAttribute('fill', o.color); if (o.rot) t.setAttribute('transform', 'rotate('+o.rot+' '+x+' '+y+')'); t.textContent = str; svg.appendChild(t); return t; }
+
+  var D = {};
+
+  D['d-desk'] = function(rc, svg, T){
+    note(rc, svg, T, 40,30,320,74, ['Mental model: a trading desk.','The head trader runs the team,','risk is independent, the journal','explains everything.'], { rot:-1.5 });
+    box(rc, svg, T, 470,30,260,64, { fill:T.gray, title:'JOURNAL', lines:['every decision explainable','order → thesis → reports → events'] });
+    box(rc, svg, T, 30,120,320,392, { fill:T.paper, dashed:true, fillStyle:'none' });
+    text(svg, 190,140, 'RESEARCH TEAM', { size:15, weight:700 });
+    var analysts = ['Quant Analyst · models and forecasts','Fundamental Analyst · financials','News & Sentiment Analyst · LLM','Filing & Transcript Analyst · LLM','Macro Strategist · rates, regime','Sector Specialist · peers, drivers','Events Analyst · calendar, actions'];
+    analysts.forEach(function(a,i){ box(rc, svg, T, 50,156+50*i,280,42, { fill:T.blue, lines:[a], ls:13.5 }); });
+    box(rc, svg, T, 470,210,260,120, { fill:T.yellow, title:'HEAD TRADER', ts:20, lines:['orchestrator · Claude Opus 5.5','commissions research, weighs it,','forms a thesis, decides'] });
+    box(rc, svg, T, 470,372,120,56, { fill:T.orange, title:'SWING BOOK', ts:13, lines:['days to weeks'], ls:12 });
+    box(rc, svg, T, 610,372,120,56, { fill:T.orange, title:'INTRADAY BOOK', ts:13, lines:['minutes to hours'], ls:12 });
+    box(rc, svg, T, 860,210,300,120, { fill:T.red, title:'RISK OFFICER', ts:20, lines:['deterministic, no LLM','limits, sizing, kill switch','can veto any order'] });
+    box(rc, svg, T, 748,128,100,70, { fill:T.yellow, title:'SKEPTIC', ts:12, lines:['argues against','every draft thesis'], ls:10 });
+    arrow(rc, svg, T, 700,210,790,198, { both:true, dashed:true, hl:8 });
+    box(rc, svg, T, 860,372,300,70, { fill:T.gray, title:'EXECUTION TRADER', lines:['broker adapter → Alpaca paper, live later'] });
+    box(rc, svg, T, 470,470,260,64, { fill:T.gray, title:'BACK OFFICE', lines:['positions, P&L, daily reconciliation'] });
+    box(rc, svg, T, 30,540,320,70, { fill:T.green, title:'PERFORMANCE REVIEWER', lines:['post-mortems · analyst credibility','forecast calibration · model promotion'] });
+    arrow(rc, svg, T, 350,300,470,270, { label:'research.report' });
+    arrow(rc, svg, T, 600,210,600,94, { label:'theses, decisions', lanchor:'start', lx:8, ly:0 });
+    arrow(rc, svg, T, 1010,210,730,62, { via:[900,92], label:'risk decisions', ly:-12 });
+    arrow(rc, svg, T, 730,270,860,270, { label:'order.intent (both books)' });
+    arrow(rc, svg, T, 1010,330,1010,372, { label:'risk.approved', lanchor:'start', lx:8, ly:0 });
+    arrow(rc, svg, T, 530,330,530,372, { label:'thesis', lanchor:'end', lx:-6, ly:0 });
+    arrow(rc, svg, T, 670,330,670,372, { label:'playbook', lanchor:'start', lx:6, ly:0 });
+    arrow(rc, svg, T, 860,420,730,500, { via:[800,470], label:'order.filled', ly:12, lx:16 });
+    arrow(rc, svg, T, 470,502,470,300, { via:[400,400], label:'portfolio.*', lx:-44, ly:0 });
+    arrow(rc, svg, T, 470,520,350,575, { label:'closed trades', ly:14, lx:10 });
+    arrow(rc, svg, T, 190,540,190,512, { label:'credibility weights', lanchor:'start', lx:8, ly:0 });
+    note(rc, svg, T, 770,470,190,96, ['Agents never call','each other. Everything','is an event on the bus.'], { fill:T.pink, rot:-2.5 });
+    note(rc, svg, T, 985,478,180,96, ['Risk sits above the','head trader. No event','bypasses it.'], { fill:T.pink, rot:2 });
+  };
+
+  D['d-books'] = function(rc, svg, T){
+    box(rc, svg, T, 20,20,570,430, { fill:T.paper, dashed:true, fillStyle:'none' });
+    text(svg, 305,46, 'SWING BOOK · held 2 to 30 trading days', { size:16, weight:700 });
+    box(rc, svg, T, 40,76,250,64, { fill:T.blue, title:'EVIDENCE', lines:['analyst reports, forecast','ensemble, macro regime'] });
+    box(rc, svg, T, 40,176,250,74, { fill:T.yellow, title:'HEAD TRADER (LLM)', lines:['reasons on every decision','re-checks every open thesis'] });
+    box(rc, svg, T, 40,286,250,74, { fill:T.yellow, title:'THESIS', lines:['narrative · evidence · target','invalidation · size rationale'] });
+    box(rc, svg, T, 330,286,240,64, { fill:T.orange, title:'SWING STRATEGY', lines:['turns the thesis into order.intent','monitors stops and time limits'] });
+    box(rc, svg, T, 330,386,240,54, { fill:T.red, title:'RISK OFFICER → EXECUTION', lines:['queued for the open, or now'] });
+    box(rc, svg, T, 330,76,240,64, { fill:T.blue, title:'WAKE-UP EVENTS', lines:['high-impact news · macro surprise','invalidation · limit breach · halt'] });
+    note(rc, svg, T, 330,170,240,86, ['Decided after the close,','confirmed pre-market,','re-evaluated whenever','new evidence arrives.'], { rot:-2 });
+    arrow(rc, svg, T, 165,140,165,176); arrow(rc, svg, T, 165,250,165,286);
+    arrow(rc, svg, T, 290,323,330,318); arrow(rc, svg, T, 450,350,450,386);
+    arrow(rc, svg, T, 330,132,290,196, { via:[312,166] });
+    box(rc, svg, T, 610,20,570,430, { fill:T.paper, dashed:true, fillStyle:'none' });
+    text(svg, 895,46, 'INTRADAY BOOK · minutes to hours, flat by 15:55', { size:16, weight:700 });
+    box(rc, svg, T, 630,76,260,80, { fill:T.yellow, title:'PRE-MARKET PLAYBOOK (LLM)', lines:['head trader picks the watchlist,','allowed setups per name, risk','budget and no-trade windows'] });
+    box(rc, svg, T, 630,190,260,50, { fill:T.teal, title:'EVERY 1-MINUTE BAR', lines:['repeats until the 15:55 flatten'] });
+    box(rc, svg, T, 630,262,260,50, { fill:T.teal, title:'INTRADAY FEATURES', lines:['opening range, VWAP, RVOL, delta'] });
+    box(rc, svg, T, 630,334,260,64, { fill:T.orange, title:'INTRADAY STRATEGY', lines:['deterministic setups only,','as allowed by the playbook'] });
+    box(rc, svg, T, 920,334,240,64, { fill:T.red, title:'RISK → EXECUTION', lines:['book budget, daily loss halt'] });
+    box(rc, svg, T, 920,190,240,74, { fill:T.blue, title:'NEWS SHOCK', lines:['Haiku scores in seconds →','news.state per symbol'] });
+    note(rc, svg, T, 920,76,240,90, ['No LLM call sits between','a bar and an order.','Bar → order intent in','under one second.'], { fill:T.pink, rot:2 });
+    arrow(rc, svg, T, 760,156,760,190, { label:'sets the rules', lanchor:'start', lx:8, ly:0 });
+    arrow(rc, svg, T, 760,240,760,262); arrow(rc, svg, T, 760,312,760,334);
+    arrow(rc, svg, T, 890,366,920,366);
+    arrow(rc, svg, T, 1040,264,890,350, { via:[960,302], dashed:true, label:'read on the next bar', ly:-14, lx:30 });
+  };
+
+  D['d-day'] = function(rc, svg, T){
+    svg.appendChild(rc.rectangle(930,154,180,32, base(T, { fill:T.green, fillStyle:'hachure', hachureGap:6, strokeWidth:0.8, seed:11 })));
+    text(svg, 1020, 200, 'market open 09:30 to 16:00', { size:11, color:T.soft });
+    arrow(rc, svg, T, 40,170,1262,170, { width:2.4 });
+    var pts = [
+      ['16:05', ['cycle starts','end-of-day refresh'], T.gray],
+      ['16:10 to 16:40', ['collect and featurize','features.vector.ready'], T.teal],
+      ['16:40 to 17:30', ['research','analyst reports, forecasts'], T.blue],
+      ['17:30 to 18:30', ['decide','theses, order intents, brief'], T.yellow],
+      ['18:30', ['risk review','orders queued, not sent'], T.red],
+      ['overnight', ['bulk work','Batch API news, retraining'], T.violet],
+      ['07:30', ['pre-market check','confirm, resize or cancel'], T.yellow],
+      ['08:00 to 09:15', ['intraday playbook','watchlist, setups, budget'], T.orange],
+      ['09:30 to 15:55', ['session','swing orders, intraday loop,','event re-evaluation'], T.orange],
+      ['15:55', ['flatten','intraday book closes'], T.red],
+      ['16:00', ['reconcile and review','back office, post-mortems'], T.green]
+    ];
+    pts.forEach(function(p,i){
+      var x = 110 + 106*i, above = (i % 2 === 0);
+      svg.appendChild(rc.circle(x,170,16, base(T, { fill:p[2], fillStyle:'solid', seed:seedOf(x,170) })));
+      svg.appendChild(rc.line(x, above ? 160 : 180, x, above ? 148 : 192, base(T, { strokeWidth:1.2, seed:seedOf(x,1) })));
+      labelBlock(svg, x, above ? 112 : 232, p[0], p[1], { ts:14, ls:11.5 });
+    });
+  };
+
+  D['d-arch'] = function(rc, svg, T){
+    text(svg, 30, 24, 'DATA COLLECTORS · one agent per source: schedule or stream, validation, dedup, occurred_at from the source, staleness alarm', { size:13.5, weight:700, anchor:'start' });
+    var cols = [['Market data',['Alpaca Basic (free) → Plus']],['Fundamentals',['EDGAR XBRL · Finnhub, FMP free']],['News',['Alpaca News · 8-K feed · RSS']],['Filings & transcripts',['EDGAR · transcripts later']],['Macro & calendar',['FRED · Finnhub calendar']],['Options & positioning',['CBOE · CFTC · FINRA · EDGAR']],['Social',['Reddit · StockTwits · Trends']]];
+    cols.forEach(function(c,i){ var x = 30 + 185*i; box(rc, svg, T, x,40,170,62, { fill:T.teal, title:c[0], ts:13, lines:c[1], ls:11 }); if (i < 6) arrow(rc, svg, T, x+85,102,x+85,170, { hl:10 }); else arrow(rc, svg, T, x+85,102,1120,170, { hl:10 }); });
+    svg.appendChild(rc.rectangle(30,170,1100,72, base(T, { fill:T.gray, fillStyle:'hachure', hachureGap:8, fillWeight:0.8, strokeWidth:2, seed:42 })));
+    labelBlock(svg, 580, 206, 'EVENT BUS · Redis Streams (consumer groups, replay) · in-memory implementation for tests', ['market.* data.* calendar.* news.* macro.* features.* research.* forecast.* playbook.* thesis.* order.* risk.* portfolio.* cycle.* review.* system.*'], { ts:15, ls:12, bg:T.paper });
+    note(rc, svg, T, 1150,128,156,164, ['event_id (ULID)','type · schema_version','occurred_at (world)','ingested_at (desk)','symbol · book','correlation_id','causation_id','source · payload'], { title:'EVENT ENVELOPE', ts:12, ls:10.5, rot:2 });
+    var rowA = [['Feature Store',['point-in-time joins','features.*.ready'],T.teal],['Quant models → Ensemble',['LightGBM, calibration','forecast.*'],T.blue],['Research analysts',['7 agents · Opus 5.5','research.report'],T.blue],['Head Trader',['state machine + Opus 5.5','thesis.* order.intent playbook'],T.yellow],['Swing & Intraday Strategy',['deterministic rules','signal.proposed, order.intent'],T.orange]];
+    rowA.forEach(function(a,i){ var x = 30 + 220*i; box(rc, svg, T, x,300,190,72, { fill:a[2], title:a[0], ts:13.5, lines:a[1], ls:11 }); arrow(rc, svg, T, x+95,300,x+95,242, { both:true, hl:9 }); });
+    var rowB = [['Risk Officer',['deterministic · kill switch','risk.approved / rejected'],T.red],['Execution Trader',['broker adapter','order.submitted / filled'],T.gray],['Back Office',['positions, reconciliation','portfolio.*'],T.gray],['Performance Reviewer',['post-mortems, scores','review.*'],T.green],['Journal & Monitor',['audit trail, alerts','system.alert'],T.gray]];
+    rowB.forEach(function(b,i){ var x = 140 + 220*i; box(rc, svg, T, x,420,190,72, { fill:b[2], title:b[0], ts:13.5, lines:b[1], ls:11 }); arrow(rc, svg, T, x+95,420,x+95,242, { both:true, hl:9 }); });
+    text(svg, 30, 522, 'Autonomy level is one configuration value: 0 research desk · 1 paper, autonomous (where we start) · 2 live with approval gate · 3 live within limits', { size:13, anchor:'start', color:T.soft });
+    svg.appendChild(rc.ellipse(455,590,200,70, base(T, { fill:T.gray, fillStyle:'solid', seed:77 })));
+    labelBlock(svg, 455, 590, 'ALPACA', ['paper account · free data tier'], { ts:14, ls:11 });
+    arrow(rc, svg, T, 455,492,455,555, { label:'orders, fills', lanchor:'start', lx:8, ly:0 });
+    box(rc, svg, T, 640,560,190,60, { fill:T.green, dashed:true, title:'SIMULATED BROKER', ts:12.5, lines:['fills with slippage and costs','swapped in for backtests'], ls:10.5 });
+    arrow(rc, svg, T, 640,590,520,492, { dashed:true, hl:9 });
+    box(rc, svg, T, 1150,330,156,80, { fill:T.green, title:'REPLAYER', ts:13, lines:['historical events in','occurred_at order under','a simulated clock'], ls:10.5 });
+    arrow(rc, svg, T, 1228,330,1125,226, { via:[1200,262], hl:10 });
+    note(rc, svg, T, 1150,440,156,168, ['Opus 5.5: head trader,','analysts, post-mortems','Haiku 5.5: bulk news','structured outputs','(pydantic), evidence','ids cited, never','places an order','prompt cache · batch API'], { title:'LLM POLICY', ts:12, ls:10.5, rot:-2 });
+    text(svg, 30, 644, 'STORES · every event, bar, feature, thesis, order, fill and LLM call is persisted', { size:13.5, weight:700, anchor:'start' });
+    var stores = [['Redis',['bus and hot state']],['PostgreSQL + Timescale',['system of record, append-only']],['Parquet + DuckDB',['research lake, nightly export']],['MLflow',['model registry, promotion']],['pgvector',['news retrieval, dedup']],['Disk → S3',['articles, filings, transcripts']]];
+    stores.forEach(function(s,i){ box(rc, svg, T, 30 + 185*i,660,170,64, { fill:T.violet, title:s[0], ts:13, lines:s[1], ls:10.5 }); });
+  };
+
+  D['d-state'] = function(rc, svg, T){
+    var states = [['PLANNED','',['scheduled on the','exchange calendar'],T.gray],['COLLECTING','30 min',['fail if daily','bars are missing'],T.teal],['RESEARCHING','50 min',['proceed, mark','missing analysts'],T.blue],['FORECASTING','15 min',['proceed with','available models'],T.blue],['DECIDING','60 min',['fail, keep','positions'],T.yellow],['RISK REVIEW','5 min',['fail, send','nothing'],T.red],['QUEUED','',['orders held','until the open'],T.orange],['EXECUTING','',['work orders,','track fills'],T.orange],['MONITORING','',['stops, time limits,','re-evaluation'],T.green],['CLOSED','',['post-mortem','graded'],T.gray]];
+    states.forEach(function(s,i){
+      var x = 40 + 116*i;
+      box(rc, svg, T, x,70,98,48, { fill:s[3], title:s[0], ts:11.5 });
+      if (i < 9) arrow(rc, svg, T, x+98,94,x+116,94, { hl:9 });
+      if (s[1]) text(svg, x+49, 134, 'timeout ' + s[1], { size:11, weight:700, color:T.accent });
+      labelBlock(svg, x+49, 160, null, s[2], { ls:10.5, color:T.soft });
+    });
+    arrow(rc, svg, T, 1017,70,553,70, { via:[785,26], dashed:true, hl:9 });
+    text(svg, 785, 12, 'event-triggered re-evaluation', { size:11.5, color:T.soft });
+    box(rc, svg, T, 470,216,300,40, { fill:T.red, dashed:true, lines:['FAILED is reachable from any stage: keep positions, send nothing, alert'], ls:11.5 });
+  };
+
+  D['d-ladder'] = function(rc, svg, T){
+    var steps = [['L0 · RESEARCH DESK',['brief only,','you trade'],T.gray],['L1 · PAPER, AUTONOMOUS',['simulated fills,','no money at risk'],T.green],['L2 · LIVE, APPROVAL GATE',['each order waits','for your yes'],T.orange],['L3 · LIVE WITHIN LIMITS',['hard limits, halt','button, alerts'],T.red]];
+    steps.forEach(function(s,i){
+      var x = 40 + 140*i, h = (i+1)*52, y = 300 - h;
+      box(rc, svg, T, x,y,140,h, { fill:s[2] });
+      text(svg, x+70, y + h - 22, String(i), { size:26, weight:700 });
+      labelBlock(svg, x+70, y-34, s[0], s[1], { ts:12.5, ls:11.5 });
+    });
+    note(rc, svg, T, 192,214,116,42, ['WE START HERE'], { rot:-4, ts:12, ls:12 });
+    text(svg, 320, 322, 'same code · one configuration value · live levels need a separate key and an explicit confirmation', { size:11.5, color:T.soft });
+  };
+
+  D['d-loop'] = function(rc, svg, T){
+    var cx = 380, cy = 215, r = 150;
+    var nodes = [['TRADES CLOSE',['thesis: target, invalidated,','expired or closed by risk'],T.green],['POST-MORTEM',['deterministic stats and','a short Opus narrative'],T.green],['ANALYST CREDIBILITY',['Brier, hit rate, IC','by horizon and regime'],T.blue],['HEAD TRADER PROMPT',['carries credibility weights,','trusts accurate analysts more'],T.yellow],['FORECAST CALIBRATION',['quantiles vs realized','shrinks conviction'],T.blue],['WEEKLY RETRAIN',['challenger must beat the','incumbent out of sample'],T.teal]];
+    var angs = [-90,-30,30,90,150,210];
+    function pt(a, rr){ var t = a*Math.PI/180; return [cx + rr*Math.cos(t), cy + rr*Math.sin(t)]; }
+    nodes.forEach(function(n,i){
+      var a1 = angs[i] + 14, a2 = angs[(i+1)%6] - 14, am = (angs[i] + angs[(i+1)%6])/2;
+      var p1 = pt(a1, r), p2 = pt(a2, r), pm = pt(am, r+8);
+      arrow(rc, svg, T, p1[0],p1[1],p2[0],p2[1], { via:pm, hl:10 });
+    });
+    nodes.forEach(function(n,i){ var p = pt(angs[i], r); box(rc, svg, T, p[0]-85,p[1]-29,170,58, { fill:n[2], title:n[0], ts:12.5, lines:n[1], ls:10.5 }); });
+    labelBlock(svg, cx, cy, 'LEARNING LOOP', ['the desk gets better','by measuring itself'], { ts:17, ls:12 });
+  };
+
+  D['d-map'] = function(rc, svg, T){
+    var cx = 660, cy = 410;
+    var fams = [['A · PRICE & VOLUME',['momentum, volatility, RVOL,','52-week distance, VWAP'],T.blue],['B · FUNDAMENTALS',['valuation, growth, quality,','surprises, revisions, shorts'],T.green],['C · CORPORATE EVENTS',['earnings dates, M&A, index','changes, offerings, lock-ups'],T.orange],['D · NEWS & SENTIMENT',['polarity, novelty, impact,','filing diffs, call tone'],T.pink],['E · SECTOR',['ETF relative strength, peers,','industry drivers, supply chain'],T.teal],['F · MACRO',['rates path, CPI, payrolls,','credit spreads, oil, dollar'],T.violet],['G · REGIME & FLOWS',['VIX, breadth, put-call, gamma,','positioning, seasonality'],T.gray],['H · ALT DATA (later)',['web traffic, card spend,','satellites, job postings'],T.gray],['I · GEOPOLITICS',['tariffs, sanctions, conflicts,','elections, disasters'],T.red],['J · BEHAVIORAL',['squeeze setups, crowding,','attention spikes, memes'],T.pink],['K · RISK FACTORS',['beta, factor loadings,','idiosyncratic vol, exposure'],T.blue],['L · INTRADAY SET',['opening range, delta, internals,','news shock, key levels'],T.orange]];
+    var pos = fams.map(function(f,i){ var a = (-90 + 30*i)*Math.PI/180; return [cx + 430*Math.cos(a), cy + 330*Math.sin(a)]; });
+    pos.forEach(function(p){ svg.appendChild(rc.line(cx,cy,p[0],p[1], base(T, { strokeWidth:1.3, seed:seedOf(p[0],p[1]) }))); });
+    svg.appendChild(rc.ellipse(cx,cy,250,100, base(T, { fill:T.yellow, fillStyle:'solid', strokeWidth:2, seed:5 })));
+    labelBlock(svg, cx, cy, 'WHAT MOVES A STOCK?', ['12 families · 300+ factors','full catalogue in docs/02-factors.md'], { ts:18, ls:11.5 });
+    fams.forEach(function(f,i){ var p = pos[i]; box(rc, svg, T, p[0]-96,p[1]-36,192,72, { fill:f[2], title:f[0], ts:13, lines:f[1], ls:11, dashed:(i===7) }); });
+  };
+
+  D['d-road'] = function(rc, svg, T){
+    var pts = [[50,180],[230,140],[410,190],[590,140],[770,190],[950,140],[1130,185],[1250,150]];
+    svg.appendChild(rc.curve(pts, base(T, { strokeWidth:3, seed:9 })));
+    var phases = [['P0 · DESIGN',['now · these documents','reviewed and agreed'],T.yellow],['P1 · FOUNDATION',['2 to 3 weeks · bus, schemas,','paper execution, risk v1, replay'],T.gray],['P2 · QUANT RESEARCH',['3 to 4 weeks · features, LightGBM,','intraday baselines, honest backtest'],T.blue],['P3 · RESEARCH TEAM',['3 to 4 weeks · LLM analysts,','evaluation harness, prompt registry'],T.blue],['P4 · HEAD TRADER & RISK',['2 to 3 weeks · thesis, playbook,','full risk officer, reviewer'],T.red],['P5 · PAPER TRADING',['3+ months · daily runs,','weekly reviews, graduation gate'],T.green],['P6 · LIVE',['approval gate first, then','within limits, small capital'],T.orange]];
+    phases.forEach(function(p,i){
+      var x = pts[i][0], y = pts[i][1], above = (i % 2 === 0);
+      svg.appendChild(rc.circle(x,y,18, base(T, { fill:p[2], fillStyle:'solid', seed:seedOf(x,y) })));
+      labelBlock(svg, x + (i===0 ? 40 : 0), above ? y-62 : y+64, p[0], p[1], { ts:13, ls:11 });
+    });
+    svg.appendChild(rc.line(1250,150,1250,96, base(T, { strokeWidth:2, seed:3 })));
+    svg.appendChild(rc.polygon([[1250,96],[1296,110],[1250,124]], base(T, { fill:T.accent, fillStyle:'solid', seed:4 })));
+    text(svg, 1252, 172, 'LIVE', { size:13, weight:700 });
+    note(rc, svg, T, 1030,226,236,84, ['Every phase ends with a review.','Negative results are reported','as plainly as positive ones.'], { rot:-2 });
+  };
+
+  function renderAll(){
+    var T = tokens();
+    Object.keys(D).forEach(function(id){
+      var svg = document.getElementById(id); if (!svg) return;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      D[id](R.svg(svg), svg, T);
+    });
+    var ul = document.querySelectorAll('svg.uline');
+    for (var i = 0; i < ul.length; i++){ var s = ul[i]; while (s.firstChild) s.removeChild(s.firstChild); s.appendChild(R.svg(s).line(4,7,316,8, base(T, { roughness:2.2, strokeWidth:2.4, stroke:T.accent, seed:100+i }))); }
+  }
+  renderAll();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(renderAll);
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  if (mq.addEventListener) mq.addEventListener('change', renderAll); else if (mq.addListener) mq.addListener(renderAll);
+  new MutationObserver(renderAll).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
+})();
+</script>

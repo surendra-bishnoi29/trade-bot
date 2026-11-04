@@ -1,0 +1,490 @@
+<title>Trading Desk Report</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Patrick+Hand&display=swap">
+<style>
+/* Layout: one long Excalidraw-style whiteboard on a dotted grid, same tokens as the design sketches. Charts are rough.js SVGs drawn from the embedded journal data; notes and tables are CSS sketch cards. */
+:root{
+  --paper:#fffdf6; --ink:#1e1e1e; --ink-soft:#5f5b52; --grid:#d9d5c8; --shadow:rgba(30,30,30,.18);
+  --c-red:#ffc9c9; --c-orange:#ffd8a8; --c-yellow:#fff3bf; --c-green:#b2f2bb; --c-teal:#c3fae8;
+  --c-blue:#a5d8ff; --c-violet:#d0bfff; --c-pink:#fcc2d7; --c-gray:#e9ecef; --accent:#e03131; --good:#2b8a3e;
+  --font-hand:'Kalam','Segoe Print','Bradley Hand','Comic Sans MS',cursive;
+  --font-body:'Patrick Hand','Segoe Print','Comic Sans MS',cursive;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141414; --ink:#e6e6ea; --ink-soft:#b3b3bb; --grid:#2b2b2b; --shadow:rgba(0,0,0,.55);
+    --c-red:#5a2a2a; --c-orange:#5a4324; --c-yellow:#56501f; --c-green:#24472e; --c-teal:#1f4640;
+    --c-blue:#243d57; --c-violet:#3a2f5c; --c-pink:#55293c; --c-gray:#2f3338; --accent:#ff6b6b; --good:#69db7c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141414; --ink:#e6e6ea; --ink-soft:#b3b3bb; --grid:#2b2b2b; --shadow:rgba(0,0,0,.55);
+  --c-red:#5a2a2a; --c-orange:#5a4324; --c-yellow:#56501f; --c-green:#24472e; --c-teal:#1f4640;
+  --c-blue:#243d57; --c-violet:#3a2f5c; --c-pink:#55293c; --c-gray:#2f3338; --accent:#ff6b6b; --good:#69db7c; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; color:var(--ink); background-color:var(--paper);
+  background-image:radial-gradient(var(--grid) 1.3px, transparent 1.5px); background-size:24px 24px;
+  font-family:var(--font-body); font-size:18px; line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:28px 56px;
+}
+.page{max-width:1240px; margin:0 auto; display:grid; gap:56px}
+h1,h2,h3{font-family:var(--font-hand); font-weight:700; line-height:1.15; margin:0; text-wrap:balance}
+h1{font-size:clamp(36px, 6vw, 60px)}
+h2{font-size:clamp(26px, 4vw, 34px)}
+h3{font-size:20px}
+p{margin:0; max-width:68ch}
+.hl{background:linear-gradient(transparent 58%, var(--c-yellow) 58%, var(--c-yellow) 92%, transparent 92%); padding:0 .15em}
+.eyebrow{font-family:var(--font-hand); font-size:14px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-soft)}
+header{display:grid; gap:14px}
+.sub{font-size:20px; max-width:72ch}
+section{display:grid; gap:20px}
+.dia{overflow-x:auto; padding-bottom:6px}
+.dia svg{width:100%; height:auto; display:block}
+svg text{font-family:var(--font-hand); fill:var(--ink)}
+.notes{display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:18px; align-items:start}
+.notes.wide{grid-template-columns:repeat(auto-fit, minmax(300px, 1fr))}
+.note{
+  font-family:var(--font-hand); font-size:15px; line-height:1.32; padding:14px 16px; min-width:0;
+  border:2px solid var(--ink); border-radius:255px 15px 225px 15px/15px 225px 15px 255px;
+  box-shadow:3px 4px 0 var(--shadow); background:var(--c-yellow);
+}
+.note b{display:block; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; margin-bottom:5px}
+.note strong{font-size:19px; display:block; margin-bottom:4px}
+.note ul{margin:4px 0 0; padding-left:18px}
+.note li{margin:3px 0}
+.notes > :nth-child(3n+1){transform:rotate(-1.2deg)}
+.notes > :nth-child(3n+2){transform:rotate(.9deg)}
+.notes > :nth-child(3n){transform:rotate(-.5deg)}
+.f-red{background:var(--c-red)} .f-orange{background:var(--c-orange)} .f-yellow{background:var(--c-yellow)} .f-green{background:var(--c-green)}
+.f-teal{background:var(--c-teal)} .f-blue{background:var(--c-blue)} .f-violet{background:var(--c-violet)} .f-pink{background:var(--c-pink)} .f-gray{background:var(--c-gray)}
+.stats{display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:16px}
+.stat{font-family:var(--font-hand); border:2px solid var(--ink); border-radius:15px 225px 15px 255px/255px 15px 225px 15px; box-shadow:3px 4px 0 var(--shadow); background:var(--paper); padding:12px 16px; min-width:0}
+.stat b{display:block; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); font-weight:400}
+.stat .v{font-size:30px; font-weight:700; line-height:1.1; font-variant-numeric:tabular-nums}
+.stat small{display:block; font-size:13px; color:var(--ink-soft); margin-top:2px}
+.neg{color:var(--accent)} .pos{color:var(--good)}
+.tbl-wrap{overflow-x:auto}
+.sk-table{border:2px solid var(--ink); border-radius:12px 255px 14px 225px/225px 14px 255px 12px; box-shadow:3px 4px 0 var(--shadow); background:var(--paper); overflow:hidden; min-width:640px}
+table{border-collapse:collapse; width:100%; font-family:var(--font-hand); font-size:15px}
+th,td{border-bottom:1.5px dashed var(--ink-soft); padding:9px 12px; text-align:left; vertical-align:top}
+tr:last-child td{border-bottom:none}
+th{background:var(--c-gray); font-weight:700; font-size:13.5px; letter-spacing:.06em; text-transform:uppercase}
+td:first-child{font-weight:700; white-space:nowrap}
+td.num,th.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+.two{display:grid; grid-template-columns:1fr 1fr; gap:22px; align-items:start}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+.two > *{min-width:0}
+.charts{display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:22px; align-items:start}
+.chart{display:grid; gap:10px; min-width:0}
+.chart h3{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.chart h3 span{font-size:14px; font-weight:400; color:var(--ink-soft)}
+.chips{display:flex; flex-wrap:wrap; gap:10px}
+.chip{font-family:var(--font-hand); font-size:14px; padding:6px 12px; border:2px solid var(--ink); border-radius:40% 60% 50% 50%/50% 40% 60% 50%; background:var(--c-gray); box-shadow:2px 3px 0 var(--shadow)}
+.chip b{font-weight:700}
+.tag{display:inline-block; font-family:var(--font-hand); font-size:12px; letter-spacing:.06em; text-transform:uppercase; padding:1px 8px; border:1.5px solid var(--ink); border-radius:12px 4px 10px 5px/5px 10px 4px 12px; background:var(--c-orange); white-space:nowrap}
+.tag.ok{background:var(--c-green)} .tag.bad{background:var(--c-red)} .tag.new{background:var(--c-violet)}
+.qa{display:grid; gap:12px}
+.qa .q{font-family:var(--font-hand); font-size:15px; display:grid; grid-template-columns:72px 1fr; gap:10px; align-items:start}
+.qa .q .t{color:var(--ink-soft); font-variant-numeric:tabular-nums}
+.qa .q em{font-style:normal; display:block; background:var(--c-blue); padding:2px 8px; border-radius:255px 15px 225px 15px/15px 225px 15px 255px; margin-bottom:4px; width:fit-content; max-width:100%}
+.qa .q span{display:block}
+.steps{display:grid; gap:10px; padding-left:0; margin:0; list-style:none; font-family:var(--font-hand); font-size:15.5px}
+.steps li{display:grid; grid-template-columns:150px 1fr; gap:12px; align-items:start; border-bottom:1.5px dashed var(--ink-soft); padding-bottom:8px}
+.steps li:last-child{border-bottom:none}
+.steps .when{font-weight:700; white-space:nowrap}
+@media (max-width:520px){.steps li{grid-template-columns:1fr}}
+footer{font-family:var(--font-hand); font-size:14px; color:var(--ink-soft); border-top:2px dashed var(--ink-soft); padding-top:14px}
+code{font-family:'Kalam',monospace; font-size:.95em; background:var(--c-gray); padding:0 4px; border-radius:4px}
+a{color:inherit}
+a:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{transition:none !important}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="wobble" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="page">
+
+<header>
+  <div class="eyebrow">bot-trading · desk report · paper account · as of 2026-11-04 03:30 UTC (09:00 IST)</div>
+  <h1>Trading Desk <span class="hl">Report</span></h1>
+  <p class="sub">The desk's first trading day, 3 November 2026: what it bought, why nothing has been sold, what broke overnight, and what happens next. Every number comes from the desk's own journal or from the broker at the time stamped above. Times are UTC, with India time in brackets where it helps.</p>
+</header>
+
+<!-- ───────────────── 1. The short answer ───────────────── -->
+<section id="answer">
+  <h2>1 · The short answer</h2>
+  <div class="stats">
+    <div class="stat"><b>Equity</b><div class="v">$99,991.91</div><small>started with $100,000.00</small></div>
+    <div class="stat"><b>Since start</b><div class="v neg">−$8.09</div><small>−0.008% of equity</small></div>
+    <div class="stat"><b>Open positions</b><div class="v">3</div><small>CVX · LLY · NEE, all long</small></div>
+    <div class="stat"><b>Orders filled</b><div class="v">5</div><small>4 buys, 1 sell, 0 rejected</small></div>
+    <div class="stat"><b>Cycles</b><div class="v">8</div><small>run · 2 scheduled ones missed</small></div>
+  </div>
+  <div class="notes wide">
+    <div class="note f-green"><b>Why nothing was sold</b><strong>No exit rule fired.</strong>A swing thesis is closed when price hits its stop, hits its target, or the thesis is 10 sessions old. Every position sits 3 to 6% above its stop and 6 to 10% below its target. The red numbers are a −0.8%, −0.4% and +0.5% day: inside the noise the stops were sized for. Selling at that point would be churn, not risk control.</div>
+    <div class="note f-red"><b>Why it could not have sold anyway</b><strong>The desk went blind at 19:58 UTC.</strong>The last live price bar arrived at 19:58 (01:28 IST). The log then shows gaps of hours between polls that normally run every five minutes, which is what a sleeping laptop looks like. The hourly cycle due at 20:08 and the post-close cycle due at 21:10 never ran. The market closed at 21:00. At 03:30 UTC the desk process was no longer running at all.</div>
+    <div class="note f-violet"><b>The new rules are not live yet</b><strong>Restart to activate them.</strong>The desk was last started at 19:08 UTC, before the two tightened rules were written. Under them, the LLY and NEE buys (skeptic concern, conviction 0.45) would not have happened, and no order can go out on a price older than 15 minutes while the market is open. Section 6 replays the day under the new rules.</div>
+  </div>
+</section>
+
+<!-- ───────────────── 2. Book and P&L ───────────────── -->
+<section id="book">
+  <h2>2 · The book, as the broker sees it</h2>
+  <div class="two">
+    <div class="tbl-wrap"><div class="sk-table">
+      <table aria-label="Open positions at the broker">
+        <thead><tr><th>Position</th><th class="num">Qty</th><th class="num">Entry</th><th class="num">Now</th><th class="num">Value</th><th class="num">P&L</th><th class="num">P&L %</th></tr></thead>
+        <tbody>
+          <tr><td>NEE</td><td class="num">23</td><td class="num">84.31</td><td class="num">84.70</td><td class="num">1,948.10</td><td class="num pos">+8.97</td><td class="num pos">+0.46%</td></tr>
+          <tr><td>CVX</td><td class="num">8</td><td class="num">226.06</td><td class="num">224.24</td><td class="num">1,793.92</td><td class="num neg">−14.53</td><td class="num neg">−0.80%</td></tr>
+          <tr><td>LLY</td><td class="num">1</td><td class="num">1,418.61</td><td class="num">1,412.55</td><td class="num">1,412.55</td><td class="num neg">−6.06</td><td class="num neg">−0.43%</td></tr>
+          <tr><td>AAPL (closed)</td><td class="num">1</td><td class="num">329.04</td><td class="num">332.57</td><td class="num">sold 15:11</td><td class="num pos">+3.53</td><td class="num pos">+1.07%</td></tr>
+          <tr><td>Cash</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num">94,837.34</td><td class="num"></td><td class="num"></td></tr>
+          <tr><td>Equity</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num">99,991.91</td><td class="num neg">−8.09</td><td class="num neg">−0.008%</td></tr>
+        </tbody>
+      </table>
+    </div></div>
+    <div class="chart">
+      <h3>Profit and loss by name <span>USD, open and closed</span></h3>
+      <div class="dia"><svg id="c-pnl" viewBox="0 0 560 190" role="img" aria-label="Horizontal bars: NEE plus 8.97, AAPL closed plus 3.53, LLY minus 6.06, CVX minus 14.53, net minus 8.09"></svg></div>
+      <div class="notes">
+        <div class="note f-gray"><b>Sizing in force</b>2% of equity per new position, so each buy was about $1,400 to $1,950. Buying power of $393,782 is the broker's 4x margin; the desk never uses it. Gross exposure is 5.2% of equity.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────── 3. Theses ───────────────── -->
+<section id="theses">
+  <h2>3 · Each thesis against its stop and target</h2>
+  <p>The thin black line is the price the desk saw on 3 November, minute by minute, from the open until the feed died at 19:58. The hatched block is the hour it did not see. The dot is the broker's latest price. The stop and target are the lines the thesis monitor watches on every bar.</p>
+  <div class="charts">
+    <div class="chart">
+      <h3>CVX <span>8 shares · conviction 0.50 · bought 15:13</span></h3>
+      <div class="dia"><svg id="c-cvx" viewBox="0 0 440 300" role="img" aria-label="CVX intraday price between a stop at 217.01 and a target at 241.88, entry 226.06, now 224.24"></svg></div>
+      <div class="note f-blue"><b>Thesis</b>Pullback in an intact uptrend with two fresh catalysts: the Iraq West Qurna-2 agreement and Evercore's target raise to $250. Skeptic: concern (the 0.9% SMA20 invalidation is the real stop, not 4%). Now 3.2% above the stop, 7.9% below the target. Time exit about 17 Nov.</div>
+    </div>
+    <div class="chart">
+      <h3>LLY <span>1 share · conviction 0.45 · bought 19:14</span></h3>
+      <div class="dia"><svg id="c-lly" viewBox="0 0 440 300" role="img" aria-label="LLY intraday price between a stop at 1333.49 and a target at 1560.47, entry 1418.61, now 1412.55"></svg></div>
+      <div class="note f-blue"><b>Thesis</b>Only green name on a red tape after the Foundayo development update, strongest 20-day momentum on the board. Skeptic: concern (update content unknown, extended 12.6% above SMA20, election-night gap risk; "waiting one session would cost little"). Now 5.6% above the stop, 10.5% below the target.</div>
+    </div>
+    <div class="chart">
+      <h3>NEE <span>23 shares · conviction 0.45 · bought 19:28</span></h3>
+      <div class="dia"><svg id="c-nee" viewBox="0 0 440 300" role="img" aria-label="NEE intraday price between a stop at 80.94 and a target at 89.79, entry 84.31, now 84.70"></svg></div>
+      <div class="note f-blue"><b>Thesis</b>Low-volatility uptrend; the Virginia rebuttal testimony adds merger protections that may raise approval odds. Skeptic: concern (bought hours before the election result the plan itself called the book's biggest risk; the expected-return arithmetic gives +1.8%, not 2.5%). Now 4.4% above the stop, 6.0% below the target.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────── 4. Timeline ───────────────── -->
+<section id="timeline">
+  <h2>4 · The day, hour by hour</h2>
+  <div class="dia"><svg id="c-time" viewBox="0 0 1300 380" style="min-width:1000px" role="img" aria-label="Timeline of 3 November from the 13:29 test order through the open, the cycles, the kill switches, the restarts, the three buys, the feed outage at 19:58, two missed cycles and the close"></svg></div>
+  <div class="notes wide">
+    <div class="note f-orange"><b>Two feed problems, different causes</b>The 16:35 and 16:52 kill switches came from the free IEX feed going quiet on most symbols while the market was busy; the feed-level rule then tripped as designed and you released it with <code>/resume</code> at 18:17. The 19:58 outage was the machine itself: the broker websocket, the news poll and the DNS lookup all failed together, and the log went silent for hours at a time.</div>
+    <div class="note f-pink"><b>You ran five cycles by hand</b>Between 19:13 and 19:33 you typed <code>/cycle</code> five times. Two of them produced the LLY and NEE buys; the other three produced holds. The scheduled cycles that should have followed (20:08 hourly, 21:10 post-close) are the ones that never ran.</div>
+    <div class="note f-gray"><b>Overnight</b>After 21:00 there was nothing to trade. The websocket tried to reconnect at 23:36, 00:53, 01:56, 03:07 UTC, each attempt an hour or more apart, and one broker call failed at 03:04. The last log line is 03:26 UTC. By 03:30 the process was gone.</div>
+  </div>
+</section>
+
+<!-- ───────────────── 5. Cycle reports ───────────────── -->
+<section id="cycles">
+  <h2>5 · The eight cycle reports</h2>
+  <p>Each cycle is the same procedure: the scorecard ranks the universe, the head trader writes a plan, the skeptic challenges it, the deterministic merge applies the rules, the risk officer checks every order. The skeptic's verdict decides a lot: a blocking objection turns a trade into a hold, a concern only advised (until the restart).</p>
+  <div class="tbl-wrap"><div class="sk-table">
+    <table aria-label="The eight trading cycles of 3 November">
+      <thead><tr><th>Time UTC</th><th>Trigger</th><th>Head trader's plan</th><th>Skeptic</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>15:11</td><td>cli</td><td>Sell the 1 AAPL (no thesis on record, split analyst flow, CNMC headline). Buy 8 CVX. Pass on LLY, NEE, KO, HD, V, PG.</td><td>2 concerns: the AAPL exit discounts real buying; the CVX stop and invalidation contradict each other, and CVX had a stale-data alert at the open.</td><td>AAPL sold at 332.57 (+3.53). CVX buy refused by the evidence check because the ids were news article ids; fixed two minutes later.</td></tr>
+        <tr><td>15:13</td><td>cli</td><td>Buy 8 CVX on the Iraq agreement and the Evercore raise. Pass on 7 names.</td><td>Concern: "the market seeing the news and declining to reward it"; execution must be gated on confirmed live bars.</td><td>CVX bought at 226.06. Thesis: stop 217.01, target 241.88.</td></tr>
+        <tr><td>17:31</td><td>mid-session (scheduled)</td><td>Hold CVX. Buy 1 LLY on the Foundayo update. Pass on 7 names.</td><td><span class="tag bad">blocking</span> "The data is stale... you cannot set a 6% stop or size the trade on a price you have not seen."</td><td>No orders. The hold-on-stale-data behaviour worked.</td></tr>
+        <tr><td>19:14</td><td>/cycle (you)</td><td>Hold CVX. Buy 1 LLY, conviction 0.45: only green name on a red tape, volume spikes absorbing the news.</td><td>Concern: "the data is current" but the edge is thin, the name is extended, and an election-night gap could skip through the stop.</td><td>LLY bought at 1418.61. Risk officer: all rules passed, price 1 minute old.</td></tr>
+        <tr><td>19:23</td><td>/cycle (you)</td><td>Hold CVX and LLY. Pass on 8 names into the election gap.</td><td>No objections. Asked for the LLY scorecard close (1433.19) to be checked against the broker mark (1419.02).</td><td>No orders.</td></tr>
+        <tr><td>19:28</td><td>/cycle (you)</td><td>Hold CVX and LLY. Buy 23 NEE, conviction 0.45, as a defensive pullback entry.</td><td>Concern: "buying it at 19:27 UTC on election day takes on that binary overnight"; the volume reading contradicts the PG rejection.</td><td>NEE bought at 84.31. Risk officer: all rules passed.</td></tr>
+        <tr><td>19:31</td><td>/cycle (you)</td><td>Hold all three. Pass on 7 names.</td><td>No objections. Warned that the CVX stop cannot be monitored while its feed is stale (last CVX bar 19:16).</td><td>No orders.</td></tr>
+        <tr><td>19:33</td><td>/cycle (you)</td><td>Hold all three. Pass on 7 names.</td><td>No objections. "Re-check the three open stops against any overnight gap at the next open."</td><td>No orders.</td></tr>
+        <tr><td>20:08</td><td>hourly (scheduled)</td><td colspan="3"><span class="tag bad">missed</span> never started: the machine was asleep or offline from 19:58.</td></tr>
+        <tr><td>21:10</td><td>post-close (scheduled)</td><td colspan="3"><span class="tag bad">missed</span> never started, for the same reason.</td></tr>
+      </tbody>
+    </table>
+  </div></div>
+</section>
+
+<!-- ───────────────── 6. Rules ───────────────── -->
+<section id="rules">
+  <h2>6 · The risk officer and the rules in force</h2>
+  <div class="two">
+    <div class="note f-red"><b>Checked on every order · deterministic, no LLM</b>
+      <ul>
+        <li>kill switch off (exits always pass)</li>
+        <li>symbol in the 30-name universe</li>
+        <li>whole shares, at least 1</li>
+        <li>a price is known</li>
+        <li><span class="tag new">new</span> price younger than 15 minutes while the market is open; unknown age rejects; exits exempt</li>
+        <li>order at most 5% of equity</li>
+        <li>position after the order at most 10% of equity</li>
+        <li>no short selling</li>
+        <li>market hours, or queue for the open</li>
+        <li>at most 20 orders a day (exits exempt)</li>
+      </ul>
+    </div>
+    <div class="note f-yellow"><b>Checked in the merge · before an order exists</b>
+      <ul>
+        <li>a blocking objection from the skeptic turns a buy into nothing and a sell into a hold</li>
+        <li>conviction at least 0.40</li>
+        <li><span class="tag new">new</span> with a skeptic concern, conviction at least 0.50</li>
+        <li>stop between 2% and 8%, target at least 1.5 times the stop</li>
+        <li>at least two evidence ids that exist in the journal</li>
+        <li>2% of equity per position, at most 10 open, at most 3 new per cycle</li>
+        <li>longs only, paper only</li>
+      </ul>
+    </div>
+  </div>
+  <h3>The same day replayed under the new rules</h3>
+  <div class="tbl-wrap"><div class="sk-table">
+    <table aria-label="Replay of each order under the tightened rules">
+      <thead><tr><th>Order</th><th>What happened</th><th>Under the new rules</th></tr></thead>
+      <tbody>
+        <tr><td>13:29 buy 1 AAPL</td><td>Test order you asked for, placed while the market was closed, filled at the open at 329.04.</td><td><span class="tag">unchanged</span> the market-closed path still queues orders on the previous close. This is the one stale-data path left; see section 7.</td></tr>
+        <tr><td>15:11 sell 1 AAPL</td><td>Exit of a position with no thesis.</td><td><span class="tag ok">allowed</span> exits are never blocked.</td></tr>
+        <tr><td>15:13 buy 8 CVX</td><td>Skeptic concern, conviction 0.50, price fresh.</td><td><span class="tag ok">allowed</span> conviction meets the 0.50 floor.</td></tr>
+        <tr><td>19:14 buy 1 LLY</td><td>Skeptic concern, conviction 0.45, price 1 minute old.</td><td><span class="tag bad">blocked</span> concern with conviction below 0.50.</td></tr>
+        <tr><td>19:28 buy 23 NEE</td><td>Skeptic concern, conviction 0.45, price fresh.</td><td><span class="tag bad">blocked</span> concern with conviction below 0.50.</td></tr>
+      </tbody>
+    </table>
+  </div></div>
+</section>
+
+<!-- ───────────────── 7. Health ───────────────── -->
+<section id="health">
+  <h2>7 · Health, and what broke</h2>
+  <div class="chips">
+    <span class="chip"><b>Broker</b> · Alpaca paper · OK, reconciled every 5 min, 1 failed call at 03:04</span>
+    <span class="chip" style="background:var(--c-red)"><b>Price feed</b> · IEX websocket, free · thin, died 19:58</span>
+    <span class="chip" style="background:var(--c-orange)"><b>Event bus</b> · Redis unreachable, in-memory fallback</span>
+    <span class="chip" style="background:var(--c-green)"><b>Kill switch</b> · off since 18:17</span>
+    <span class="chip" style="background:var(--c-red)"><b>Scheduler</b> · 2 cycles missed</span>
+    <span class="chip" style="background:var(--c-red)"><b>Desk process</b> · not running at 03:30</span>
+    <span class="chip" style="background:var(--c-orange)"><b>Daily bars</b> · 3 Nov bar is a mid-session snapshot</span>
+  </div>
+  <div class="notes wide">
+    <div class="note f-red"><b>Defect 1 · the scheduler sleeps in one piece</b>It computes the next cycle time and sleeps the whole way. A laptop sleep or a long stall then skips the cycle silently. Fix: sleep in 60-second slices, re-read the clock each time, run a missed cycle as soon as the desk is awake and the market is open, and log every miss.</div>
+    <div class="note f-red"><b>Defect 2 · the desk ran on a laptop that slept</b>No code survives that. Fix: start it with <code>caffeinate -i uv run desk run</code>, or run it on an always-on machine, and add a heartbeat line every five minutes so a gap is visible in the log.</div>
+    <div class="note f-orange"><b>Defect 3 · a half-day daily bar is kept forever</b>The 3 Nov daily bar was fetched during the session (CVX 225.70 against a real close of 224.24, LLY 1433.19 against 1412.55) and the bar table never overwrites. The scorecard's 5-day and 20-day returns use it. Fix: overwrite on conflict and skip today's daily bar until the close.</div>
+    <div class="note f-orange"><b>Defect 4 · orders on the previous close</b>Pre-market and after-close cycles can queue market orders that fill at the open on yesterday's price; the AAPL test order did exactly that. Fix: the pre-market cycle plans only, and buys go out 15 minutes after the open on fresh bars. A design change, so it waits for your yes.</div>
+    <div class="note f-gray"><b>Observation · the free feed is thin</b>Quiet names went 20 to 30 minutes without a bar during the session (PLD and UNP last printed at 19:30, JPM, GS, XOM, LIN and BRK.B at 19:32 before the outage). With the 15-minute freshness rule, buys in such names will sometimes be rejected. The paid SIP feed is the trigger we defined for that.</div>
+  </div>
+</section>
+
+<!-- ───────────────── 8. Next ───────────────── -->
+<section id="next">
+  <h2>8 · What happens next</h2>
+  <div class="two">
+    <ul class="steps">
+      <li><span class="when">now</span><span>Restart the desk. The two new rules go live, the kill switch stays off (last journal entry is the 18:17 release), and the data agent backfills the minute bars it missed between 19:58 and 21:00.</span></li>
+      <li><span class="when">13:30 UTC · 19:00 IST</span><span>Pre-market cycle. It plans on yesterday's close and may queue orders for the open (defect 4).</span></li>
+      <li><span class="when">14:30 UTC · 20:00 IST</span><span>Market opens. The thesis monitor checks CVX, LLY and NEE against their stops and targets on every bar.</span></li>
+      <li><span class="when">17:30 UTC · 23:00 IST</span><span>Mid-session cycle, then hourly cycles while the market is open.</span></li>
+      <li><span class="when">21:10 UTC · 02:40 IST</span><span>Post-close cycle: review, no fills until the next open.</span></li>
+      <li><span class="when">about 17 Nov</span><span>Day-10 time exit for all three theses if neither stop nor target has hit.</span></li>
+    </ul>
+    <div class="notes">
+      <div class="note f-green"><b>If you want out now</b>Tell the head trader in the console: "sell CVX", or "close every position". Sells go through the risk officer like any order, and exits are never blocked by the kill switch, the freshness rule or the daily cap. Or run <code>/cycle</code> and let the plan decide.</div>
+      <div class="note f-yellow"><b>Reading the loss</b>−$8.09 on $100,000 is 0.008%. A single thesis stop, if it hit, would cost about $70 to $85. The desk is sized for many small, defined losses; the number to watch is whether the stops and targets pay over weeks, not the first evening.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────── 9. Console ───────────────── -->
+<section id="console">
+  <h2>9 · What you asked the head trader</h2>
+  <p>Twenty-two console questions on 3 November. The ones about trading, with the head trader's answers shortened. The answers were right about the kill switch and the blocked LLY trade each time.</p>
+  <div class="qa">
+    <div class="q"><span class="t">16:06</span><div><em>why we are not able to buy or sell new stocks?</em><span>"Nothing I can see is blocking us. We can still trade. The desk just hasn't placed an order since 15:13:37 UTC."</span></div></div>
+    <div class="q"><span class="t">17:12</span><div><em>are we going to buy or sell new stocks and when?</em><span>"No new buys or sells are planned right now. The risk officer hit the kill switch at 16:52:40 UTC because of stale data on 29 of 30 symbols."</span></div></div>
+    <div class="q"><span class="t">17:39</span><div><em>are we ready to buy / sell new stocks?</em><span>"Not yet. The price feed looks healthy again, but the risk officer's kill switch is still on."</span></div></div>
+    <div class="q"><span class="t">18:14</span><div><em>when are you going to sell / buy?</em><span>"Nothing will be bought or sold until a person releases the kill switch with /resume."</span></div></div>
+    <div class="q"><span class="t">18:59</span><div><em>are we going to sell / buy new stocks other than CVX? what is the hurdle?</em><span>"The only new trade the desk tried was an LLY buy, and the skeptic blocked it because LLY's prices were out of date. Since then, no trading cycle has run."</span></div></div>
+  </div>
+</section>
+
+<footer>Sources: the desk journal in Postgres (114 decision, order, risk, cycle and console events since 12:00 UTC on 3 Nov; 7,058 minute bars; the theses table), the Alpaca paper account, positions and orders endpoints, and logs/desk.log. Generated 2026-11-04 03:30 UTC. Rough.js draws the sketches; if it fails to load, plain shapes are drawn instead.</footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function(){
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs){ var e = document.createElementNS(NS, tag); for (var k in attrs) if (attrs[k] !== undefined) e.setAttribute(k, attrs[k]); return e; }
+
+  // Fallback renderer if rough.js did not load: plain shapes through a displacement filter.
+  function makeShim(){
+    function mk(d, o){
+      var p = el('path', { d: d, stroke: o.stroke || '#000', 'stroke-width': o.strokeWidth || 1.5, fill: (o.fill && o.fillStyle !== 'none') ? o.fill : 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round', filter: 'url(#wobble)' });
+      if (o.strokeLineDash) p.setAttribute('stroke-dasharray', o.strokeLineDash.join(' '));
+      var g = el('g', {}); g.appendChild(p); return g;
+    }
+    return { svg: function(){ return {
+      rectangle: function(x,y,w,h,o){ return mk('M'+x+' '+y+'h'+w+'v'+h+'h'+(-w)+'Z', o); },
+      line: function(x1,y1,x2,y2,o){ return mk('M'+x1+' '+y1+'L'+x2+' '+y2, o); },
+      polygon: function(pts,o){ return mk('M'+pts.map(function(p){return p.join(' ');}).join('L')+'Z', o); },
+      circle: function(x,y,d,o){ return mk('M'+(x-d/2)+' '+y+'a'+(d/2)+' '+(d/2)+' 0 1 0 '+d+' 0a'+(d/2)+' '+(d/2)+' 0 1 0 '+(-d)+' 0', o); },
+      curve: function(pts,o){ var d='M'+pts[0].join(' '); for (var i=1;i<pts.length;i++) d+='L'+pts[i].join(' '); return mk(d,o); },
+      linearPath: function(pts,o){ return this.curve(pts,o); }
+    }; } };
+  }
+  var R = window.rough || makeShim();
+
+  function tokens(){
+    var cs = getComputedStyle(document.documentElement);
+    function g(n){ return cs.getPropertyValue(n).trim(); }
+    return { ink:g('--ink'), soft:g('--ink-soft'), paper:g('--paper'), accent:g('--accent'), good:g('--good'),
+      red:g('--c-red'), orange:g('--c-orange'), yellow:g('--c-yellow'), green:g('--c-green'), teal:g('--c-teal'),
+      blue:g('--c-blue'), violet:g('--c-violet'), pink:g('--c-pink'), gray:g('--c-gray') };
+  }
+  function seedOf(){ var h = 2166136261; for (var i=0;i<arguments.length;i++){ h ^= Math.floor(arguments[i]*7+13); h = Math.imul(h, 16777619) >>> 0; } return (h % 100000) + 1; }
+  function base(T, extra){ var o = { roughness:1.1, bowing:1, stroke:T.ink, strokeWidth:1.5, fillStyle:'solid', hachureGap:7, fillWeight:0.9, hachureAngle:-41 }; for (var k in extra) if (extra[k] !== undefined) o[k] = extra[k]; return o; }
+  function text(svg, x, y, str, o){ o = o || {}; var t = el('text', { x:x, y:y, 'font-size':o.size || 13, 'text-anchor':o.anchor || 'middle', 'font-weight':o.weight || 400, 'dominant-baseline':'middle' }); if (o.color) t.setAttribute('fill', o.color); if (o.rot) t.setAttribute('transform', 'rotate('+o.rot+' '+x+' '+y+')'); t.textContent = str; svg.appendChild(t); if (o.bg){ try { var b = t.getBBox(); var r = el('rect', { x:b.x-4, y:b.y-2, width:b.width+8, height:b.height+4, fill:o.bg, rx:3, opacity:0.92 }); svg.insertBefore(r, t); } catch(e){} } return t; }
+  function fmt(v, d){ return v.toLocaleString('en-US', { minimumFractionDigits:d, maximumFractionDigits:d }); }
+
+  var SERIES = {"CVX":[[0,226.06],[2,226.275],[4,226.861],[6,227.33],[8,227.02],[10,226.745],[12,227.155],[14,226.13],[16,226.01],[18,225.61],[20,225.62],[22,225.865],[24,225.9],[26,225.86],[28,225.63],[30,225.48],[32,225.61],[34,225.325],[36,225.46],[38,226.06],[40,226.04],[42,225.725],[44,225.94],[46,226.32],[48,226.66],[50,226.41],[52,226.4],[54,226.38],[56,226.41],[58,226.56],[60,226.565],[64,226.225],[66,226.28],[68,226.39],[73,226.05],[78,225.955],[80,226.045],[83,226.14],[87,225.845],[91,226.25],[95,226.0],[97,225.94],[99,225.83],[101,226.1],[103,225.99],[105,226.065],[107,226.1],[109,225.98],[111,225.85],[113,225.65],[115,225.56],[117,225.26],[119,225.81],[121,225.64],[123,225.59],[125,225.685],[127,225.64],[129,225.49],[131,225.825],[133,225.79],[135,225.82],[137,225.82],[139,225.87],[141,225.965],[144,226.13],[149,226.48],[152,226.28],[154,226.26],[156,226.09],[158,226.145],[160,226.18],[162,226.085],[164,226.12],[166,226.135],[168,226.015],[170,226.14],[172,226.24],[174,226.2],[176,226.225],[178,226.335],[180,226.24],[182,226.15],[184,226.13],[186,226.22],[188,226.12],[190,226.21],[192,226.17],[194,226.27],[196,226.4],[198,226.39],[203,226.36],[208,226.23],[210,226.29],[212,226.35],[214,226.48],[216,226.465],[218,226.46],[220,226.54],[222,226.39],[224,226.21],[226,226.17],[228,226.16],[230,226.16],[232,226.18],[234,226.2],[236,226.18],[238,226.33],[240,226.48],[242,226.465],[244,226.48],[246,226.44],[248,226.36],[250,226.33],[252,226.36],[254,226.3],[256,226.2],[258,226.17],[260,226.145],[262,226.155],[265,226.23],[267,226.255],[269,226.26],[271,226.055],[275,225.93],[279,225.7],[282,225.66],[297,225.545],[328,225.65]],"LLY":[[0,1415.686],[2,1425.365],[4,1428.27],[6,1428.21],[8,1433.17],[10,1433.57],[12,1427.45],[14,1431.31],[16,1433.23],[18,1433.51],[20,1432.609],[22,1430.58],[24,1432.095],[26,1432.41],[28,1435.005],[30,1431.895],[32,1427.41],[34,1423.02],[36,1422.87],[38,1425.07],[40,1421.7],[42,1422.47],[44,1420.1],[46,1419.91],[48,1420.77],[50,1420.9],[52,1422.47],[54,1421.78],[56,1419.99],[58,1421.95],[60,1419.75],[62,1419.09],[64,1419.22],[66,1421.03],[68,1420.045],[70,1419.62],[72,1419.48],[75,1422.16],[77,1422.5],[79,1422.38],[81,1422.22],[83,1421.435],[85,1420.13],[87,1421.79],[89,1418.3],[91,1417.73],[95,1415.56],[97,1415.87],[99,1418.5],[101,1418.39],[103,1417.75],[105,1419.08],[107,1418.56],[109,1418.425],[111,1419.14],[113,1418.72],[115,1419.565],[117,1418.74],[119,1420.381],[121,1418.22],[123,1419.6],[125,1420.47],[127,1420.46],[129,1421.65],[131,1422.93],[133,1421.85],[135,1422.604],[137,1422.596],[139,1423.47],[141,1422.97],[143,1423.19],[145,1423.4],[147,1423.165],[149,1422.31],[152,1421.425],[154,1422.765],[156,1422.61],[158,1421.53],[160,1420.78],[162,1420.58],[164,1419.15],[166,1418.89],[168,1417.44],[170,1417.28],[172,1416.56],[174,1417.03],[176,1419.0],[178,1420.365],[180,1420.19],[182,1420.16],[184,1419.075],[186,1418.32],[188,1419.295],[190,1421.86],[192,1422.7],[194,1422.385],[196,1422.515],[198,1421.52],[200,1421.825],[202,1420.98],[204,1420.89],[206,1420.08],[208,1419.88],[210,1419.98],[212,1419.54],[214,1421.05],[216,1420.43],[218,1421.7],[220,1421.94],[222,1421.51],[224,1421.06],[226,1420.875],[228,1420.98],[230,1420.535],[232,1420.62],[234,1419.57],[236,1420.365],[238,1422.0],[240,1421.41],[242,1421.9],[244,1421.14],[246,1421.5],[248,1421.0],[250,1420.33],[252,1421.21],[254,1422.02],[256,1421.99],[258,1421.61],[260,1421.39],[262,1422.57],[264,1420.89],[266,1421.24],[268,1421.61],[270,1421.29],[273,1420.23],[275,1420.2],[279,1418.6],[281,1418.36],[283,1418.385],[285,1419.28],[287,1419.15],[289,1419.15],[291,1418.97],[293,1419.09],[295,1418.75],[297,1418.72],[299,1418.565],[301,1416.35],[328,1416.145]],"NEE":[[0,84.44],[2,84.2],[4,83.85],[6,83.945],[8,83.945],[10,84.015],[12,83.89],[14,83.98],[16,84.055],[18,84.02],[20,84.015],[22,83.945],[24,84.015],[26,84.09],[28,84.08],[30,83.97],[32,83.835],[34,83.92],[36,84.01],[38,84.0],[40,83.935],[42,83.91],[44,83.905],[46,83.84],[48,83.85],[50,83.875],[52,83.925],[54,84.17],[56,84.15],[58,84.24],[60,84.24],[62,84.21],[64,84.275],[66,84.31],[68,84.33],[70,84.395],[72,84.36],[75,84.44],[77,84.355],[79,84.415],[81,84.48],[83,84.51],[85,84.49],[87,84.49],[89,84.53],[91,84.48],[95,84.485],[97,84.485],[99,84.49],[101,84.515],[103,84.56],[105,84.55],[107,84.61],[109,84.62],[111,84.625],[113,84.645],[115,84.7],[117,84.795],[119,84.78],[121,84.733],[123,84.765],[125,84.79],[127,84.815],[129,84.85],[131,84.72],[133,84.635],[135,84.623],[137,84.66],[139,84.67],[141,84.61],[143,84.58],[145,84.615],[148,84.605],[150,84.51],[153,84.47],[155,84.47],[157,84.425],[159,84.365],[161,84.335],[163,84.31],[165,84.335],[167,84.32],[169,84.32],[171,84.315],[173,84.35],[175,84.325],[177,84.335],[179,84.385],[181,84.36],[183,84.295],[185,84.17],[187,84.18],[189,84.25],[191,84.23],[193,84.2],[195,84.18],[197,84.21],[199,84.22],[202,84.18],[204,84.195],[206,84.27],[208,84.27],[210,84.285],[212,84.28],[214,84.275],[216,84.24],[218,84.26],[220,84.32],[222,84.32],[224,84.31],[226,84.3],[228,84.325],[230,84.35],[232,84.345],[234,84.34],[236,84.37],[238,84.335],[240,84.34],[242,84.355],[244,84.39],[246,84.405],[248,84.42],[250,84.405],[252,84.365],[254,84.37],[256,84.35],[258,84.34],[260,84.345],[262,84.365],[264,84.33],[266,84.345],[268,84.33],[271,84.315],[274,84.33],[278,84.335],[280,84.29],[282,84.29],[284,84.29],[286,84.335],[288,84.33],[290,84.335],[292,84.36],[294,84.345],[296,84.33],[298,84.295],[300,84.35],[302,84.35],[328,84.495]]};
+
+  var POS = [
+    { s:'CVX', id:'c-cvx', entry:226.05625, now:224.24, stop:217.01, target:241.88, stopPct:4, targetPct:7, dec:2 },
+    { s:'LLY', id:'c-lly', entry:1418.61, now:1412.55, stop:1333.49, target:1560.47, stopPct:6, targetPct:10, dec:2 },
+    { s:'NEE', id:'c-nee', entry:84.31, now:84.70, stop:80.94, target:89.79, stopPct:4, targetPct:6.5, dec:2 }
+  ];
+
+  // ---- one thesis chart: intraday path on the same scale as stop, entry and target ----
+  function thesisChart(p){
+    var svg = document.getElementById(p.id); if (!svg) return;
+    var rc = R.svg(svg), T = tokens();
+    var W = 440, H = 300, x0 = 14, x1 = 318, y0 = 20, y1 = 258;
+    var lo = p.stop * 0.985, hi = p.target * 1.012;
+    function Y(v){ return y1 - (v - lo) / (hi - lo) * (y1 - y0); }
+    function X(m){ return x0 + (m / 390) * (x1 - x0); }
+    svg.appendChild(rc.rectangle(x0, y0, x1 - x0, y1 - y0, base(T, { fill:T.paper, fillStyle:'solid', seed:seedOf(1, p.entry) })));
+    // the hour the desk did not see
+    svg.appendChild(rc.rectangle(X(328), y0, X(390) - X(328), y1 - y0, base(T, { fill:T.soft, fillStyle:'hachure', hachureGap:6, fillWeight:0.7, stroke:T.soft, strokeWidth:1, seed:seedOf(2, p.entry) })));
+    text(svg, (X(328) + X(390)) / 2, y0 + 18, 'no data', { size:11, color:T.soft, bg:T.paper });
+    text(svg, (X(328) + X(390)) / 2, y0 + 32, '19:58 to 21:00', { size:11, color:T.soft, bg:T.paper });
+    // levels
+    function level(v, label, o){
+      svg.appendChild(rc.line(x0, Y(v), x1, Y(v), base(T, { stroke:o.stroke, strokeWidth:o.sw || 1.4, strokeLineDash:o.dash, roughness:0.8, seed:seedOf(3, v) })));
+      text(svg, x1 + 8, Y(v), label, { anchor:'start', size:12.5, color:o.stroke, weight:o.weight });
+      if (o.sub) text(svg, x1 + 8, Y(v) + 14, o.sub, { anchor:'start', size:11, color:T.soft });
+    }
+    level(p.target, 'target ' + fmt(p.target, 2), { stroke:T.good, dash:[8,6], weight:700, sub:'+' + p.targetPct + '% from entry' });
+    level(p.entry, 'entry ' + fmt(p.entry, 2), { stroke:T.soft, sw:1.2 });
+    level(p.stop, 'stop ' + fmt(p.stop, 2), { stroke:T.accent, dash:[8,6], weight:700, sub:'−' + p.stopPct + '% from entry' });
+    // the path the desk saw
+    var pts = (SERIES[p.s] || []).map(function(q){ return [X(q[0]), Y(q[1])]; });
+    if (pts.length > 1) svg.appendChild(rc.linearPath(pts, base(T, { stroke:T.ink, strokeWidth:2, roughness:0.5, bowing:0.5, seed:seedOf(4, p.entry) })));
+    // the broker's latest price
+    svg.appendChild(rc.circle(X(390), Y(p.now), 11, base(T, { fill:T.accent, fillStyle:'solid', stroke:T.ink, strokeWidth:1.3, seed:seedOf(5, p.now) })));
+    var above = p.now >= p.entry;
+    text(svg, X(390) - 6, Y(p.now) + (above ? -14 : 16), 'now ' + fmt(p.now, 2), { anchor:'end', size:12.5, weight:700, bg:T.paper });
+    // distances, in words
+    var dStop = (p.now - p.stop) / p.now * 100, dTgt = (p.target - p.now) / p.now * 100;
+    text(svg, x0 + 6, Y(p.stop) - 12, dStop.toFixed(1) + '% above the stop', { anchor:'start', size:11.5, color:T.soft, bg:T.paper });
+    text(svg, x0 + 6, Y(p.target) + 14, dTgt.toFixed(1) + '% below the target', { anchor:'start', size:11.5, color:T.soft, bg:T.paper });
+    // time axis
+    [['14:30', 0], ['16:00', 90], ['17:30', 180], ['19:00', 270], ['20:30', 360]].forEach(function(t){
+      svg.appendChild(rc.line(X(t[1]), y1, X(t[1]), y1 + 6, base(T, { strokeWidth:1, roughness:0.5, seed:seedOf(6, t[1]) })));
+      text(svg, X(t[1]), y1 + 16, t[0], { size:11, color:T.soft });
+    });
+    text(svg, (x0 + x1) / 2, y1 + 34, '3 Nov, minute closes (UTC)', { size:11.5, color:T.soft });
+  }
+
+  // ---- P&L bars ----
+  function pnlBars(){
+    var svg = document.getElementById('c-pnl'); if (!svg) return;
+    var rc = R.svg(svg), T = tokens();
+    var rows = [ ['NEE', 8.97, 'open'], ['AAPL', 3.53, 'closed'], ['LLY', -6.06, 'open'], ['CVX', -14.53, 'open'] ];
+    var zero = 300, scale = 10, top = 16, rowH = 34, barH = 22;
+    svg.appendChild(rc.line(zero, 8, zero, top + rows.length * rowH + 6, base(T, { strokeWidth:1.3, roughness:0.6, seed:1 })));
+    rows.forEach(function(r, i){
+      var y = top + i * rowH, v = r[1], w = Math.abs(v) * scale, x = v >= 0 ? zero + 2 : zero - 2 - w;
+      svg.appendChild(rc.rectangle(x, y, w, barH, base(T, { fill: v >= 0 ? T.green : T.red, fillStyle:'solid', seed:seedOf(7, i) })));
+      text(svg, zero - 12 - (v < 0 ? w + 4 : 0), y + barH / 2, r[0] + (r[2] === 'closed' ? ' (closed)' : ''), { anchor:'end', size:13, weight:700 });
+      text(svg, v >= 0 ? zero + w + 10 : zero + 10, y + barH / 2, (v >= 0 ? '+' : '−') + fmt(Math.abs(v), 2), { anchor:'start', size:13, color: v >= 0 ? T.good : T.accent, weight:700 });
+    });
+    var yN = top + rows.length * rowH + 14;
+    svg.appendChild(rc.line(130, yN - 4, 560 - 20, yN - 4, base(T, { strokeWidth:1, strokeLineDash:[5,5], roughness:0.5, seed:2 })));
+    text(svg, zero, yN + 12, 'net −8.09 · unrealized −11.62, realized +3.53', { size:12.5, color:T.soft });
+  }
+
+  // ---- the day's timeline ----
+  function timeline(){
+    var svg = document.getElementById('c-time'); if (!svg) return;
+    var rc = R.svg(svg), T = tokens();
+    var axisY = 200, xa = 60, xb = 1240, t0 = 13 * 60, t1 = 21.5 * 60;
+    function X(hm){ var m = parseInt(hm.slice(0,2), 10) * 60 + parseInt(hm.slice(3,5), 10); return xa + (m - t0) / (t1 - t0) * (xb - xa); }
+    // session band
+    svg.appendChild(rc.rectangle(X('14:30'), axisY - 14, X('21:00') - X('14:30'), 28, base(T, { fill:T.teal, fillStyle:'solid', stroke:T.soft, strokeWidth:1, seed:11 })));
+    text(svg, (X('14:30') + X('21:00')) / 2, axisY, 'market open 14:30 to 21:00 UTC  ·  20:00 to 02:30 IST', { size:12, color:T.soft, bg:T.teal });
+    // outage band
+    svg.appendChild(rc.rectangle(X('19:58'), axisY - 14, X('21:00') - X('19:58'), 28, base(T, { fill:T.soft, fillStyle:'hachure', hachureGap:6, fillWeight:0.7, stroke:T.soft, strokeWidth:1, seed:12 })));
+    svg.appendChild(rc.line(xa, axisY, xb + 20, axisY, base(T, { strokeWidth:2, roughness:0.7, seed:13 })));
+    ['13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'].forEach(function(h){
+      svg.appendChild(rc.line(X(h), axisY + 14, X(h), axisY + 22, base(T, { strokeWidth:1, roughness:0.4, seed:seedOf(14, X(h)) })));
+    });
+    var E = [
+      ['13:29', ['13:29 test buy 1 AAPL', 'market closed: queued'], 1, 'middle', T.gray],
+      ['14:30', ['14:30 open'], -1, 'middle', T.gray],
+      ['14:32', ['14:32 AAPL filled 329.04'], 2, 'middle', T.gray],
+      ['15:11', ['15:11 cycle: sell AAPL 332.57', 'realized +3.53'], 1, 'middle', T.blue],
+      ['15:13', ['15:13 cycle: buy 8 CVX 226.06'], -2, 'middle', T.blue],
+      ['16:35', ['16:35 kill switch', '15 of 30 symbols stale'], -1, 'middle', T.red],
+      ['16:52', ['16:52 kill switch again', '29 of 30 stale'], -3, 'middle', T.red],
+      ['17:31', ['17:31 mid-session cycle', 'LLY buy blocked: stale data'], 2, 'middle', T.yellow],
+      ['18:03', ['18:03 restart, switch restored'], -1, 'middle', T.gray],
+      ['18:17', ['18:17 /resume (you)'], -2, 'middle', T.green],
+      ['19:08', ['19:08 restart', 'hourly cycles on'], 3, 'end', T.gray],
+      ['19:14', ['19:14 /cycle: buy 1 LLY 1418.61'], 1, 'end', T.blue],
+      ['19:22', ['19:22 /cycle: holds'], -1, 'middle', T.gray],
+      ['19:28', ['19:28 /cycle: buy 23 NEE 84.31'], 2, 'middle', T.blue],
+      ['19:32', ['19:31 and 19:33 /cycle: holds'], -2, 'middle', T.gray],
+      ['19:58', ['19:58 last bar, feed dies'], -3, 'middle', T.red],
+      ['20:08', ['20:08 hourly cycle MISSED'], 3, 'start', T.orange],
+      ['21:00', ['21:00 close'], -1, 'middle', T.gray],
+      ['21:10', ['21:10 post-close cycle MISSED'], 1, 'end', T.orange]
+    ];
+    E.forEach(function(e, i){
+      var x = X(e[0]), lvl = e[2], up = lvl > 0, ly = up ? axisY - 36 - (Math.abs(lvl) - 1) * 44 : axisY + 44 + (Math.abs(lvl) - 1) * 44;
+      var lx = e[3] === 'end' ? x - 6 : (e[3] === 'start' ? x + 6 : x);
+      svg.appendChild(rc.line(x, axisY + (up ? -14 : 14), x, ly + (up ? 12 : -12), base(T, { strokeWidth:1, stroke:T.soft, roughness:0.5, seed:seedOf(15, i) })));
+      svg.appendChild(rc.circle(x, axisY, 8, base(T, { fill:e[4], fillStyle:'solid', strokeWidth:1.2, seed:seedOf(16, i) })));
+      var lines = e[1];
+      lines.forEach(function(s, j){
+        var yy = ly + (j - (lines.length - 1) / 2) * 15;
+        text(svg, lx, yy, s, { anchor:e[3], size:12, weight: j === 0 ? 700 : 400, color: j === 0 ? T.ink : T.soft, bg:e[4] });
+      });
+    });
+  }
+
+  function drawAll(){
+    POS.forEach(thesisChart);
+    pnlBars();
+    timeline();
+  }
+  drawAll();
+  // redraw when the theme flips, so fills follow the tokens
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  function redraw(){ ['c-pnl','c-time','c-cvx','c-lly','c-nee'].forEach(function(id){ var s = document.getElementById(id); if (s) while (s.firstChild) s.removeChild(s.firstChild); }); drawAll(); }
+  if (mq.addEventListener) mq.addEventListener('change', redraw);
+  new MutationObserver(redraw).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
+})();
+</script>

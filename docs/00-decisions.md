@@ -1,0 +1,44 @@
+# Decision log
+
+Dates are when the decision was made. Status is one of **decided**, **assumed** (my recommendation, applied unless you object) or **open**.
+
+## Decided
+
+| # | Decision | Choice | Rationale | Date |
+|---|---|---|---|---|
+| D1 | Market | US equities (NYSE, Nasdaq listed stocks and ETFs) | Deepest free and paid data, free paper trading via Alpaca, richest news and fundamentals coverage | 2026-11-01 |
+| D2 | Starting autonomy | Level 1: fully autonomous paper trading | Real-time decisions and simulated fills with no money at risk. Graduation to live on measured results | 2026-11-01 |
+| D3 | Horizon | Both: a swing book (days to weeks) and an intraday book (minutes to hours, flat by the close) | Requested. The books share data, risk, execution and learning, but have separate strategies, limits and capital budgets | 2026-11-01 |
+| D4 | Budget | No ceiling, but free tiers first | Every data source starts on its free tier and is upgraded only when a defined trigger is hit (architecture section 12). Claude Opus 5.5 for reasoning from the start | 2026-11-01, refined 2026-11-02 |
+| D6 | Market data for phases 1 to 4 | Alpaca Market Data Basic plan (free) with the consolidated SIP feed for history; Alpaca paper trading for execution | Full minute-bar history since 2016 for everything older than 15 minutes, and backtests never need the last 15 minutes. First paid upgrade is Algo Trader Plus when live paper intraday trading starts in phase 5 | 2026-11-02 |
+| D7 | Team design | Ten LLM roles (head trader, skeptic, seven analysts, the reviewer's narrative), each built from six parts: role prompt, own evidence, read-only tools, output schema, memory, scorecard. Analysts work independently in parallel; a skeptic challenges every draft thesis; deep-dive mode with a five-call tool budget on the head trader's request | Expertise comes from prompt, data, tools and track record, not from different model weights. Risk officer, execution, back office, feature store and models stay deterministic | 2026-11-03 |
+| D8 | Agent memory | Built natively on our PostgreSQL, borrowing Hindsight's architecture: typed world and experience memories with two clocks, entity and causal links, observations consolidated with evidence and versioned by knowledge time, knowledge pages read into the daily prompt layer, four-way retrieval with rank fusion and token-budget packing. Not the Hindsight service itself | Its recall cannot be restricted to what was known at a point in time, which replay needs; its extraction is not deterministic; our volume does not need its scale. A thin Memory interface keeps the choice reversible | 2026-11-03 |
+| D9 | Phase 1 start | Local Homebrew PostgreSQL 14 (with pgvector) and Redis 8 instead of Docker Compose on the development machine; plain partitioned tables now, TimescaleDB later; phase 1 reordered so slice 2 is a thin, runnable desk with the head agent, four sub-agents and a desk console you can talk to; a `watcher.alert` topic added for the real-time watcher | Docker is not installed and Timescale's Homebrew build needs a newer PostgreSQL; the user wants to see and talk to the head agent early. No design change: Timescale is a storage optimization, the compose file is still written for the cloud VM | 2026-11-03 |
+| D10 | Autonomous swing cycle, version 0 | A deterministic scorecard (20-day and 5-day returns, news score, low volatility) ranks the universe; the head trader returns a structured plan; the skeptic challenges it and a blocking objection turns a trade into a hold; approved buys become theses and order intents through the risk officer; a thesis monitor exits on stop, target or time; the cycle runs pre-market, mid-session and after the close, and on high-impact news for a held name. Safeguards: 2% of equity per new position, at most 10 open positions, 3 new per cycle, longs only, evidence ids must exist in the event store, paper only. Tightened on 2026-11-04 after the LLY buy: the risk officer rejects any non-exit order while the market is open if the symbol's last price is older than 15 minutes or of unknown age (rule `price_fresh`); a skeptic *concern* on a buy blocks it unless conviction is at least 0.5 (`DESK_MIN_CONVICTION_WITH_CONCERN`). Known gap: pre-market cycles still queue orders on the previous close (`allow_when_closed`) | Requested on 2026-11-03: the desk must check, score and choose on its own. The scoring is triage, not a forecast; phase 2 replaces it with tested models. 2026-11-04: "it should not buy on stale data, the risk officer should be in place" | 2026-11-03 |
+| D5 | Working method | Design agreed in documents before code; review at the end of each phase | Requested | 2026-11-01 |
+
+## Assumed (confirm or change)
+
+| # | Assumption | Choice | Why |
+|---|---|---|---|
+| A1 | Language and runtime | Python 3.12, asyncio | Standard for trading, machine learning and the Anthropic SDK |
+| A2 | Prediction target | Distribution of forward returns and direction probability. Swing: 1, 5 and 20 trading days. Intraday: next 15, 30 and 60 minutes. Never a single price point | A point price is unforecastable noise; a distribution gives conviction and sizing |
+| A3 | Universe | Swing: a static core of about 30 liquid large caps spanning all 11 GICS sectors, reviewed quarterly. Intraday: a dynamic daily watchlist of 10 to 20 names chosen pre-market from the 500 most liquid stocks (gaps, relative volume, news, earnings), plus SPY and QQQ as regime references | Small enough to research deeply, large enough to diversify |
+| A4 | Meaning of intraday | Minute-scale decisions, holding minutes to hours. Not sub-second, not market making | LLM latency is seconds; high-frequency trading is a different business |
+| A5 | Short selling | Allowed in both books in paper, with separate caps | Many setups are symmetric; paper is the time to learn the mechanics |
+| A6 | Instruments | Stocks and ETFs only in v1. Options data is used as a factor, not traded | Keeps v1 tractable |
+| A7 | Paper capital | Set the Alpaca paper equity to the capital you actually intend to deploy live | Position sizing, pattern-day-trader rules and slippage only make sense at realistic scale |
+| A8 | Event bus | Redis Streams from phase 1, with an in-memory bus for unit tests | Persistence, replay and consumer groups are needed for two books and for backtest-by-replay |
+| A9 | System of record | PostgreSQL with TimescaleDB for events, bars, features, orders and positions; Parquet plus DuckDB for research datasets | Boring, reliable, queryable |
+| A10 | Models | Claude Opus 5.5 for the head trader, analyst synthesis and post-mortems; Claude Haiku 5.5 for bulk news scoring; LightGBM for the first forecasters | Current Anthropic guidance; gradient boosting is the proven baseline for tabular features |
+| A11 | Deployment | Local machine with Docker Compose during the build; a small cloud VM once paper trading runs daily | Uptime matters once the desk runs every session |
+| A12 | Retraining cadence | Forecast models retrained weekly with walk-forward validation; a challenger is promoted only if it beats the incumbent out of sample | Avoids silent decay and silent overfitting |
+
+## Open
+
+| # | Question | Options | Needed by |
+|---|---|---|---|
+| O1 | Market data vendor | Resolved as D6: free tiers first, upgrade on triggers listed in architecture section 12 | Done |
+| O2 | Notification channel for alerts and the daily brief | Slack, Telegram, email | Phase 1 |
+| O3 | Graduation criteria from paper to live approval gate | Proposed in roadmap phase 5; confirm the thresholds | Phase 5 |
+| O4 | Team | Who else works on this and in what role; affects how much we build in parallel | Phase 1 |
