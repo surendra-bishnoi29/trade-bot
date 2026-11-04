@@ -236,16 +236,26 @@ class SwingCycle(BaseAgent):
     def _limits(self, rows: list[ScoreRow], open_theses: list[ThesisPayload]) -> str:
         s = self.settings
         equity = self.back_office.snapshot.equity
-        budget = equity * s.position_pct
+        scale = self.risk.size_scale() if hasattr(self.risk, "size_scale") else Decimal(1)
+        budget = equity * s.position_pct * scale
         held = {r.symbol for r in rows if r.position_qty} | {t.symbol for t in open_theses}
         slots = max(0, min(s.max_new_per_cycle, s.max_open_positions - len(held)))
+        if scale == 0:
+            slots = 0
+        posture = (
+            " (HALVED: drawdown de-risk)"
+            if scale == Decimal("0.5")
+            else " (NO NEW RISK: drawdown halt, daily loss limit or kill switch)"
+            if scale == 0
+            else ""
+        )
         suggested = ", ".join(
             f"{r.symbol}={math.floor(float(budget) / float(r.last_close))}"
             for r in rows
             if r.rank <= 10 and r.last_close
         )
         return (
-            f"equity {equity:.0f} USD; budget per new position {float(s.position_pct) * 100:.0f}% = {budget:.0f} USD; "
+            f"equity {equity:.0f} USD; budget per new position {float(s.position_pct) * 100:.0f}% = {budget:.0f} USD{posture}; "
             f"max open positions {s.max_open_positions}; currently open {len(held)}; new positions allowed this cycle {slots}; "
             f"longs only; whole shares; suggested quantity per buy: {suggested or 'n/a'}; "
             f"kill switch {'ENGAGED: no new buys' if self.risk.state.kill_switch else 'off'}"

@@ -36,6 +36,16 @@ export function HealthStrip({ health, socket, now }: { health: Health | null; so
       />
       <Chip ok={socket} warn={!socket} label={socket ? "live" : "reconnecting…"} />
       {health.bot.next_cycle && <span className="chip plain">next cycle {health.bot.next_cycle}</span>}
+      {typeof health.bot.drawdown === "number" && (
+        <Chip
+          ok={(health.bot.size_scale ?? 1) >= 1}
+          warn={(health.bot.size_scale ?? 1) === 0.5}
+          label={`drawdown ${(health.bot.drawdown * 100).toFixed(1)}%${
+            typeof health.bot.day_pnl === "number" ? ` · day ${health.bot.day_pnl >= 0 ? "+" : ""}${health.bot.day_pnl.toFixed(0)} USD` : ""
+          }${(health.bot.size_scale ?? 1) === 0.5 ? " · half size" : (health.bot.size_scale ?? 1) === 0 ? " · no new risk" : ""}`}
+          title="from the equity peak; the risk officer halves new positions at 3%, stops them at 5%, engages the kill switch at 8%"
+        />
+      )}
       {down.map((c) => (
         <Chip key={c.component} ok={false} warn={c.status === "degraded"} label={`${c.component} ${c.status}`} title={c.detail} />
       ))}

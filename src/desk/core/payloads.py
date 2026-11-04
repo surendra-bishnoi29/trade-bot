@@ -323,6 +323,9 @@ class Heartbeat(Payload):
     open_theses: int = 0
     next_cycle: str = ""
     morning: bool = False  # the first heartbeat of a trading day, worth a message
+    drawdown: float | None = None  # from the equity peak
+    day_pnl: float | None = None  # against the previous close's equity
+    size_scale: float | None = None  # 1, 0.5 or 0: what the drawdown ladder allows
 
 
 @payload_for(Topics.DESK_COMMAND)

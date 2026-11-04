@@ -55,6 +55,9 @@ export interface Health {
     open_theses: number | null;
     started_at: string | null;
     gap_seconds: number | null;
+    drawdown?: number | null;
+    day_pnl?: number | null;
+    size_scale?: number | null;
   };
   feed: { last_bar: string | null; age_seconds: number | null };
   kill_switch: { engaged: boolean; reason: string; since: string | null };

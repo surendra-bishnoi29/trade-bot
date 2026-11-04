@@ -140,7 +140,7 @@ class Desk:
         risk = RiskOfficer(
             bus,
             clock,
-            RiskLimits(universe=frozenset(universe)),
+            RiskLimits.from_settings(settings, universe),
             back_office.view,
             price_of,
             price_age_of,
@@ -414,6 +414,7 @@ class Ops(BaseAgent):
         if calendar.is_session(now.date()) and now.hour >= 12 and self._morning_sent != now.date():
             self._morning_sent = now.date()
             morning = True
+        posture = desk.risk.status()
         return Heartbeat(
             status="degraded" if degraded else "ok",
             feed_age_seconds=feed_age,
@@ -421,6 +422,9 @@ class Ops(BaseAgent):
             open_theses=len(desk.strategy.theses),
             next_cycle=next_cycle,
             morning=morning,
+            drawdown=posture.get("drawdown"),
+            day_pnl=posture.get("day_pnl"),
+            size_scale=posture.get("size_scale"),
         )
 
     async def heartbeat(self, desk: Desk) -> None:

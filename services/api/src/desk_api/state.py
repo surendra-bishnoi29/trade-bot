@@ -421,6 +421,9 @@ class StateReader:
                 "open_theses": bp.get("open_theses"),
                 "started_at": restarted["payload"].get("started_at") if restarted else None,
                 "gap_seconds": restarted["payload"].get("gap_seconds") if restarted else None,
+                "drawdown": bp.get("drawdown"),
+                "day_pnl": bp.get("day_pnl"),
+                "size_scale": bp.get("size_scale"),
             },
             "feed": {
                 "last_bar": last_bar,

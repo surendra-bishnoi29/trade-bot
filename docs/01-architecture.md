@@ -279,6 +279,8 @@ Deterministic, versioned, fully logged. Each rule returns pass or fail with the 
 
 The risk officer never consults an LLM.
 
+**Implemented (2026-11-04, decision D14).** Per order: `universe`, `quantity` (whole shares), `duplicate_order` (one working order per side at the broker), `price_known`, `price_fresh` (15 minutes while open), `order_notional` (5% of equity), `position_cap` (10%). Per book (swing and intraday have their own limits): `daily_order_cap`, `max_positions`, `book_exposure` (swing 100%, intraday 50% of equity), `short_selling` (swing: none; intraday: allowed up to 25% gross short), `market_hours` (the intraday book never queues orders for the next open). Portfolio: `gross_exposure` (100%), `sector_concentration` (30%), `daily_loss_limit` (2% of the day's starting equity, then exits only for the day), `drawdown_ladder` from the equity peak (3%: new positions at half size, which the planner's budget follows; 5%: no new positions; 8%: the kill switch engages by itself and only a human releases it), `pattern_day_trader` (below 25,000 of equity, a fourth day trade in five days is refused). Exits are never blocked by limits that exist to stop new risk. Every rule is in the trade card with its numbers. Not yet: a band around the last trade, a share of average volume, halts, orders per minute, volatility-scaled sizing, a correlation cap, margin usage.
+
 ## 9. Autonomy ladder
 
 | Level | Name | Orders | Human |

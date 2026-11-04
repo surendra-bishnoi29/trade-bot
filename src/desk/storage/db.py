@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 from psycopg.types.json import Jsonb
@@ -410,6 +411,15 @@ class Database:
             )
             cols = [d.name for d in cur.description]
             return [self._thesis_from_row(cols, r) for r in await cur.fetchall()]
+
+    async def peak_equity(self) -> Decimal | None:
+        """The highest equity any portfolio snapshot ever recorded: the drawdown ladder's peak."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT max((payload->>'equity')::numeric) FROM events WHERE type = 'portfolio.reconciled'"
+            )
+            row = await cur.fetchone()
+            return Decimal(str(row[0])) if row and row[0] is not None else None
 
     async def earliest_bar_ts(self, interval: str) -> datetime | None:
         async with self.pool.connection() as conn:

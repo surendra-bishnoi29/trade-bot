@@ -136,6 +136,7 @@ class AccountInfo:
     buying_power: Decimal
     pattern_day_trader: bool
     daytrade_count: int
+    last_equity: Decimal | None = None  # the previous close's equity: the day's P&L baseline
 
 
 @dataclass(frozen=True)
@@ -172,6 +173,7 @@ class AlpacaTrading:
             buying_power=_dec(a.buying_power) or Decimal(0),
             pattern_day_trader=bool(a.pattern_day_trader),
             daytrade_count=int(a.daytrade_count or 0),
+            last_equity=_dec(getattr(a, "last_equity", None)),
         )
 
     async def positions(self) -> list[PositionInfo]:

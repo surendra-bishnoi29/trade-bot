@@ -51,6 +51,26 @@ ssh oracle sudo -u desk /opt/desk/app/.venv/bin/desk-api users add NAME --role o
 
 The interface is at the server's address; operators can run cycles and use the kill switch, viewers can watch and ask the head trader. Telegram notifications need `DESK_TELEGRAM_BOT_TOKEN` and `DESK_TELEGRAM_CHAT_ID` in the server's `.env` (`scripts/telegram_chat_id.py` finds the chat id).
 
+## The risk officer's limits
+
+Every order passes the deterministic risk officer; every rule and its numbers are on the trade card. Defaults, all overridable in `.env`:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `DESK_POSITION_PCT` | 0.02 | budget per new swing position, of equity |
+| `DESK_MAX_OPEN_POSITIONS` | 10 | open names in the swing book |
+| `DESK_MAX_GROSS_PCT` | 1.0 | account gross exposure, of equity |
+| `DESK_MAX_SECTOR_PCT` | 0.30 | one sector's gross exposure, of equity |
+| `DESK_MAX_DAILY_LOSS_PCT` | 0.02 | loss on the day (against the previous close's equity) after which only exits are allowed |
+| `DESK_DRAWDOWN_DERISK_PCT` | 0.03 | from the equity peak: new positions at half size |
+| `DESK_DRAWDOWN_HALT_PCT` | 0.05 | no new positions |
+| `DESK_DRAWDOWN_KILL_PCT` | 0.08 | the kill switch engages by itself; `/resume` releases it |
+| `DESK_INTRADAY_MAX_GROSS_PCT` | 0.5 | the intraday book's gross exposure |
+| `DESK_INTRADAY_ALLOW_SHORT` | true | shorts in the intraday book only |
+| `DESK_INTRADAY_MAX_SHORT_PCT` | 0.25 | the intraday book's gross short exposure |
+
+The health strip shows the drawdown, the day's P&L and the posture (full size, half size, no new risk).
+
 ## Replaying a past session
 
 ```bash

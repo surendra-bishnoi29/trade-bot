@@ -67,6 +67,19 @@ class Settings(BaseSettings):
     )
     min_conviction_with_concern: float = 0.5  # a buy the skeptic has a concern about needs this
 
+    # the risk officer's portfolio rules (architecture section 8)
+    max_gross_pct: Decimal = Decimal("1.0")  # account gross exposure, of equity
+    max_sector_pct: Decimal = Decimal("0.30")  # one sector's gross exposure, of equity
+    max_daily_loss_pct: Decimal = Decimal("0.02")  # of the day's starting equity; then exits only
+    drawdown_derisk_pct: Decimal = Decimal(
+        "0.03"
+    )  # from the equity peak: new positions at half size
+    drawdown_halt_pct: Decimal = Decimal("0.05")  # no new positions
+    drawdown_kill_pct: Decimal = Decimal("0.08")  # kill switch, released by a human
+    intraday_max_gross_pct: Decimal = Decimal("0.5")
+    intraday_allow_short: bool = True
+    intraday_max_short_pct: Decimal = Decimal("0.25")
+
     # operations (slice 4: the desk runs on a server)
     require_redis: bool = (
         False  # production: refuse to start without Redis instead of the in-memory bus

@@ -28,6 +28,9 @@ class Snapshot:
     open_orders: dict[str, set[str]] = field(
         default_factory=dict
     )  # symbol -> sides working at the broker
+    last_equity: Decimal | None = None
+    daytrade_count: int = 0
+    pattern_day_trader: bool = False
 
 
 class BackOffice(BaseAgent):
@@ -77,6 +80,9 @@ class BackOffice(BaseAgent):
             },
             as_of=self.clock.now(),
             open_orders=working,
+            last_equity=getattr(account, "last_equity", None),
+            daytrade_count=int(getattr(account, "daytrade_count", 0) or 0),
+            pattern_day_trader=bool(getattr(account, "pattern_day_trader", False)),
         )
         await self.emit(
             Topics.PORTFOLIO_RECONCILED,
@@ -143,6 +149,14 @@ class BackOffice(BaseAgent):
             equity=self.snapshot.equity,
             positions={s: p.qty for s, p in self.snapshot.positions.items()},
             open_orders={s: set(v) for s, v in self.snapshot.open_orders.items()},
+            market_values={
+                s: p.market_value
+                for s, p in self.snapshot.positions.items()
+                if p.market_value is not None
+            },
+            day_start_equity=self.snapshot.last_equity,
+            daytrade_count=self.snapshot.daytrade_count,
+            pattern_day_trader=self.snapshot.pattern_day_trader,
         )
 
     def price_of(self, symbol: str) -> Decimal | None:
