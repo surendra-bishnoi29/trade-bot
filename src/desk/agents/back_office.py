@@ -93,11 +93,18 @@ class BackOffice(BaseAgent):
                 if self.db
                 else set()
             )
+        known = (
+            await self.db.known_order_intents(self.clock.now() - timedelta(days=7))
+            if self.db
+            else None  # no journal: trust every order with a desk-shaped id
+        )
         notes: list[str] = []
         for order in await self.trading.recent_orders(limit=50):
             intent_id = order.client_order_id
             if len(intent_id) != 26 or intent_id in self.recorded or order.status not in terminal:
                 continue
+            if known is not None and intent_id not in known:
+                continue  # placed by another run or by hand: not this desk's order to record
             status, topic = terminal[order.status]
             self.recorded.add(intent_id)
             await self.emit(

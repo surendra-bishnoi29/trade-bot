@@ -161,3 +161,28 @@ async def test_back_office_reconciles_broker_fills_once(clock):
     assert (
         len([e for e in bus.log if e.type == Topics.ORDER_FILLED]) == 1
     )  # recorded once, never twice
+
+
+async def test_back_office_ignores_broker_orders_this_journal_never_placed(clock):
+    """A fresh journal must not import an older run's fills from the broker's history."""
+
+    class FakeDB:
+        def __init__(self, known):
+            self.known = known
+
+        async def terminal_order_intents(self, since):
+            return set()
+
+        async def known_order_intents(self, since):
+            return self.known
+
+    bus = InMemoryBus(clock)
+    office = BackOffice(bus, clock, FakeTrading(), Decimal(100000), db=FakeDB(set()))  # type: ignore[arg-type]
+    await office.refresh()
+    assert not [e for e in bus.log if e.type == Topics.ORDER_FILLED]
+    bus = InMemoryBus(clock)
+    office = BackOffice(
+        bus, clock, FakeTrading(), Decimal(100000), db=FakeDB({"01M6GZJ4C6C6VW19W1KKFG8A2Q"})
+    )  # type: ignore[arg-type]
+    await office.refresh()
+    assert len([e for e in bus.log if e.type == Topics.ORDER_FILLED]) == 1

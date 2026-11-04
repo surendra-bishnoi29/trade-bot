@@ -286,6 +286,16 @@ class Database:
                     found.add(article_id)
             return found
 
+    async def known_order_intents(self, since: datetime) -> set[str]:
+        """Intent ids this journal placed itself (an order.intent or order.submitted exists). The back
+        office imports broker fills only for these, so orders from another run or account never leak in."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT DISTINCT payload->>'intent_id' FROM events WHERE type = ANY(%s) AND occurred_at >= %s",
+                (["order.intent", "order.submitted"], since),
+            )
+            return {row[0] for row in await cur.fetchall() if row[0]}
+
     async def terminal_order_intents(self, since: datetime) -> set[str]:
         async with self.pool.connection() as conn:
             cur = await conn.execute(
