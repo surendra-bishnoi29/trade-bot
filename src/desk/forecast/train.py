@@ -25,11 +25,12 @@ from desk.forecast.model import (
     train_final,
     walk_forward,
 )
+from desk.research.costs import CostModel
 from desk.storage.db import Database
 
 log = logging.getLogger(__name__)
 
-ROUND_TRIP_COST = 0.002  # 10 bps a side, the desk's conservative paper assumption
+ROUND_TRIP_COST = CostModel.conservative().round_trip  # 20 bps: a model must pay for a bad day too
 
 
 async def load_bars(

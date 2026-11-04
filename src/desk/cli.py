@@ -110,7 +110,7 @@ async def _theses() -> None:
         await desk.stop()
 
 
-async def _backfill(daily_sessions: int | None = None) -> None:
+async def _backfill(daily_sessions: int | None = None, minute_sessions: int | None = None) -> None:
     from desk.agents.data_agent import DataAgent
     from desk.app import Desk
 
@@ -131,6 +131,8 @@ async def _backfill(daily_sessions: int | None = None) -> None:
         )
         if daily_sessions:
             agent.daily_sessions = daily_sessions
+        if minute_sessions:
+            agent.minute_sessions = minute_sessions
         print(await agent.backfill())
         print(await desk.db.bar_counts())
     finally:
@@ -175,6 +177,55 @@ async def _evaluate(days: int) -> None:
     await db.open()
     try:
         print(render(await evaluate(db, datetime.now(UTC), days=days)))
+    finally:
+        await db.close()
+
+
+async def _costs(days: int) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from desk.research.costs import calibrate, observed_fills, render
+    from desk.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.database_url)
+    await db.open()
+    try:
+        fills = await observed_fills(db, datetime.now(UTC) - timedelta(days=days))
+        print(render(*calibrate(fills)))
+    finally:
+        await db.close()
+
+
+async def _intraday_eval(sessions: int, symbols: str | None, as_json: bool) -> None:
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    from desk.core import calendar
+    from desk.research.costs import calibrate, observed_fills
+    from desk.research.intraday import evaluate, load_minute_sessions, render
+    from desk.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.database_url)
+    await db.open()
+    try:
+        now = datetime.now(UTC)
+        names = (
+            [s.strip().upper() for s in symbols.split(",")]
+            if symbols
+            else list(settings.core_universe)
+        )
+        today = calendar.session_of(now - timedelta(days=1))
+        days = calendar.last_sessions(today, sessions)
+        bars = await load_minute_sessions(db, names, days)
+        cost, _ = calibrate(await observed_fills(db, now - timedelta(days=90)))
+        result = evaluate(bars, cost)
+        if as_json:
+            result = {k: v for k, v in result.items() if k != "trades"}
+            print(json.dumps(result, indent=2, default=str))
+        else:
+            print(render(result))
     finally:
         await db.close()
 
@@ -264,6 +315,17 @@ def main(argv: list[str] | None = None) -> int:
     backfill.add_argument(
         "--daily-sessions", type=int, help="how many sessions of daily bars to hold (default 250)"
     )
+    backfill.add_argument(
+        "--minute-sessions", type=int, help="how many sessions of minute bars to hold (default 5)"
+    )
+    costs = sub.add_parser("costs", help="the cost model, calibrated to the desk's own fills")
+    costs.add_argument("--days", type=int, default=90)
+    intraday = sub.add_parser(
+        "intraday-eval", help="score the intraday baselines on stored minute bars, after costs"
+    )
+    intraday.add_argument("--sessions", type=int, default=60)
+    intraday.add_argument("--symbols", help="comma separated; default the core universe")
+    intraday.add_argument("--json", action="store_true")
     cycle = sub.add_parser("cycle", help="run one swing cycle now")
     cycle.add_argument(
         "--dry-run", action="store_true", help="plan and challenge, but place no orders"
@@ -302,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "ask":
         asyncio.run(_ask(args.question))
     elif args.command == "backfill":
-        asyncio.run(_backfill(args.daily_sessions))
+        asyncio.run(_backfill(args.daily_sessions, args.minute_sessions))
     elif args.command == "cycle":
         asyncio.run(_cycle(args.dry_run))
     elif args.command == "theses":
@@ -315,6 +377,10 @@ def main(argv: list[str] | None = None) -> int:
         from desk.core.prompts import render_registry
 
         print(render_registry())
+    elif args.command == "costs":
+        asyncio.run(_costs(args.days))
+    elif args.command == "intraday-eval":
+        asyncio.run(_intraday_eval(args.sessions, args.symbols, args.json))
     elif args.command == "train":
         asyncio.run(_train(args.horizon, args.days, store=not args.no_store))
     elif args.command == "features":

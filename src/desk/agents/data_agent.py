@@ -63,7 +63,10 @@ class DataAgent(BaseAgent):
         ):
             daily_start = max(daily_start, latest_daily - timedelta(days=3))
         latest_minute = await self.db.latest_bar_ts("1m")
-        if latest_minute is not None:
+        earliest_minute = await self.db.earliest_bar_ts("1m")
+        if latest_minute is not None and (
+            earliest_minute is not None and earliest_minute <= minute_start + timedelta(days=7)
+        ):
             minute_start = max(minute_start, latest_minute - timedelta(hours=1))
 
         counts = {"1d": 0, "1m": 0}

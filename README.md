@@ -72,6 +72,16 @@ uv run desk models                         # every trained model, its out-of-sam
 
 `desk train` refuses a frame that fails the lookahead audit, and a model becomes champion only through the promotion gate (300 or more out-of-sample predictions, positive rank correlation, hit rate at least 50%, no regression against the incumbent). With a champion in the registry the forecaster agent publishes a `forecast` report per name after every quant screen, with the model's own record in the text, and the scorecard gives the expected return a third of its weight. Without one the desk runs exactly as before. Model files live under `data/models` (git-ignored); retrain weekly after the close on Friday.
 
+## Costs and the intraday baselines (phase 2)
+
+```bash
+uv run desk costs                                  # slippage of every fill against its arrival price; the cost model it supports
+uv run desk backfill --minute-sessions 60          # three months of minute bars for the universe
+uv run desk intraday-eval --sessions 60            # opening range, VWAP reversion, momentum, after costs, vs holding from the open
+```
+
+The cost model assumes 5 bps a side for the core names (10 bps round trip; the training gate uses twice that) until 20 fills say otherwise. The intraday baselines are the yardstick the intraday book must beat: one trade per name and session, no lookahead, flat by the close.
+
 ## Running the interface locally
 
 ```bash
