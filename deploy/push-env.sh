@@ -9,9 +9,10 @@ HOST="${DESK_HOST:-oracle}"
 FILE="${1:-.env.vm}"
 cd "$(dirname "$0")/.."
 [ -f "$FILE" ] || { echo "no $FILE here"; exit 1; }
-KEYS=$(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$FILE" | cut -d= -f1 | paste -sd'|' -)
+PROTECTED='DESK_DATABASE_URL|DESK_REDIS_URL|DESK_REQUIRE_REDIS|DESK_SESSION_SECRET'  # the server decides these
+KEYS=$(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$FILE" | cut -d= -f1 | grep -v -E "^($PROTECTED)$" | paste -sd'|' -)
 [ -n "$KEYS" ] || { echo "$FILE has no KEY=VALUE lines"; exit 1; }
-grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$FILE" | ssh "$HOST" "sudo bash -c '
+grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$FILE" | grep -v -E "^($PROTECTED)=" | ssh "$HOST" "sudo bash -c '
   grep -v -E \"^($KEYS)=\" /opt/desk/app/.env > /tmp/env.new
   cat >> /tmp/env.new
   install -o desk -g desk -m 600 /tmp/env.new /opt/desk/app/.env
