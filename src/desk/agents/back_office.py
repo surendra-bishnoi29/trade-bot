@@ -45,6 +45,7 @@ class BackOffice(BaseAgent):
         self.db = db
         self.recorded: set[str] | None = None
         self.snapshot = Snapshot(paper_capital, paper_capital, paper_capital, {}, clock.now())
+        self.book_of: dict[str, str] = {}  # symbol -> book, for positions the intraday book owns
 
     async def refresh(self) -> Snapshot:
         account = await self.trading.account()
@@ -157,6 +158,7 @@ class BackOffice(BaseAgent):
             day_start_equity=self.snapshot.last_equity,
             daytrade_count=self.snapshot.daytrade_count,
             pattern_day_trader=self.snapshot.pattern_day_trader,
+            book_of=dict(self.book_of),
         )
 
     def price_of(self, symbol: str) -> Decimal | None:

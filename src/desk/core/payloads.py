@@ -458,6 +458,23 @@ class WeeklyReviewPayload(Payload):
     facts: dict[str, Any] = Field(default_factory=dict)
 
 
+@payload_for(Topics.INTRADAY_TRADE)
+class IntradayTrade(Payload):
+    """One round trip of the intraday book, written when the exit fills."""
+
+    symbol: str
+    side: Literal["long", "short"]
+    quantity: Decimal
+    entry_price: Decimal
+    exit_price: Decimal
+    realized_pnl: Decimal
+    opened_at: datetime
+    closed_at: datetime
+    strategy: str
+    reason: str = ""
+    note: str = ""
+
+
 @payload_for(Topics.FILING_NEW)
 class FilingNew(Payload):
     symbol: str

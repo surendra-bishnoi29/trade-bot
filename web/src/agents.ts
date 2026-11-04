@@ -18,6 +18,7 @@ export const TEAM: AgentInfo[] = [
   { key: "filings", label: "Filing analyst", role: "new 8-K, 10-Q and 10-K filings from EDGAR" },
   { key: "macro", label: "Macro strategist", role: "rates, curve, VIX, dollar, oil, releases (FRED)" },
   { key: "fundamentals", label: "Fundamentals & events", role: "valuation, growth, margins, earnings dates" },
+  { key: "intraday", label: "Intraday book", role: "playbook before the open, one strategy on minute bars, flat by the close (off until it beats costs)" },
   { key: "scheduler", label: "Scheduler", role: "pre-market, mid-session, post-close" },
   { key: "risk", label: "Risk officer", role: "approves or rejects every order" },
   { key: "execution", label: "Execution", role: "orders to the broker, fills" },

@@ -464,7 +464,12 @@ async def research_digest(
         )
 
     lines: list[str] = []
-    for key in (("macro", "macro", None), ("regime", "regime", None), ("sector", "sector", None)):
+    for key in (
+        ("macro", "macro", None),
+        ("regime", "regime", None),
+        ("sector", "sector", None),
+        ("intraday", "playbook", None),
+    ):
         if key in latest:
             lines.append(line(latest[key]))
     note = next((e for (a, k, _), e in latest.items() if k == "morning_note"), None)

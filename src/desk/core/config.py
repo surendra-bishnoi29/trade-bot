@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     intraday_allow_short: bool = True
     intraday_max_short_pct: Decimal = Decimal("0.25")
 
+    # the intraday book (phase 4): off until a strategy beats costs in `desk intraday-eval`
+    intraday_enabled: bool = False
+    intraday_strategy: Literal["opening_range", "vwap_reversion", "momentum"] = "vwap_reversion"
+    intraday_position_pct: Decimal = Decimal("0.01")  # of equity per name
+    intraday_watchlist_size: int = 10
+    intraday_max_positions: int = 5
+
     # operations (slice 4: the desk runs on a server)
     require_redis: bool = (
         False  # production: refuse to start without Redis instead of the in-memory bus

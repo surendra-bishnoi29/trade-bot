@@ -195,6 +195,7 @@ def create_app(
             "macro",
             "fundamental",
             "event",
+            "playbook",
         ):
             raise HTTPException(status_code=400, detail="unknown research kind")
         return await reader(request).research(kind, limit=max(1, min(limit, 20)))

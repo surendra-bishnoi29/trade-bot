@@ -262,6 +262,17 @@ class SwingCycle(BaseAgent):
             f"max open positions {s.max_open_positions}; currently open {len(held)}; new positions allowed this cycle {slots}; "
             f"longs only; whole shares; suggested quantity per buy: {suggested or 'n/a'}; "
             f"kill switch {'ENGAGED: no new buys' if self.risk.state.kill_switch else 'off'}"
+            + (
+                f"; the intraday book holds {', '.join(sorted(intraday))} (its own positions, flat by the close; not yours)"
+                if (
+                    intraday := [
+                        s
+                        for s, b in getattr(self.back_office, "book_of", {}).items()
+                        if b == "intraday"
+                    ]
+                )
+                else ""
+            )
         )
 
     async def run(self, trigger: str, *, dry_run: bool = False) -> CycleResult:

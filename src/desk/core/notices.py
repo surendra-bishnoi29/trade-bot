@@ -112,6 +112,12 @@ def render(event: Event) -> str | None:
         return f"📊 Analyst scoreboard ({p.get('days')} days): best {best}" + (
             f"; weakest {worst}" if worst else ""
         )
+    if t == Topics.INTRADAY_TRADE:
+        pnl = p.get("realized_pnl")
+        return (
+            f"⚡ Intraday {str(p.get('side', '')).upper()} {p.get('quantity')} {event.symbol} closed ({p.get('reason', '')}): "
+            f"{money(p.get('entry_price'))} to {money(p.get('exit_price'))}, P&L {money(pnl)}. {p.get('note', '')}"
+        )
     if t == Topics.REVIEW_WEEKLY:
         f = p.get("facts") or {}
         pnl = f.get("pnl")
@@ -177,6 +183,8 @@ def summarize(event: Event) -> str:
             return f"scorecard ({p.get('when', '')}): top {', '.join((p.get('top') or [])[:5])}"
         if kind == "morning_note":
             return f"morning note: {(p.get('note') or {}).get('headline', '')}"
+        if kind == "playbook":
+            return first_sentence(p.get("summary", ""), 200)
         stance = f"{p.get('stance')} " if p.get("stance") not in (None, "none") else ""
         return f"{kind} {sym}: {stance}{first_sentence(p.get('summary', ''), 160)}".replace(
             "  ", " "

@@ -73,6 +73,7 @@ class Topics:
     REVIEW_POSTMORTEM = "review.trade.postmortem"
     REVIEW_ANALYST_SCORE = "review.analyst.score"
     REVIEW_WEEKLY = "review.weekly"
+    INTRADAY_TRADE = "intraday.trade"
 
     @classmethod
     def all(cls) -> list[str]:

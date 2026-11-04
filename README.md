@@ -120,6 +120,20 @@ uv run desk graduation    # the checklist for moving from paper to live, each cr
 
 The reviewer writes the weekly review every Friday after the close; it and the graduation checklist are in the Reviews tab. `bash deploy/healthcheck.sh` and `bash deploy/restore-drill.sh` run by hand too.
 
+## The intraday book (phase 4)
+
+Off by default: on the last 59 sessions none of the three baselines beats costs (`desk intraday-eval`), so the book waits for a strategy that does. When one passes, switch it on in `.env`:
+
+```
+DESK_INTRADAY_ENABLED=true
+DESK_INTRADAY_STRATEGY=vwap_reversion     # or opening_range, momentum
+DESK_INTRADAY_POSITION_PCT=0.01           # of equity per name
+DESK_INTRADAY_WATCHLIST_SIZE=10
+DESK_INTRADAY_MAX_POSITIONS=5
+```
+
+Forty-five minutes before the open the book publishes its playbook (the names that moved, traded and made news yesterday) as a `playbook` report. During the session it runs the chosen strategy on live minute bars for those names, one position per name per day, every order through the risk officer under the intraday book's limits (gross 50%, shorts allowed up to 25%, nothing queued for the next open), no entries in the last half hour, everything flat ten minutes before the close. Each round trip is an `intraday.trade` event with its P&L and reason, on Telegram and in the activity feed. After a restart during the session the book recovers its positions from the day's fills.
+
 ## The performance reviewer (phase 4)
 
 ```bash

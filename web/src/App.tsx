@@ -239,6 +239,7 @@ export default function App() {
         case "thesis.created":
         case "thesis.updated":
         case "thesis.closed":
+        case "intraday.trade":
         case "cycle.started":
         case "cycle.completed":
         case "cycle.failed":

@@ -22,6 +22,7 @@ from desk.agents.filings import FilingAnalyst
 from desk.agents.forecaster import ForecastAnalyst
 from desk.agents.fundamentals import FundamentalAnalyst
 from desk.agents.head_trader import HeadTrader
+from desk.agents.intraday import IntradayBook
 from desk.agents.macro import MacroStrategist
 from desk.agents.monitor import Monitor
 from desk.agents.news_agent import NewsAgent, NewsScorer
@@ -81,6 +82,7 @@ class Desk:
     screen: QuantScreen | None = None
     forecaster: ForecastAnalyst | None = None
     reviewer: ReviewerAgent | None = None
+    intraday: IntradayBook | None = None
     news_analyst: NewsAnalyst | None = None
     filings: FilingAnalyst | None = None
     macro: MacroStrategist | None = None
@@ -238,6 +240,28 @@ class Desk:
             desk.forecaster.start()
             desk.reviewer = ReviewerAgent(bus, clock, db, head, narrative=settings.review_narrative)
             desk.reviewer.start()
+            if settings.intraday_enabled:
+                desk.intraday = IntradayBook(
+                    bus,
+                    clock,
+                    db,
+                    universe,
+                    back_office,
+                    risk,
+                    strategy=settings.intraday_strategy,
+                    position_pct=settings.intraday_position_pct,
+                    watchlist_size=settings.intraday_watchlist_size,
+                    max_positions=settings.intraday_max_positions,
+                )
+                desk.intraday.start()
+                log.warning(
+                    "intraday book ON (%s): paper orders under the book's limits, flat before the close",
+                    settings.intraday_strategy,
+                )
+            else:
+                log.info(
+                    "intraday book off (DESK_INTRADAY_ENABLED=false): the baselines do not beat costs yet"
+                )
             desk.data = DataAgent(bus, clock, db, market, universe)
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
             desk.watcher = WatcherAgent(
@@ -325,6 +349,8 @@ class Desk:
             self.tasks.append(asyncio.create_task(self.data.run_forever(), name="data"))
         if self.watcher is not None:
             self.tasks.append(asyncio.create_task(self.watcher.run_forever(), name="watcher"))
+        if self.intraday is not None:
+            self.tasks.append(asyncio.create_task(self.intraday.run_forever(), name="intraday"))
             self.tasks.append(asyncio.create_task(self.watcher.stale_loop(), name="watcher_stale"))
         if self.data is not None:
             self.tasks.append(asyncio.create_task(self.news.run_forever(), name="news"))
