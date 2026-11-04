@@ -19,7 +19,9 @@ from desk.agents.cycle import CycleScheduler, SwingCycle
 from desk.agents.data_agent import DataAgent
 from desk.agents.execution import ExecutionAgent
 from desk.agents.filings import FilingAnalyst
+from desk.agents.fundamentals import FundamentalAnalyst
 from desk.agents.head_trader import HeadTrader
+from desk.agents.macro import MacroStrategist
 from desk.agents.monitor import Monitor
 from desk.agents.news_agent import NewsAgent, NewsScorer
 from desk.agents.prices import PriceCache
@@ -77,6 +79,8 @@ class Desk:
     screen: QuantScreen | None = None
     news_analyst: NewsAnalyst | None = None
     filings: FilingAnalyst | None = None
+    macro: MacroStrategist | None = None
+    fundamentals: FundamentalAnalyst | None = None
     telegram: TelegramNotifier | None = None
     ops: Ops | None = None
     data: DataAgent | None = None
@@ -144,7 +148,14 @@ class Desk:
             log.warning("kill switch restored from the journal: %s", risk.state.kill_reason)
         execution = ExecutionAgent(bus, clock, trading)
         execution.start()
-        news = NewsAgent(bus, clock, db, market, NewsScorer(), universe)
+        extra_sources: list = []
+        if settings.rss_news:
+            from desk.data.rss import RssNews
+
+            extra_sources.append(RssNews())
+        news = NewsAgent(
+            bus, clock, db, market, NewsScorer(), universe, extra_sources=extra_sources
+        )
         await news.remember_stored()
         news.start()
         head = HeadTrader(bus, clock, db, settings, back_office, risk=risk)
@@ -200,6 +211,22 @@ class Desk:
                 await desk.filings.warm()
             else:
                 log.info("filing analyst off: set DESK_SEC_USER_AGENT to poll EDGAR")
+            if settings.fred_api_key:
+                from desk.data.fred import Fred
+
+                desk.macro = MacroStrategist(
+                    bus, clock, db, Fred(settings.fred_api_key.get_secret_value())
+                )
+            else:
+                log.info("macro strategist off: set DESK_FRED_API_KEY (free) to read FRED")
+            if settings.finnhub_api_key:
+                from desk.data.finnhub import Finnhub
+
+                desk.fundamentals = FundamentalAnalyst(
+                    bus, clock, db, Finnhub(settings.finnhub_api_key.get_secret_value()), universe
+                )
+            else:
+                log.info("fundamental and events analysts off: set DESK_FINNHUB_API_KEY (free)")
             desk.screen = QuantScreen(bus, clock, db, universe, back_office, head=head, cycle=cycle)
             desk.data = DataAgent(bus, clock, db, market, universe)
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
@@ -301,6 +328,12 @@ class Desk:
             )
         if self.filings is not None:
             self.tasks.append(asyncio.create_task(self.filings.run_forever(), name="filings"))
+        if self.macro is not None:
+            self.tasks.append(asyncio.create_task(self.macro.run_forever(), name="macro"))
+        if self.fundamentals is not None:
+            self.tasks.append(
+                asyncio.create_task(self.fundamentals.run_forever(), name="fundamentals")
+            )
         self.ops = Ops(self.bus, self.clock)
         await self.ops.announce_start(self)
         self.tasks.append(asyncio.create_task(self.ops.heartbeat(self), name="heartbeat"))

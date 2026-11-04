@@ -7,6 +7,8 @@ const ANALYST: Record<string, string> = {
   sector: "Sector specialist",
   news_analyst: "News analyst",
   filings: "Filing analyst",
+  macro: "Macro strategist",
+  fundamentals: "Fundamentals & events",
   head_trader: "Head trader",
 };
 
@@ -23,6 +25,7 @@ function Stance({ r }: { r: Report }) {
 export function Research({ reports, now }: { reports: Report[] | null; now: number }) {
   if (!reports) return <section className="card"><p className="muted">loading research…</p></section>;
   const regime = reports.find((r) => r.kind === "regime");
+  const macro = reports.find((r) => r.kind === "macro");
   const sector = reports.find((r) => r.kind === "sector");
   const bySymbol = new Map<string, Report[]>();
   for (const r of reports) {
@@ -61,6 +64,16 @@ export function Research({ reports, now }: { reports: Report[] | null; now: numb
           )}
         </div>
         <div className="research-block">
+          <b>Macro</b>
+          {macro ? (
+            <p>
+              <Stance r={macro} /> {macro.summary} <span className="muted small">{ago(macro.at, now)}</span>
+            </p>
+          ) : (
+            <p className="muted">Needs a FRED key.</p>
+          )}
+        </div>
+        <div className="research-block">
           <b>Sectors</b>
           {sector ? (
             <p>
@@ -82,6 +95,8 @@ export function Research({ reports, now }: { reports: Report[] | null; now: numb
                 <th>Technical read</th>
                 <th>News</th>
                 <th>Filings</th>
+                <th>Fundamentals</th>
+                <th>Events</th>
               </tr>
             </thead>
             <tbody>
@@ -95,6 +110,8 @@ export function Research({ reports, now }: { reports: Report[] | null; now: numb
                     <td>{cell(rs.find((r) => r.kind === "technical"))}</td>
                     <td>{cell(rs.find((r) => r.kind === "news"))}</td>
                     <td>{cell(rs.find((r) => r.kind === "filing"))}</td>
+                    <td>{cell(rs.find((r) => r.kind === "fundamental"))}</td>
+                    <td>{cell(rs.find((r) => r.kind === "event"))}</td>
                   </tr>
                 );
               })}

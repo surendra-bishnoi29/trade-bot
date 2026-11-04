@@ -15,6 +15,8 @@ export const TEAM: AgentInfo[] = [
   { key: "sector", label: "Sector specialist", role: "leaders and laggards across sectors" },
   { key: "news_analyst", label: "News analyst", role: "tone and themes per name from the scored news" },
   { key: "filings", label: "Filing analyst", role: "new 8-K, 10-Q and 10-K filings from EDGAR" },
+  { key: "macro", label: "Macro strategist", role: "rates, curve, VIX, dollar, oil, releases (FRED)" },
+  { key: "fundamentals", label: "Fundamentals & events", role: "valuation, growth, margins, earnings dates" },
   { key: "scheduler", label: "Scheduler", role: "pre-market, mid-session, post-close" },
   { key: "risk", label: "Risk officer", role: "approves or rejects every order" },
   { key: "execution", label: "Execution", role: "orders to the broker, fills" },
@@ -62,7 +64,8 @@ export function describe(m: LiveMessage): string {
       return `${p.form} filed by ${s}: ${(p.items ?? []).join(", ") || "no items"}`;
     case "research.report":
       if (p.kind === "technical" || p.kind === "news" || p.kind === "filing") return `${p.kind} ${s}: ${p.stance ?? ""} ${String(p.summary ?? "").slice(0, 90)}`;
-      if (p.kind === "regime" || p.kind === "sector") return `${p.kind}: ${String(p.summary ?? "").slice(0, 100)}`;
+      if (p.kind === "regime" || p.kind === "sector" || p.kind === "macro") return `${p.kind}: ${String(p.summary ?? "").slice(0, 100)}`;
+      if (p.kind === "fundamental" || p.kind === "event") return `${p.kind} ${s}: ${String(p.summary ?? "").slice(0, 90)}`;
       if (p.kind === "scorecard") return `scorecard (${p.when ?? ""}): top ${(p.top ?? []).slice(0, 5).join(", ")}`;
       if (p.kind === "morning_note") return `morning note: ${p.note?.headline ?? ""}`;
       return `report: ${p.analyst ?? ""}`;

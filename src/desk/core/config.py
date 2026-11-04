@@ -78,6 +78,11 @@ class Settings(BaseSettings):
     sec_user_agent: str | None = (
         None  # EDGAR asks for a descriptive agent with a contact; unset = off
     )
+    rss_news: bool = True  # keyless RSS headlines per symbol behind the same scoring
+    fred_api_key: SecretStr | None = None  # macro strategist; free key from fred.stlouisfed.org
+    finnhub_api_key: SecretStr | None = (
+        None  # fundamentals and earnings dates; free key from finnhub.io
+    )
 
     # unprefixed on purpose: the Anthropic SDK reads ANTHROPIC_API_KEY itself
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

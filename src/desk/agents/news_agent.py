@@ -110,10 +110,12 @@ class NewsAgent(BaseAgent):
         *,
         poll_s: float = 60.0,
         max_symbols_per_article: int = 3,
+        extra_sources: list | None = None,
     ) -> None:
         super().__init__(bus, clock)
         self.db = db
         self.market = market
+        self.extra_sources = list(extra_sources or [])  # anything with .news(symbols, since, limit)
         self.scorer = scorer
         self.universe = universe
         self.poll_s = poll_s
@@ -141,7 +143,12 @@ class NewsAgent(BaseAgent):
         caused_by: Event | None = None,
         limit: int = 50,
     ) -> int:
-        articles = await self.market.news(symbols, since, limit=limit)
+        articles = list(await self.market.news(symbols, since, limit=limit))
+        for source in self.extra_sources:
+            try:
+                articles.extend(await source.news(symbols, since, limit=limit))
+            except Exception as exc:  # noqa: BLE001 - a secondary source must never block the primary
+                log.warning("news source %s failed: %s", type(source).__name__, exc)
         emitted = 0
         for article in articles:
             raw = self.seen.get(article.article_id)

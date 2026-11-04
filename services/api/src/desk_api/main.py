@@ -191,6 +191,9 @@ def create_app(
             "technical",
             "news",
             "filing",
+            "macro",
+            "fundamental",
+            "event",
         ):
             raise HTTPException(status_code=400, detail="unknown research kind")
         return await reader(request).research(kind, limit=max(1, min(limit, 20)))

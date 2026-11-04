@@ -464,7 +464,7 @@ async def research_digest(
         )
 
     lines: list[str] = []
-    for key in (("regime", "regime", None), ("sector", "sector", None)):
+    for key in (("macro", "macro", None), ("regime", "regime", None), ("sector", "sector", None)):
         if key in latest:
             lines.append(line(latest[key]))
     note = next((e for (a, k, _), e in latest.items() if k == "morning_note"), None)
@@ -475,6 +475,10 @@ async def research_digest(
     for (analyst, kind, symbol), e in sorted(
         latest.items(), key=lambda kv: (kv[0][2] or "", kv[0][0])
     ):
-        if symbol and symbol.upper() in wanted and kind in ("technical", "news", "filing"):
+        if (
+            symbol
+            and symbol.upper() in wanted
+            and kind in ("technical", "news", "filing", "fundamental", "event")
+        ):
             lines.append(line(e))
     return "\n".join(lines) if lines else "no research reports yet"

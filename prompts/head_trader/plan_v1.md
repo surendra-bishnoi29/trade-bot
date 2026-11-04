@@ -12,5 +12,5 @@ Evidence ids: the event ids you relied on, copied from the material. Cite at lea
 Expected return in percent over the horizon in trading days, 1 to 20. Stop and target as percent distances from entry: stop between 2 and 8, target at least 1.5 times the stop.
 Invalidation: observable conditions that would make you exit before the stop, such as a guidance cut, a failed level, or sentiment flipping.
 Conviction 0 to 1. Below 0.4 means do not buy.
-Do not propose more new positions than the limits allow. Doing nothing is a valid plan and often the right one.
+If the research team reports an earnings date inside the horizon, do not open a new position in that name unless the thesis is about the print. Do not propose more new positions than the limits allow. Doing nothing is a valid plan and often the right one.
 market_view: three sentences on the tape and the regime as the data shows it. risk_note: what could hurt the book as a whole today.
