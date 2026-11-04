@@ -51,6 +51,16 @@ ssh oracle sudo -u desk /opt/desk/app/.venv/bin/desk-api users add NAME --role o
 
 The interface is at the server's address; operators can run cycles and use the kill switch, viewers can watch and ask the head trader. Telegram notifications need `DESK_TELEGRAM_BOT_TOKEN` and `DESK_TELEGRAM_CHAT_ID` in the server's `.env` (`scripts/telegram_chat_id.py` finds the chat id).
 
+## Replaying a past session
+
+```bash
+uv run desk replay --day 2026-11-03                 # the same agents, a simulated broker, a scripted head trader
+uv run desk replay --day 2026-11-03 --llm           # the real head trader; model outputs are cached, a rerun is free
+uv run desk replay --day 2026-11-03 --feed-gap 15:00-15:15   # withhold bars: the kill switch must engage
+```
+
+The replayer feeds the day's minute bars to the agents under a driven clock, the simulated broker fills at the next bar with slippage and commission always on, theses live in memory, and the journal is read as of the simulated time and never written. The report lists cycles, fills, theses, costs and drawdown.
+
 ## Running the interface locally
 
 ```bash

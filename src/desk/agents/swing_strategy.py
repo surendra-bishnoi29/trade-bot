@@ -51,15 +51,16 @@ class SwingStrategy(BaseAgent):
         Topics.THESIS_CREATED,
     )
 
-    def __init__(self, bus: Bus, clock: Clock, db: Database) -> None:
+    def __init__(self, bus: Bus, clock: Clock, db: Database, theses=None) -> None:
         super().__init__(bus, clock)
         self.db = db
+        self.store = theses or db  # the database, or memory in a replay
         self.theses: dict[str, ThesisPayload] = {}  # thesis_id -> thesis (open ones)
         self.intent_to_thesis: dict[str, str] = {}
         self.exiting: set[str] = set()
 
     async def load(self) -> int:
-        self.theses = {t.thesis_id: t for t in await self.db.open_theses()}
+        self.theses = {t.thesis_id: t for t in await self.store.open_theses()}
         return len(self.theses)
 
     async def reconcile(self, positions: dict[str, tuple[Decimal, Decimal | None]]) -> list[str]:
@@ -72,7 +73,7 @@ class SwingStrategy(BaseAgent):
             if thesis.status == "pending_entry" and held and held[0] > 0:
                 entry = held[1] or thesis.entry_price or Decimal(0)
                 stop, target = price_levels(entry, thesis.stop_pct, thesis.target_pct)
-                updated = await self.db.update_thesis(
+                updated = await self.store.update_thesis(
                     thesis.thesis_id,
                     now,
                     status="active",
@@ -88,7 +89,7 @@ class SwingStrategy(BaseAgent):
                     )
                     notes.append(f"{thesis.symbol} activated at {entry}")
             elif thesis.status == "closing" and (not held or held[0] <= 0):
-                updated = await self.db.update_thesis(
+                updated = await self.store.update_thesis(
                     thesis.thesis_id,
                     now,
                     status="closed",
@@ -129,7 +130,7 @@ class SwingStrategy(BaseAgent):
     ) -> None:
         self.exiting.add(thesis.thesis_id)
         now = self.clock.now()
-        updated = await self.db.update_thesis(
+        updated = await self.store.update_thesis(
             thesis.thesis_id, now, status="closing", reason=f"{reason} at {close}"
         )
         if updated:
@@ -168,7 +169,7 @@ class SwingStrategy(BaseAgent):
         if event.type == Topics.ORDER_FILLED and thesis.status == "pending_entry":
             entry = update.avg_price or thesis.entry_price or Decimal(0)
             stop, target = price_levels(entry, thesis.stop_pct, thesis.target_pct)
-            updated = await self.db.update_thesis(
+            updated = await self.store.update_thesis(
                 thesis.thesis_id,
                 now,
                 status="active",
@@ -183,7 +184,7 @@ class SwingStrategy(BaseAgent):
             pnl = (exit_price - (thesis.entry_price or exit_price)) * (
                 update.filled_quantity or thesis.quantity
             )
-            updated = await self.db.update_thesis(
+            updated = await self.store.update_thesis(
                 thesis.thesis_id, now, status="closed", closed_at=now, realized_pnl=pnl
             )
             topic = Topics.THESIS_CLOSED
@@ -191,7 +192,7 @@ class SwingStrategy(BaseAgent):
             event.type in (Topics.ORDER_REJECTED, Topics.ORDER_CANCELED)
             and thesis.status == "pending_entry"
         ):
-            updated = await self.db.update_thesis(
+            updated = await self.store.update_thesis(
                 thesis.thesis_id,
                 now,
                 status="rejected",
@@ -203,7 +204,7 @@ class SwingStrategy(BaseAgent):
             and thesis.status == "closing"
         ):
             self.exiting.discard(thesis.thesis_id)
-            updated = await self.db.update_thesis(
+            updated = await self.store.update_thesis(
                 thesis.thesis_id,
                 now,
                 status="active",

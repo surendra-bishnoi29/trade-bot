@@ -7,6 +7,7 @@ import asyncio
 import logging
 import sys
 import time
+from datetime import UTC
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -134,6 +135,33 @@ async def _backfill() -> None:
         await desk.stop()
 
 
+async def _replay(args: argparse.Namespace) -> None:
+    import json
+    from datetime import date, datetime, timedelta
+    from decimal import Decimal
+
+    from desk.replay.assemble import run_replay
+
+    day = date.fromisoformat(args.day)
+    gap = None
+    if args.feed_gap:
+        a, b = args.feed_gap.split("-")
+        start = datetime.combine(day, datetime.strptime(a, "%H:%M").time(), tzinfo=UTC)
+        end = datetime.combine(day, datetime.strptime(b, "%H:%M").time(), tzinfo=UTC)
+        gap = (start, end if end > start else end + timedelta(days=1))
+    report = await run_replay(
+        load_settings(),
+        day,
+        llm=args.llm,
+        capital=Decimal(args.capital),
+        slippage_bps=Decimal(args.slippage_bps),
+        feed_gap=gap,
+    )
+    print(report.render())
+    if args.json:
+        print(json.dumps(report.as_dict(), default=str))
+
+
 def main(argv: list[str] | None = None) -> int:
     truststore.inject_into_ssl()  # websockets and urllib use the system trust store, like the browser does
     load_dotenv()
@@ -150,6 +178,15 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run", action="store_true", help="plan and challenge, but place no orders"
     )
     sub.add_parser("theses", help="list recent theses")
+    replay = sub.add_parser(
+        "replay", help="replay one past session through the agents with a simulated broker"
+    )
+    replay.add_argument("--day", required=True, help="session date, YYYY-MM-DD")
+    replay.add_argument("--llm", action="store_true", help="use the real head trader (cached)")
+    replay.add_argument("--capital", default="100000")
+    replay.add_argument("--slippage-bps", default="5")
+    replay.add_argument("--feed-gap", help="withhold bars between HH:MM-HH:MM UTC")
+    replay.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     _logging(args.verbose, console=(args.command == "run" and not args.no_console))
     if args.command == "run":
@@ -162,6 +199,8 @@ def main(argv: list[str] | None = None) -> int:
         asyncio.run(_cycle(args.dry_run))
     elif args.command == "theses":
         asyncio.run(_theses())
+    elif args.command == "replay":
+        asyncio.run(_replay(args))
     return 0
 
 

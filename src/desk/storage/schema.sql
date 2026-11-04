@@ -65,3 +65,12 @@ CREATE TABLE IF NOT EXISTS theses (
     realized_pnl         NUMERIC
 );
 CREATE INDEX IF NOT EXISTS theses_symbol_status ON theses (symbol, status);
+
+-- Structured model outputs keyed by a hash of the whole prompt (replays rerun for free)
+CREATE TABLE IF NOT EXISTS llm_cache (
+    key        TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL,
+    model      TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    response   JSONB NOT NULL
+);

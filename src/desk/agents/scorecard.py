@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from statistics import mean, pstdev
 
+from desk.core import calendar
 from desk.core.events import Topics
 from desk.storage.db import Database
 
@@ -156,13 +157,38 @@ async def build_scorecard(
     bars: dict[str, list[dict]] = {}
     news: dict[str, list[dict]] = {}
     alerts: dict[str, int] = {}
+    in_session = calendar.is_session(now.date()) and now < calendar.session_bounds(now.date())[1]
     for symbol in universe:
-        bars[symbol] = await db.recent_bars(symbol, "1d", limit=60)
+        daily = await db.recent_bars(symbol, "1d", limit=61, before=now)
+        if in_session:
+            # today's daily bar is only trusted after the close; during the session the latest minute
+            # bar stands in for it, so the scorecard never reads a close that has not happened yet
+            daily = [b for b in daily if b["ts"].date() != now.date()]
+            latest = await db.recent_bars(symbol, "1m", limit=1, before=now)
+            if latest and latest[0]["ts"].date() == now.date():
+                b = latest[0]
+                daily = daily + [
+                    {
+                        "ts": b["ts"],
+                        "open": b["close"],
+                        "high": b["close"],
+                        "low": b["close"],
+                        "close": b["close"],
+                        "volume": b["volume"] or 0,
+                    }
+                ]
+        bars[symbol] = daily[-60:]
         scored = await db.recent_events(
-            [Topics.NEWS_ARTICLE_SCORED], now - timedelta(days=5), symbol=symbol, limit=200
+            [Topics.NEWS_ARTICLE_SCORED],
+            now - timedelta(days=5),
+            symbol=symbol,
+            limit=200,
+            until=now,
         )
         news[symbol] = [{**e.payload, "occurred_at": e.occurred_at} for e in scored]
-    for e in await db.recent_events([Topics.WATCHER_ALERT], now - timedelta(hours=24), limit=500):
+    for e in await db.recent_events(
+        [Topics.WATCHER_ALERT], now - timedelta(hours=24), limit=500, until=now
+    ):
         if e.symbol:
             alerts[e.symbol] = alerts.get(e.symbol, 0) + 1
     return compute_scorecard(bars, news, alerts, positions, now)

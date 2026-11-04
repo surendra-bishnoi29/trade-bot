@@ -61,7 +61,9 @@ class HeadTrader(BaseAgent):
         self.db = db
         self.settings = settings
         self.back_office = back_office
-        self.client = client or anthropic.AsyncAnthropic()
+        self._client = client
+        self.cache = None  # an LLMCache during replays; live cycles are never cached
+        self.material_rows: list = []  # the scorecard rows behind the material, set by the cycle
         self.model = model
         self.static_prompt = PROMPT_PATH.read_text()
         self.plan_prompt = PLAN_PROMPT_PATH.read_text()
@@ -69,6 +71,12 @@ class HeadTrader(BaseAgent):
         self._scores: dict[str, asyncio.Queue[Event]] = {}
         self._decisions: dict[str, asyncio.Future[Event]] = {}
         self.last_usage: dict[str, int] = {}
+
+    @property
+    def client(self) -> anthropic.AsyncAnthropic:
+        if self._client is None:
+            self._client = anthropic.AsyncAnthropic()
+        return self._client
 
     # ---- bus side: events the tools wait for ----
 
@@ -135,9 +143,15 @@ class HeadTrader(BaseAgent):
 
     async def q_news(self, symbol: str, hours: int = 24) -> str:
         since = self.clock.now() - timedelta(hours=min(max(hours, 1), 168))
-        raw = await self.db.recent_events([Topics.NEWS_ARTICLE_RAW], since, limit=200)
+        raw = await self.db.recent_events(
+            [Topics.NEWS_ARTICLE_RAW], since, limit=200, until=self.clock.now()
+        )
         scored = await self.db.recent_events(
-            [Topics.NEWS_ARTICLE_SCORED], since, symbol=symbol.upper(), limit=200
+            [Topics.NEWS_ARTICLE_SCORED],
+            since,
+            symbol=symbol.upper(),
+            limit=200,
+            until=self.clock.now(),
         )
         scores = {e.payload["article_id"]: e.payload for e in scored}
         lines = []
@@ -166,7 +180,9 @@ class HeadTrader(BaseAgent):
 
     async def q_alerts(self, hours: int = 6) -> str:
         since = self.clock.now() - timedelta(hours=min(max(hours, 1), 48))
-        events = await self.db.recent_events([Topics.WATCHER_ALERT], since, limit=50)
+        events = await self.db.recent_events(
+            [Topics.WATCHER_ALERT], since, limit=50, until=self.clock.now()
+        )
         if not events:
             return "no watcher alerts in the window"
         return "\n".join(
@@ -188,7 +204,7 @@ class HeadTrader(BaseAgent):
             Topics.CONSOLE_ANSWER,
             Topics.RISK_KILL_SWITCH,
         ]
-        events = await self.db.recent_events(types, since, limit=60)
+        events = await self.db.recent_events(types, since, limit=60, until=self.clock.now())
         if not events:
             return "nothing in the journal for the window"
         out = []
@@ -213,7 +229,9 @@ class HeadTrader(BaseAgent):
 
     async def q_cycles(self, hours: int = 24) -> str:
         since = self.clock.now() - timedelta(hours=min(max(hours, 1), 168))
-        events = await self.db.recent_events([Topics.CYCLE_PLAN], since, limit=10)
+        events = await self.db.recent_events(
+            [Topics.CYCLE_PLAN], since, limit=10, until=self.clock.now()
+        )
         if not events:
             return "no cycles in the window"
         out = []
@@ -480,7 +498,25 @@ class HeadTrader(BaseAgent):
             "cache_write": getattr(usage, "cache_creation_input_tokens", 0) or 0,
         }
 
+    def _cache_key(self, kind: str, *parts: str) -> str:
+        from desk.storage.llm_cache import cache_key
+
+        prompt = self.static_prompt + self.plan_prompt if kind == "plan" else self.skeptic_prompt
+        return cache_key(kind, self.model, prompt, *parts)
+
     async def plan(self, material: str, limits: str) -> CyclePlan:
+        key = self._cache_key("plan", self.daily_layer(), material, limits)
+        if self.cache is not None:
+            hit = await self.cache.get(key)
+            if hit is not None:
+                self.last_usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
+                return CyclePlan.model_validate(hit)
+        plan = await self._plan_llm(material, limits)
+        if self.cache is not None:
+            await self.cache.put(key, "plan", self.model, plan.model_dump(mode="json"))
+        return plan
+
+    async def _plan_llm(self, material: str, limits: str) -> CyclePlan:
         response = await self.client.messages.parse(
             model=self.model,
             max_tokens=8000,
@@ -517,6 +553,18 @@ class HeadTrader(BaseAgent):
         return response.parsed_output
 
     async def challenge(self, material: str, plan: CyclePlan) -> Challenge:
+        key = self._cache_key("challenge", self.daily_layer(), material, plan.model_dump_json())
+        if self.cache is not None:
+            hit = await self.cache.get(key)
+            if hit is not None:
+                self.last_usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
+                return Challenge.model_validate(hit)
+        challenge = await self._challenge_llm(material, plan)
+        if self.cache is not None:
+            await self.cache.put(key, "challenge", self.model, challenge.model_dump(mode="json"))
+        return challenge
+
+    async def _challenge_llm(self, material: str, plan: CyclePlan) -> Challenge:
         response = await self.client.messages.parse(
             model=self.model,
             max_tokens=4000,

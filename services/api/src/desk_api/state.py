@@ -501,8 +501,7 @@ class StateReader:
     # ---- bars for charts ----
 
     async def bars(self, symbol: str, interval: str, n: int) -> list[dict]:
-        rows = await self.db.recent_bars(symbol.upper(), interval, limit=n)
-        rows.reverse()
+        rows = await self.db.recent_bars(symbol.upper(), interval, limit=n)  # oldest first
         return [
             {
                 "ts": r["ts"],

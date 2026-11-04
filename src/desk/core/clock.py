@@ -34,10 +34,17 @@ class LiveClock:
 
 
 class SimClock:
-    """A clock that moves only when told to."""
+    """A clock that moves only when told to.
 
-    def __init__(self, start: datetime) -> None:
+    Free-running (the default): sleep() advances the clock itself, which is what unit tests want.
+    Driven: sleep() waits until advance_to() passes the wake-up time. The replayer drives the clock
+    from historical events, and every agent's timer (polling a fill, refreshing the book, the
+    scheduler's slices) wakes in historical order instead of racing ahead."""
+
+    def __init__(self, start: datetime, *, driven: bool = False) -> None:
         self._now = utc(start)
+        self.driven = driven
+        self._waiters: list[tuple[datetime, asyncio.Future[None]]] = []
 
     def now(self) -> datetime:
         return self._now
@@ -49,6 +56,25 @@ class SimClock:
                 f"simulated clock cannot go backwards: {t.isoformat()} < {self._now.isoformat()}"
             )
         self._now = t
+        self._wake()
+
+    def next_wakeup(self) -> datetime | None:
+        """The earliest time a sleeping task wants to resume, if any."""
+        return min((at for at, _ in self._waiters), default=None)
+
+    def _wake(self) -> None:
+        due = [(at, fut) for at, fut in self._waiters if at <= self._now]
+        self._waiters = [(at, fut) for at, fut in self._waiters if at > self._now]
+        for _, fut in due:
+            if not fut.done():
+                fut.set_result(None)
 
     async def sleep(self, seconds: float) -> None:
-        self._now += timedelta(seconds=seconds)
+        if not self.driven:
+            self._now += timedelta(seconds=seconds)
+            self._wake()
+            return
+        target = self._now + timedelta(seconds=max(0.0, seconds))
+        fut: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        self._waiters.append((target, fut))
+        await fut

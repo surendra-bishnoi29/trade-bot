@@ -149,6 +149,36 @@ class Database:
             cols = [d.name for d in cur.description]
             return [dict(zip(cols, row, strict=True)) for row in reversed(await cur.fetchall())]
 
+    async def bars_between(
+        self, symbols: list[str], interval: str, start: datetime, end: datetime
+    ) -> list[dict]:
+        """All bars of the symbols in [start, end), oldest first; the replayer's feed."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                """
+                SELECT symbol, interval, ts, open, high, low, close, volume, vwap, trade_count, source
+                FROM bars WHERE symbol = ANY(%s) AND interval = %s AND ts >= %s AND ts < %s
+                ORDER BY ts, symbol
+                """,
+                (symbols, interval, start, end),
+            )
+            cols = [d.name for d in cur.description]
+            return [dict(zip(cols, row, strict=True)) for row in await cur.fetchall()]
+
+    async def llm_cache_get(self, key: str) -> dict | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute("SELECT response FROM llm_cache WHERE key = %s", (key,))
+            row = await cur.fetchone()
+            return row[0] if row else None
+
+    async def llm_cache_put(self, key: str, kind: str, model: str, response: dict) -> None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "INSERT INTO llm_cache (key, kind, model, response) VALUES (%s, %s, %s, %s) "
+                "ON CONFLICT (key) DO NOTHING",
+                (key, kind, model, Jsonb(response)),
+            )
+
     async def bar_counts(self) -> dict[str, int]:
         async with self.pool.connection() as conn:
             cur = await conn.execute("SELECT interval, count(*) FROM bars GROUP BY interval")
@@ -157,8 +187,16 @@ class Database:
     # ---- events ----
 
     async def recent_events(
-        self, types: list[str], since: datetime, *, symbol: str | None = None, limit: int = 50
+        self,
+        types: list[str],
+        since: datetime,
+        *,
+        symbol: str | None = None,
+        limit: int = 50,
+        until: datetime | None = None,
     ) -> list[Event]:
+        """Events of the given types since a time, newest first. `until` bounds the read to what was
+        known at that moment: a replay must never see the future."""
         async with self.pool.connection() as conn:
             cur = await conn.execute(
                 """
@@ -166,9 +204,10 @@ class Database:
                        causation_id, source, payload
                 FROM events
                 WHERE type = ANY(%s) AND occurred_at >= %s AND (%s::text IS NULL OR symbol = %s)
+                  AND (%s::timestamptz IS NULL OR occurred_at <= %s)
                 ORDER BY occurred_at DESC LIMIT %s
                 """,
-                (types, since, symbol, symbol, limit),
+                (types, since, symbol, symbol, until, until, limit),
             )
             cols = [d.name for d in cur.description]
             return [Event(**dict(zip(cols, row, strict=True))) for row in await cur.fetchall()]

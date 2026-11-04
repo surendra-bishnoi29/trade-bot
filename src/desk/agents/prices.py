@@ -21,9 +21,9 @@ class PriceCache(BaseAgent):
         self.last: dict[str, Decimal] = {}
         self.last_at: dict[str, datetime] = {}
 
-    async def seed(self, db: Database, symbols: list[str]) -> int:
+    async def seed(self, db: Database, symbols: list[str], before: datetime | None = None) -> int:
         for symbol in symbols:
-            bars = await db.recent_bars(symbol, "1d", limit=1)
+            bars = await db.recent_bars(symbol, "1d", limit=1, before=before)
             if bars:
                 self.last[symbol] = Decimal(bars[-1]["close"])
                 self.last_at[symbol] = bars[-1]["ts"]

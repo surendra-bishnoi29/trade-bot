@@ -196,9 +196,11 @@ class SwingCycle(BaseAgent):
         back_office: BackOffice,
         risk: RiskOfficer,
         strategy: SwingStrategy,
+        theses=None,
     ) -> None:
         super().__init__(bus, clock)
         self.db = db
+        self.store = theses or db  # where theses live: the database, or memory in a replay
         self.settings = settings
         self.head = head
         self.back_office = back_office
@@ -272,7 +274,7 @@ class SwingCycle(BaseAgent):
             rows = await build_scorecard(
                 self.db, list(self.settings.core_universe), positions, self.clock.now()
             )
-            open_theses = await self.db.open_theses()
+            open_theses = await self.store.open_theses()
             scorecard = render_scorecard(rows, top_n=10)
             await self.emit(
                 Topics.RESEARCH_REPORT,
@@ -287,6 +289,7 @@ class SwingCycle(BaseAgent):
             )
             material = await self._material(rows, open_theses)
             limits = self._limits(rows, open_theses)
+            self.head.material_rows = rows
             plan = await self.head.plan(material, limits)
             usage = {"plan": dict(self.head.last_usage)}
             challenge = await self.head.challenge(material, plan)
@@ -398,7 +401,7 @@ class SwingCycle(BaseAgent):
                     created_at=now,
                     updated_at=now,
                 )
-                await self.db.insert_thesis(thesis)
+                await self.store.insert_thesis(thesis)
                 a.thesis_id = thesis.thesis_id
                 created = await self.emit(
                     Topics.THESIS_CREATED,
@@ -422,7 +425,7 @@ class SwingCycle(BaseAgent):
             elif a.action == "sell":
                 evidence: list[str] = []
                 if a.thesis_id:
-                    updated = await self.db.update_thesis(
+                    updated = await self.store.update_thesis(
                         a.thesis_id, now, status="closing", reason="head trader decided to exit"
                     )
                     if updated:

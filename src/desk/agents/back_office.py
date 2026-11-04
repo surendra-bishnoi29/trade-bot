@@ -138,6 +138,9 @@ class BackOffice(BaseAgent):
         return None
 
     async def handle(self, event: Event) -> None:
+        intent_id = event.payload.get("intent_id")
+        if intent_id and self.recorded is not None and event.type == Topics.ORDER_FILLED:
+            self.recorded.add(intent_id)  # reported by the execution trader: not ours to repeat
         await self.refresh()
         symbol = event.symbol
         if symbol and symbol in self.snapshot.positions:
