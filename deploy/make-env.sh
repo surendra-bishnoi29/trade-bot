@@ -18,5 +18,11 @@ grep -v -E '^(DESK_DATABASE_URL|DESK_REDIS_URL|DESK_REQUIRE_REDIS|DESK_SESSION_S
   echo "DESK_REQUIRE_REDIS=true"
   echo "DESK_SESSION_SECRET=$(openssl rand -hex 32)"
 } >> "$tmp"
+if [ -f .env.vm ]; then
+  # values that differ on the server (for example the server's own broker keys) win over the laptop's
+  KEYS=$(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env.vm | cut -d= -f1 | paste -sd'|' -)
+  grep -v -E "^($KEYS)=" "$tmp" > "$tmp.2" && mv "$tmp.2" "$tmp"
+  grep -E '^[A-Za-z_][A-Za-z0-9_]*=' .env.vm >> "$tmp"
+fi
 scp -q "$tmp" "$HOST":/tmp/desk.env
 echo "server env staged at $HOST:/tmp/desk.env ($(grep -c . "$tmp") lines)"

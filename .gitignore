@@ -19,3 +19,4 @@ build/
 .claude/settings.local.json
 graphify-out/
 node_modules/
+.env.vm
