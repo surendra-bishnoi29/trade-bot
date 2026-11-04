@@ -146,10 +146,7 @@ class QuantScreen(BaseAgent):
     async def note_exists_today(self) -> bool:
         now = self.clock.now()
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        for e in await self.db.recent_events([Topics.RESEARCH_REPORT], start, limit=50, until=now):
-            if e.payload.get("kind") == "morning_note":
-                return True
-        return False
+        return await self.db.report_exists("morning_note", start, now)
 
     async def run_once(self, kind: str) -> None:
         try:

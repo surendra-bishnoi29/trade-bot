@@ -149,6 +149,18 @@ class Database:
             cols = [d.name for d in cur.description]
             return [dict(zip(cols, row, strict=True)) for row in reversed(await cur.fetchall())]
 
+    async def report_exists(
+        self, kind: str, since: datetime, until: datetime | None = None
+    ) -> bool:
+        """Whether a research report of this kind was published in the window (cheap, exact)."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT 1 FROM events WHERE type = %s AND payload->>'kind' = %s AND occurred_at >= %s "
+                "AND (%s::timestamptz IS NULL OR occurred_at <= %s) LIMIT 1",
+                ("research.report", kind, since, until, until),
+            )
+            return await cur.fetchone() is not None
+
     async def bars_between(
         self, symbols: list[str], interval: str, start: datetime, end: datetime
     ) -> list[dict]:

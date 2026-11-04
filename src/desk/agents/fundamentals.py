@@ -116,10 +116,7 @@ class FundamentalAnalyst(BaseAgent):
             return False
         now = self.clock.now()
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        for e in await self.db.recent_events([Topics.RESEARCH_REPORT], start, limit=500, until=now):
-            if e.payload.get("kind") == "fundamental":
-                return True
-        return False
+        return await self.db.report_exists("fundamental", start, now)
 
     async def last_close(self, symbol: str) -> float | None:
         if self.db is None:
