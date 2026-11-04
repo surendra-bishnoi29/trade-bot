@@ -194,8 +194,7 @@ async def train_pipeline(
     path = str(Path(models_dir) / f"{mid}.joblib")
     save(model, path)
     champion = await db.champion("swing", horizon)
-    champion_pooled = (champion["metrics"] or {}).get("pooled") if champion else None
-    ok, why = promotion_gate(wf.pooled, champion_pooled)
+    ok, why = promotion_gate(model.metrics, champion["metrics"] if champion else None)
     status = "champion" if ok else "candidate"
     if ok and champion:
         await db.set_model_status(champion["model_id"], "retired")

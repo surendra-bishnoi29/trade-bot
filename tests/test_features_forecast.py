@@ -16,6 +16,7 @@ from desk.forecast.model import (
     walk_forward,
     walk_forward_folds,
 )
+from desk.forecast.train import signal_backtest
 
 SESSIONS = calendar.last_sessions(date(2026, 10, 30), 320)
 
@@ -118,16 +119,35 @@ def test_walk_forward_finds_a_planted_signal_and_nothing_in_noise():
 
 def test_final_model_predicts_a_distribution_and_the_gate_is_strict():
     frame = build_frame(synthetic_bars(signal=2.5))
-    wf = walk_forward(frame, 5, warmup=120, step=42, shuffle_control=False)
+    wf = walk_forward(frame, 5, warmup=120, step=28, shuffle_control=False)
     model = train_final(frame, 5, SESSIONS[-1], wf)
+    model.metrics["backtest"] = signal_backtest(wf.oos, 5)
     assert isinstance(model, SwingForecaster) and model.calibrator is not None
     pred = model.predict(latest_rows(frame, SESSIONS[-1]))
     assert set(pred.columns) >= {"symbol", "exp_ret", "p_up", "q10", "q90"}
     assert (pred["q10"] <= pred["q90"]).all() and pred["p_up"].between(0, 1).all()
-    ok, why = promotion_gate(wf.pooled, None)
-    assert ok and why.startswith("promoted")
-    assert not promotion_gate({"ic": -0.02, "hit": 0.49, "n": 500}, None)[0]
-    assert not promotion_gate({"ic": 0.05, "hit": 0.55, "n": 50}, None)[0]
-    assert not promotion_gate({"ic": 0.02, "hit": 0.52, "n": 500}, {"ic": 0.08})[0]
-    assert promotion_gate({"ic": 0.075, "hit": 0.52, "n": 500}, {"ic": 0.08})[0]
+    ok, why = promotion_gate(model.metrics, None)
+    assert ok and why.startswith("promoted"), why
+
+    def metrics(
+        ic=0.075, hit=0.54, n=900, folds=8, fold_ic=0.07, brier=0.24, naive=0.25, s=1.2, u=0.9
+    ):
+        return {
+            "pooled": {"ic": ic, "hit": hit, "n": n, "brier": brier, "brier_naive": naive},
+            "folds": [{"ic": fold_ic + (0.01 if i % 2 else -0.01)} for i in range(folds)],
+            "backtest": {"signal": {"sharpe": s}, "universe": {"sharpe": u}},
+        }
+
+    assert promotion_gate(metrics(), None)[0]
+    assert "too little" in promotion_gate(metrics(n=50), None)[1]
+    assert "too little" in promotion_gate(metrics(folds=3), None)[1]
+    assert "no reliable" in promotion_gate(metrics(ic=0.003, fold_ic=0.003), None)[1]
+    assert "no reliable" in promotion_gate(metrics(ic=0.03, fold_ic=0.001), None)[1]
+    assert "worse than the base rate" in promotion_gate(metrics(brier=0.26, naive=0.248), None)[1]
+    assert "does not beat the universe" in promotion_gate(metrics(s=0.4, u=1.0), None)[1]
+    assert "hit rate" in promotion_gate(metrics(hit=0.48), None)[1]
+    assert (
+        "worse than the champion" in promotion_gate(metrics(ic=0.05), {"pooled": {"ic": 0.08}})[1]
+    )
+    assert promotion_gate(metrics(ic=0.075), {"pooled": {"ic": 0.08}})[0]
     assert isinstance(pd.DataFrame(wf.pooled["calibration"]), pd.DataFrame)

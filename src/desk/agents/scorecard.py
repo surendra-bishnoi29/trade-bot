@@ -39,9 +39,8 @@ class ScoreRow:
     alerts_24h: int = 0
     position_qty: Decimal = Decimal(0)
     position_pnl_pct: float | None = None
-    forecast_5d: float | None = (
-        None  # the champion model's expected 5-session return, when one exists
-    )
+    forecast: float | None = None  # the champion model's expected return, when one exists
+    forecast_horizon: int = 5
     score: float = 0.0
     rank: int = 0
 
@@ -80,6 +79,7 @@ def compute_scorecard(
     positions: dict[str, tuple[Decimal, Decimal | None]],
     now: datetime,
     forecasts: dict[str, float] | None = None,
+    forecast_horizon: int = 5,
 ) -> list[ScoreRow]:
     rows: dict[str, ScoreRow] = {}
     for symbol, series in bars.items():
@@ -111,7 +111,8 @@ def compute_scorecard(
         )
         row.alerts_24h = alerts.get(symbol, 0)
         if forecasts and symbol in forecasts:
-            row.forecast_5d = forecasts[symbol]
+            row.forecast = forecasts[symbol]
+            row.forecast_horizon = forecast_horizon
         if symbol in positions:
             qty, avg_entry = positions[symbol]
             row.position_qty = qty
@@ -125,8 +126,8 @@ def compute_scorecard(
     rvol = _rank_scores(
         {s: (-r.vol_20d if r.vol_20d is not None else None) for s, r in rows.items()}
     )
-    with_forecast = bool(forecasts) and any(r.forecast_5d is not None for r in rows.values())
-    rfc = _rank_scores({s: r.forecast_5d for s, r in rows.items()}) if with_forecast else {}
+    with_forecast = bool(forecasts) and any(r.forecast is not None for r in rows.values())
+    rfc = _rank_scores({s: r.forecast for s, r in rows.items()}) if with_forecast else {}
     for s, r in rows.items():
         if with_forecast:
             # the tested model takes a third of the score; the triage inputs share the rest
@@ -149,10 +150,11 @@ def _f(v: float | None, pct: bool = True) -> str:
 
 def render_scorecard(rows: list[ScoreRow], top_n: int = 10) -> str:
     chosen = [r for r in rows if r.rank <= top_n or r.position_qty]
-    with_forecast = any(r.forecast_5d is not None for r in rows)
+    with_forecast = any(r.forecast is not None for r in rows)
+    horizon = next((r.forecast_horizon for r in rows if r.forecast is not None), 5)
     lines = [
         "rank symbol close ret1d ret5d ret20d vol20 rvol dHi20 dLo20 sma20 sma50 news1d news5d(n,max) alerts24h position"
-        + (" fcst5d" if with_forecast else "")
+        + (f" fcst{horizon}d" if with_forecast else "")
     ]
     for r in chosen:
         pos = f"{r.position_qty} ({_f(r.position_pnl_pct)})" if r.position_qty else "-"
@@ -160,11 +162,11 @@ def render_scorecard(rows: list[ScoreRow], top_n: int = 10) -> str:
             f"{r.rank:>2} {r.symbol:<6} {r.last_close} {_f(r.ret_1d)} {_f(r.ret_5d)} {_f(r.ret_20d)} {_f(r.vol_20d)} "
             f"{_f(r.rvol, pct=False)} {_f(r.dist_high_20d)} {_f(r.dist_low_20d)} {_f(r.sma20_rel)} {_f(r.sma50_rel)} "
             f"{r.news_1d:+.2f} {r.news_5d:+.2f}({r.news_count_5d},{r.news_max_impact_5d}) {r.alerts_24h} {pos}"
-            + (f" {_f(r.forecast_5d)}" if with_forecast else "")
+            + (f" {_f(r.forecast)}" if with_forecast else "")
         )
     if with_forecast:
         lines.append(
-            "fcst5d: the champion model's expected 5-session return (a third of the score when present)"
+            f"fcst{horizon}d: the champion model's expected {horizon}-session return (a third of the score when present)"
         )
     return "\n".join(lines)
 
@@ -213,6 +215,7 @@ async def build_scorecard(
     ):
         if e.symbol:
             alerts[e.symbol] = alerts.get(e.symbol, 0) + 1
+    horizon = 5
     if forecasts is None:
         forecasts = {}
         for e in await db.recent_events(
@@ -220,8 +223,10 @@ async def build_scorecard(
         ):
             p = e.payload
             if p.get("kind") == "forecast" and p.get("symbol") and p["symbol"] not in forecasts:
+                data = p.get("data") or {}
                 try:
-                    forecasts[p["symbol"]] = float((p.get("data") or {}).get("exp_ret"))
+                    forecasts[p["symbol"]] = float(data.get("exp_ret"))
+                    horizon = int(data.get("horizon_sessions") or horizon)
                 except (TypeError, ValueError):
                     continue
-    return compute_scorecard(bars, news, alerts, positions, now, forecasts or None)
+    return compute_scorecard(bars, news, alerts, positions, now, forecasts or None, horizon)

@@ -209,16 +209,17 @@ def test_scorecard_takes_the_forecast_as_a_third_of_the_score():
     now = datetime(2026, 11, 3, 21, 0, tzinfo=UTC)
     bars = {"UP": series(100, 0.5), "FLAT": series(100, 0.0), "DOWN": series(130, -0.5)}
     plain = compute_scorecard(bars, {}, {}, {}, now)
-    assert plain[0].symbol == "UP" and all(r.forecast_5d is None for r in plain)
+    assert plain[0].symbol == "UP" and all(r.forecast is None for r in plain)
     assert "fcst5d" not in render_scorecard(plain)
     with_fc = compute_scorecard(bars, {}, {}, {}, now, {"DOWN": 0.04, "FLAT": 0.0, "UP": -0.03})
     by = {r.symbol: r for r in with_fc}
-    assert by["DOWN"].forecast_5d == 0.04 and by["DOWN"].score > plain[-1].score
+    assert by["DOWN"].forecast == 0.04 and by["DOWN"].score > plain[-1].score
     assert (
         by["UP"].score < plain[0].score
     )  # a bearish forecast costs a strong trend some of its score
     text = render_scorecard(with_fc)
     assert "fcst5d" in text and "+4.0%" in text
+    assert "fcst20d" in render_scorecard(compute_scorecard(bars, {}, {}, {}, now, {"UP": 0.1}, 20))
 
 
 async def test_feature_store_and_model_registry_round_trip(database_url):

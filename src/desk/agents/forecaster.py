@@ -58,6 +58,7 @@ def forecast_report(
             "q10": float(row["q10"]),
             "q90": float(row["q90"]),
             "model_id": model_row.get("model_id"),
+            "horizon_sessions": horizon,
             "ic": ic,
             "hit": hit,
             "n": n,

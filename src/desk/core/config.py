@@ -79,6 +79,7 @@ class Settings(BaseSettings):
         None  # EDGAR asks for a descriptive agent with a contact; unset = off
     )
     models_dir: str = "data/models"  # trained forecasters (git-ignored)
+    forecast_horizon: int = 5  # sessions ahead the champion forecaster predicts (1, 5 or 20)
     rss_news: bool = True  # keyless RSS headlines per symbol behind the same scoring
     fred_api_key: SecretStr | None = None  # macro strategist; free key from fred.stlouisfed.org
     finnhub_api_key: SecretStr | None = (

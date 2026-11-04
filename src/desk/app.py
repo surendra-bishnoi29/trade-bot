@@ -230,7 +230,9 @@ class Desk:
             else:
                 log.info("fundamental and events analysts off: set DESK_FINNHUB_API_KEY (free)")
             desk.screen = QuantScreen(bus, clock, db, universe, back_office, head=head, cycle=cycle)
-            desk.forecaster = ForecastAnalyst(bus, clock, db, universe)
+            desk.forecaster = ForecastAnalyst(
+                bus, clock, db, universe, horizon=settings.forecast_horizon
+            )
             desk.forecaster.start()
             desk.data = DataAgent(bus, clock, db, market, universe)
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX

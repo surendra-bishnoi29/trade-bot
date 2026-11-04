@@ -179,7 +179,7 @@ async def _evaluate(days: int) -> None:
         await db.close()
 
 
-async def _train(horizon: int, days: int, *, store: bool = True) -> None:
+async def _train(horizon: int | None, days: int, *, store: bool = True) -> None:
     from datetime import UTC, datetime
 
     from desk.forecast.train import train_pipeline
@@ -193,7 +193,7 @@ async def _train(horizon: int, days: int, *, store: bool = True) -> None:
             db,
             datetime.now(UTC),
             list(settings.core_universe),
-            horizon=horizon,
+            horizon=horizon or settings.forecast_horizon,
             days=days,
             models_dir=settings.models_dir,
             store_features=store,
@@ -277,7 +277,9 @@ def main(argv: list[str] | None = None) -> int:
     train = sub.add_parser(
         "train", help="build features, audit for lookahead, walk-forward a forecaster, register it"
     )
-    train.add_argument("--horizon", type=int, default=5, help="sessions ahead (1, 5 or 20)")
+    train.add_argument(
+        "--horizon", type=int, help="sessions ahead (1, 5 or 20; default DESK_FORECAST_HORIZON)"
+    )
     train.add_argument("--days", type=int, default=400, help="daily bars of history to use")
     train.add_argument("--no-store", action="store_true", help="do not write the feature store")
     features = sub.add_parser("features", help="the point-in-time feature store")

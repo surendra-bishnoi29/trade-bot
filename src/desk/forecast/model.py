@@ -1,7 +1,8 @@
 """The swing forecaster and its honest evaluation.
 
 The model predicts the distribution of the forward return over a horizon: an expected value, a
-probability of an up move and the 10th and 90th percentiles. It is judged by walk-forward: train on
+probability of an up move (from the expected value and the residual spread, then calibrated on
+out-of-sample outcomes) and the 10th and 90th percentiles. It is judged by walk-forward: train on
 rows whose target was known by the fold's start, predict the following month, roll forward; report
 rank correlation, hit rate, top-minus-bottom spread, Brier score, calibration and quantile coverage,
 all out of sample. The probability is calibrated on those out-of-sample predictions. A shuffled-target
@@ -20,8 +21,8 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
-from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
+from scipy.stats import norm, spearmanr
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.isotonic import IsotonicRegression
 
 from desk.features.daily import FEATURES, training_rows
@@ -62,7 +63,7 @@ class SwingForecaster:
         self.horizon = horizon
         p = {**PARAMS, **(params or {})}
         self.reg = HistGradientBoostingRegressor(**p)
-        self.clf = HistGradientBoostingClassifier(**p)
+        self.scale = 0.05  # spread of the target; the raw p(up) is Phi(expected / scale)
         self.q10 = HistGradientBoostingRegressor(loss="quantile", quantile=0.1, **p)
         self.q90 = HistGradientBoostingRegressor(loss="quantile", quantile=0.9, **p)
         self.calibrator: IsotonicRegression | None = None
@@ -77,7 +78,9 @@ class SwingForecaster:
         X = rows[FEATURES].to_numpy(dtype=float)
         y = rows[self.target].to_numpy(dtype=float)
         self.reg.fit(X, y)
-        self.clf.fit(X, (y > 0).astype(int))
+        # the target's own spread, not the in-sample residual: a boosted model fits its training
+        # rows far better than it will fit tomorrow, and a small residual would make p(up) overconfident
+        self.scale = max(float(np.std(y)), 1e-6)
         self.q10.fit(X, y)
         self.q90.fit(X, y)
         self.trained_through = max(rows["session"])
@@ -85,7 +88,10 @@ class SwingForecaster:
 
     def predict(self, rows: pd.DataFrame) -> pd.DataFrame:
         X = rows[FEATURES].to_numpy(dtype=float)
-        p_raw = self.clf.predict_proba(X)[:, 1]
+        exp = self.reg.predict(X)
+        # one source of skill: the direction probability comes from the return model, not from a
+        # second model fitted to a noisier label; the calibrator then maps it to realized up-rates
+        p_raw = norm.cdf(exp / self.scale)
         p = self.calibrator.predict(p_raw) if self.calibrator is not None else p_raw
         q10, q90 = self.q10.predict(X), self.q90.predict(X)
         lo, hi = np.minimum(q10, q90), np.maximum(q10, q90)
@@ -93,7 +99,7 @@ class SwingForecaster:
             {
                 "symbol": rows["symbol"].to_numpy(),
                 "session": rows["session"].to_numpy(),
-                "exp_ret": self.reg.predict(X),
+                "exp_ret": exp,
                 "p_up": p,
                 "p_up_raw": p_raw,
                 "q10": lo,
@@ -116,13 +122,19 @@ def _metrics(pred: pd.DataFrame, realized: np.ndarray) -> dict[str, Any]:
     out["ic"] = None if ic is None or np.isnan(ic) else float(ic)
     out["hit"] = float(np.mean(np.sign(pred["exp_ret"]) == np.sign(realized)))
     up = (realized > 0).astype(float)
-    out["brier"] = float(np.mean((pred["p_up"] - up) ** 2))
-    out["brier_naive"] = float(np.mean((up.mean() - up) ** 2))
     q = pd.qcut(pred["exp_ret"].rank(method="first"), 5, labels=False)
     out["spread_top_minus_bottom"] = float(realized[q == 4].mean() - realized[q == 0].mean())
     out["coverage_10_90"] = float(np.mean((realized >= pred["q10"]) & (realized <= pred["q90"])))
-    bins = pd.cut(pred["p_up"], [0, 0.3, 0.4, 0.5, 0.6, 0.7, 1.0], include_lowest=True)
-    cal = pd.DataFrame({"bin": bins, "p": pred["p_up"], "up": up}).groupby("bin", observed=True)
+    # probabilities are judged where a calibrator existed (the first folds have none), when enough
+    p_up, up_cal = pred["p_up"].to_numpy(), up
+    if "calibrated" in pred.columns and int(pred["calibrated"].sum()) >= 300:
+        mask = pred["calibrated"].to_numpy(dtype=bool)
+        p_up, up_cal = p_up[mask], up[mask]
+        out["brier_rows"] = int(mask.sum())
+    out["brier"] = float(np.mean((p_up - up_cal) ** 2))
+    out["brier_naive"] = float(np.mean((up_cal.mean() - up_cal) ** 2))
+    bins = pd.cut(pd.Series(p_up), [0, 0.3, 0.4, 0.5, 0.6, 0.7, 1.0], include_lowest=True)
+    cal = pd.DataFrame({"bin": bins, "p": p_up, "up": up_cal}).groupby("bin", observed=True)
     out["calibration"] = [
         {
             "bin": str(b),
@@ -195,6 +207,10 @@ def walk_forward(
     rng = np.random.default_rng(11)
     folds = walk_forward_folds(sessions, warmup=warmup, step=step)
     shuffle_every = max(1, len(folds) // SHUFFLE_FOLDS)
+    seen_raw: list[
+        np.ndarray
+    ] = []  # earlier folds' raw probabilities and outcomes, for calibration
+    seen_up: list[np.ndarray] = []
     for i, fold in enumerate(folds):
         train = training_rows(frame, horizon, fold.train_as_of)
         test = frame[
@@ -205,8 +221,15 @@ def walk_forward(
         if len(train) < 200 or test.empty:
             continue
         model = SwingForecaster(horizon).fit(train)
+        # probabilities are calibrated on the folds already scored, never on this one: the Brier
+        # score and the calibration table then describe what the desk would actually have seen
+        if seen_raw:
+            model.calibrate(np.concatenate(seen_raw), np.concatenate(seen_up))
         pred = model.predict(test)
         pred["realized"] = test[target].to_numpy()
+        pred["calibrated"] = model.calibrator is not None
+        seen_raw.append(pred["p_up_raw"].to_numpy())
+        seen_up.append((pred["realized"].to_numpy() > 0).astype(float))
         fm = _metrics(pred, pred["realized"].to_numpy())
         result.folds.append(
             {
@@ -247,16 +270,50 @@ def train_final(
     return model
 
 
-def promotion_gate(candidate: dict[str, Any], champion: dict[str, Any] | None) -> tuple[bool, str]:
-    """A candidate becomes champion only with real out-of-sample skill and no regression."""
-    ic, hit, n = candidate.get("ic"), candidate.get("hit"), candidate.get("n", 0)
-    if ic is None or n < 300:
-        return False, f"too little out-of-sample evidence (n={n})"
-    if ic <= 0.0 or (hit or 0) < 0.5:
-        return False, f"no out-of-sample skill (ic {ic:+.3f}, hit {hit:.0%})"
-    if champion and champion.get("ic") is not None and ic < champion["ic"] - 0.01:
-        return False, f"worse than the champion (ic {ic:+.3f} vs {champion['ic']:+.3f})"
-    return True, f"promoted (ic {ic:+.3f}, hit {hit:.0%}, n={n})"
+MIN_IC = 0.02  # below this a ranking is not worth a third of the scorecard
+MIN_T = 2.0  # fold-to-fold reliability of the rank correlation
+
+
+def promotion_gate(metrics: dict[str, Any], champion: dict[str, Any] | None) -> tuple[bool, str]:
+    """A candidate becomes champion only with reliable out-of-sample skill, probabilities that beat
+    the base rate, an after-cost backtest that beats the universe, and no regression against the
+    incumbent. Every refusal says why, so the training report is the review."""
+    pooled = metrics.get("pooled") or {}
+    folds = [f for f in metrics.get("folds") or [] if f.get("ic") is not None]
+    ic, hit, n = pooled.get("ic"), pooled.get("hit"), pooled.get("n", 0)
+    if ic is None or n < 300 or len(folds) < 6:
+        return False, f"too little out-of-sample evidence (n={n}, folds={len(folds)})"
+    fold_ic = np.array([f["ic"] for f in folds], dtype=float)
+    t_stat = (
+        float(fold_ic.mean() / (fold_ic.std(ddof=1) / np.sqrt(len(fold_ic))))
+        if len(fold_ic) > 1 and fold_ic.std(ddof=1) > 0
+        else 0.0
+    )
+    if ic < MIN_IC or fold_ic.mean() <= 0 or t_stat < MIN_T:
+        return (
+            False,
+            f"no reliable out-of-sample skill (ic {ic:+.3f}, fold mean {fold_ic.mean():+.3f}, t {t_stat:.1f}, hit {hit:.0%})",
+        )
+    if (hit or 0) < 0.5:
+        return False, f"hit rate below a coin (hit {hit:.0%})"
+    brier, naive = pooled.get("brier"), pooled.get("brier_naive")
+    if brier is not None and naive is not None and brier > naive:
+        return (
+            False,
+            f"probabilities worse than the base rate (brier {brier:.4f} vs naive {naive:.4f})",
+        )
+    bt = metrics.get("backtest") or {}
+    if bt.get("signal") and bt.get("universe"):
+        s, u = bt["signal"]["sharpe"], bt["universe"]["sharpe"]
+        if s <= 0 or s < u:
+            return (
+                False,
+                f"top quintile does not beat the universe after costs (sharpe {s:.2f} vs {u:.2f})",
+            )
+    champ_ic = ((champion or {}).get("pooled") or {}).get("ic")
+    if champ_ic is not None and ic < champ_ic - 0.01:
+        return False, f"worse than the champion (ic {ic:+.3f} vs {champ_ic:+.3f})"
+    return True, f"promoted (ic {ic:+.3f}, t {t_stat:.1f}, hit {hit:.0%}, n={n})"
 
 
 def save(model: SwingForecaster, path: str) -> None:

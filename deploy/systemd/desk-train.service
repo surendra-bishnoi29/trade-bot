@@ -8,4 +8,4 @@ User=desk
 Group=desk
 WorkingDirectory=/opt/desk/app
 EnvironmentFile=/opt/desk/app/.env
-ExecStart=/opt/desk/app/.venv/bin/desk train --horizon 5 --days 1300
+ExecStart=/opt/desk/app/.venv/bin/desk train --days 1300
