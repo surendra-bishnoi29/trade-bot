@@ -433,6 +433,8 @@ bot-trading/
   pyproject.toml
 ```
 
+As built (2026-11-04): the bot lives in `src/desk` (core, bus, storage, data, agents), the interface backend in `services/api/src/desk_api`, the interface in `web/`, deployment in `deploy/`. The research, forecast and replay packages above arrive with phases 2 to 4.
+
 ## 18. Project risks and how the design answers them
 
 | Risk | Mitigation |
@@ -445,3 +447,19 @@ bot-trading/
 | Cost of data and LLM calls | Haiku for bulk, Batch API overnight, prompt caching, output cache on replay, daily spend alerts |
 | Broker or feed outage during the session | Kill switch on disconnect, closing-only mode, reconciliation on reconnect |
 | Regulatory rules (pattern day trader, short-sale restrictions) | Encoded in the risk officer; paper mode exercises them |
+
+## 19. Services and deployment (decision D11)
+
+Three services, one machine, no shared code paths at runtime:
+
+| Service | Process | Talks to | Must not |
+|---|---|---|---|
+| bot | `desk run --no-console` under `desk-bot.service`, Type=notify with a watchdog | Alpaca (one data websocket, trading REST), Anthropic, Postgres, Redis | serve HTTP, know about browsers |
+| api | `desk-api serve` under `desk-api.service` on 127.0.0.1:8080 | Postgres (reads), Redis (tails streams, publishes `desk.command`) | import the bot's agents, place orders itself |
+| web | static React build served by Caddy on port 80 (443 once a domain exists), `/api` and `/ws` proxied to the api | the api only | hold secrets |
+
+How a question travels: browser → `POST /api/ask` → `desk.command` on Redis → the bot's command agent → the head trader streams `console.answer.delta` events → the api's live feed tails the stream → WebSocket → the chat canvas renders Markdown, tables, highlights and `chart` blocks. Commands (`cycle`, `plan`, `kill`, `resume`, `status`) travel the same road and answer with `desk.command.result`. Viewers can ask and watch; only operators can run cycles or touch the kill switch, enforced in the api and again in the bot.
+
+Why every trade is explainable in the interface: the api assembles a trade card from the fill, the intent, the thesis, the cycle plan (the decision text and the market view), the skeptic's objection for that symbol, the risk officer's rule results and the evidence articles, so a client sees what, when, why, the exit plan and who objected.
+
+Staying up: systemd restarts either service within seconds; the bot pings the watchdog every 150 s so a hung process is replaced; on every start the bot announces how long it was away, backfills the bars it missed, reconciles orders and positions with the broker, restores the kill switch and the day's order count from the journal, and runs the last scheduled cycle if the journal shows it never ran (a late pre-market or mid-session cycle only while the market is still open). The scheduler sleeps in one-minute slices, so a stalled clock cannot skip a cycle. Nightly `pg_dump` to `/opt/desk/backups`, kept 14 days.

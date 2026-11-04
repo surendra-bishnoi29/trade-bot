@@ -35,4 +35,26 @@ DESK_TEST_REDIS_URL=redis://localhost:6379/0 DESK_TEST_DATABASE_URL=postgresql:/
 uv run python scripts/check_anthropic.py   # one tiny call to confirm the Anthropic key works
 ```
 
-Layout, as in the architecture document: `src/desk/core` (clock, event envelope, payload schemas, settings), `src/desk/bus` (in-memory and Redis Streams buses), `src/desk/storage` (schema, event store, persister), `src/desk/agents` (the base agent), `tests`, `scripts`.
+Layout: `src/desk` is the bot (core, bus, storage, data, agents, the `desk` command), `services/api` is the interface backend (`desk-api`), `web/` is the React interface, `deploy/` holds the systemd units, the Caddyfile and the deploy scripts, `docs/` the design.
+
+## Running the desk on the server
+
+The desk runs on a Linux VM as three systemd services: `desk-bot`, `desk-api` and Caddy (architecture section 19). From this machine:
+
+```bash
+deploy/make-env.sh            # once: stage the server's .env (this machine's keys plus server overrides)
+deploy/deploy.sh              # sync the code, install, build the interface, restart bot and api
+deploy/deploy.sh --no-bot     # same, but leave the running bot alone
+ssh oracle sudo journalctl -u desk-bot -f        # the bot's log
+ssh oracle sudo -u desk /opt/desk/app/.venv/bin/desk-api users add NAME --role operator   # interface accounts
+```
+
+The interface is at the server's address; operators can run cycles and use the kill switch, viewers can watch and ask the head trader. Telegram notifications need `DESK_TELEGRAM_BOT_TOKEN` and `DESK_TELEGRAM_CHAT_ID` in the server's `.env` (`scripts/telegram_chat_id.py` finds the chat id).
+
+## Running the interface locally
+
+```bash
+uv run desk-api users add me --role operator   # once, against the local database
+uv run desk-api serve                          # api on 127.0.0.1:8080
+cd web && npm install && npm run dev           # interface on http://localhost:5173, proxied to the api
+```
