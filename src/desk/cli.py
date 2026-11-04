@@ -299,6 +299,39 @@ async def _review(days: int, score_days: int) -> None:
         await db.close()
 
 
+async def _weekly(days: int) -> None:
+    from datetime import UTC, datetime
+
+    from desk.review.weekly import render_weekly, weekly_facts
+    from desk.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.database_url)
+    await db.open()
+    try:
+        print(render_weekly(await weekly_facts(db, datetime.now(UTC), days=days)))
+    finally:
+        await db.close()
+
+
+async def _graduation() -> None:
+    from datetime import UTC, datetime
+
+    from desk.review.graduation import graduation, render_graduation
+    from desk.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.database_url)
+    await db.open()
+    try:
+        result = await graduation(
+            db, datetime.now(UTC), drawdown_limit_pct=float(settings.drawdown_halt_pct) * 100
+        )
+        print(render_graduation(result))
+    finally:
+        await db.close()
+
+
 async def _compare(args: argparse.Namespace) -> None:
     import json
     from decimal import Decimal
@@ -394,6 +427,9 @@ def main(argv: list[str] | None = None) -> int:
     review.add_argument(
         "--score-days", type=int, default=60, help="analyst calls in the last N days"
     )
+    weekly = sub.add_parser("weekly", help="the weekly review from the journal, as Markdown")
+    weekly.add_argument("--days", type=int, default=7)
+    sub.add_parser("graduation", help="the graduation checklist: paper to live, with the numbers")
     compare = sub.add_parser(
         "compare",
         help="replay recent sessions: rules-only baseline, optionally the head trader too",
@@ -451,6 +487,10 @@ def main(argv: list[str] | None = None) -> int:
         asyncio.run(_review(args.days, args.score_days))
     elif args.command == "compare":
         asyncio.run(_compare(args))
+    elif args.command == "weekly":
+        asyncio.run(_weekly(args.days))
+    elif args.command == "graduation":
+        asyncio.run(_graduation())
     return 0
 
 

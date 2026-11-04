@@ -162,6 +162,24 @@ export interface Postmortem {
   process_sound?: boolean | null;
 }
 
+export interface WeeklyReview {
+  id: string;
+  at: string;
+  week_ending: string;
+  markdown: string;
+  facts: Record<string, unknown>;
+}
+
+export interface Graduation {
+  as_of: string;
+  started: string | null;
+  sessions: number;
+  ready: boolean;
+  failing: string[];
+  pending: string[];
+  criteria: { key: string; title: string; status: "pass" | "fail" | "pending"; value: string; target: string; detail: string }[];
+}
+
 export interface AnalystScores {
   id?: string;
   at?: string;

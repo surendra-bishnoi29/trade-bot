@@ -112,6 +112,16 @@ def render(event: Event) -> str | None:
         return f"📊 Analyst scoreboard ({p.get('days')} days): best {best}" + (
             f"; weakest {worst}" if worst else ""
         )
+    if t == Topics.REVIEW_WEEKLY:
+        f = p.get("facts") or {}
+        pnl = f.get("pnl")
+        pnl_text = f"P&L {pnl:+,.0f} USD" if isinstance(pnl, (int, float)) else "no P&L yet"
+        inc = f.get("incidents") or {}
+        return (
+            f"🗓 Weekly review to {p.get('week_ending', '')}: {pnl_text}, {f.get('trades', 0)} fills, "
+            f"{len(f.get('grades') or [])} post-mortems, {len(inc.get('kill_switch') or [])} kill-switch events, "
+            f"{inc.get('risk_rejections', 0)} orders rejected. Full review in the interface."
+        )
     if t == Topics.DESK_BRIEF:
         b = p.get("brief") or {}
         return (

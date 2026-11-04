@@ -1,14 +1,56 @@
-import { AnalystScores, Postmortem } from "../api";
+import { AnalystScores, Graduation, Postmortem, WeeklyReview } from "../api";
 import { dateUTC } from "../format";
+import { Markdown } from "./Markdown";
 
 function pct(v: number | null | undefined, digits = 1): string {
   return typeof v === "number" ? `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%` : "n/a";
 }
 
-export function Reviews({ postmortems, scores }: { postmortems: Postmortem[]; scores: AnalystScores | null }) {
+export function Reviews({
+  postmortems,
+  scores,
+  weekly,
+  graduation,
+}: {
+  postmortems: Postmortem[];
+  scores: AnalystScores | null;
+  weekly: WeeklyReview | null;
+  graduation: Graduation | null;
+}) {
   const weights = scores ? Object.entries(scores.weights).sort((a, b) => b[1].weight - a[1].weight) : [];
   return (
     <div className="reviews">
+      <section className="card">
+        <header className="card-head">
+          <h2>Graduation checklist</h2>
+          <span className="muted">
+            {graduation
+              ? graduation.ready
+                ? "every criterion passes: ready to discuss live trading with an approval gate"
+                : `${graduation.failing.length} failing, ${graduation.pending.length} pending; ${graduation.sessions} sessions so far`
+              : "computed from the journal"}
+          </span>
+        </header>
+        {graduation ? (
+          <ul className="checklist">
+            {graduation.criteria.map((c) => (
+              <li key={c.key} className={`crit-${c.status}`}>
+                <span className={`tag standing-${c.status === "pass" ? "trusted" : c.status === "fail" ? "doubted" : "neutral"}`}>{c.status}</span>{" "}
+                <b>{c.title}</b>: {c.value} <span className="muted">(target {c.target}{c.detail ? `; ${c.detail}` : ""})</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">Loading…</p>
+        )}
+      </section>
+      <section className="card">
+        <header className="card-head">
+          <h2>Weekly review</h2>
+          <span className="muted">{weekly ? `week ending ${weekly.week_ending}` : "written by the reviewer every Friday after the close"}</span>
+        </header>
+        {weekly ? <Markdown text={weekly.markdown} /> : <p className="muted">No weekly review yet. The first one is written on Friday after the close.</p>}
+      </section>
       <section className="card">
         <header className="card-head">
           <h2>Trade post-mortems</h2>

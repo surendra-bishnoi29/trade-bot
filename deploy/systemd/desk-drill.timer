@@ -1,0 +1,9 @@
+[Unit]
+Description=Restore the newest backup into a scratch database on the first Sunday of the month
+
+[Timer]
+OnCalendar=Sun *-*-01..07 03:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

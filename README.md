@@ -92,6 +92,24 @@ uv run desk models                         # every trained model, its out-of-sam
 
 `desk train` refuses a frame that fails the lookahead audit, and a model becomes champion only through the promotion gate (300 or more out-of-sample predictions, positive rank correlation, hit rate at least 50%, no regression against the incumbent). With a champion in the registry the forecaster agent publishes a `forecast` report per name after every quant screen, with the model's own record in the text, and the scorecard gives the expected return a third of its weight. Without one the desk runs exactly as before. Model files live under `data/models` (git-ignored); retrain weekly after the close on Friday.
 
+## Operations (phase 5)
+
+On the server, systemd timers do the routine work and report to Telegram:
+
+| Timer | When | What |
+|---|---|---|
+| `desk-healthcheck` | every 5 minutes | services, Redis, disk, the last heartbeat, the price feed during the session; one message per problem per hour, one when it recovers |
+| `desk-backup` | 22:30 UTC daily | `pg_dump` of the journal, 14 days kept |
+| `desk-drill` | first Sunday monthly | restores the newest backup into a scratch database, counts what came back, drops it |
+| `desk-train` | Saturday 02:00 UTC | retrains the forecaster through the promotion gate |
+
+```bash
+uv run desk weekly        # the weekly review (performance, post-mortems, analyst scores, incidents, models and prompts)
+uv run desk graduation    # the checklist for moving from paper to live, each criterion with its number
+```
+
+The reviewer writes the weekly review every Friday after the close; it and the graduation checklist are in the Reviews tab. `bash deploy/healthcheck.sh` and `bash deploy/restore-drill.sh` run by hand too.
+
 ## The performance reviewer (phase 4)
 
 ```bash

@@ -450,6 +450,14 @@ class AnalystScoresPayload(Payload):
     weights: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
+@payload_for(Topics.REVIEW_WEEKLY)
+class WeeklyReviewPayload(Payload):
+    week_ending: date
+    generated_at: datetime
+    markdown: str
+    facts: dict[str, Any] = Field(default_factory=dict)
+
+
 @payload_for(Topics.FILING_NEW)
 class FilingNew(Payload):
     symbol: str

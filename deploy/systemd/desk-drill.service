@@ -1,0 +1,7 @@
+[Unit]
+Description=Trading desk backup restore drill
+After=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/desk/app/deploy/restore-drill.sh

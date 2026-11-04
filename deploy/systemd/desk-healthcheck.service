@@ -1,0 +1,7 @@
+[Unit]
+Description=Trading desk external health check
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/desk/app/deploy/healthcheck.sh

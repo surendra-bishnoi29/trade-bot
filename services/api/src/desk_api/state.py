@@ -573,6 +573,27 @@ class StateReader:
         )
         return [{"id": r["event_id"], "at": r["occurred_at"], **r["payload"]} for r in rows]
 
+    async def weekly_review(self) -> dict | None:
+        row = await self._latest(Topics.REVIEW_WEEKLY, days=30)
+        if not row:
+            return None
+        p = row["payload"]
+        return {
+            "id": row["event_id"],
+            "at": row["occurred_at"],
+            "week_ending": p.get("week_ending"),
+            "markdown": p.get("markdown", ""),
+            "facts": p.get("facts") or {},
+        }
+
+    async def graduation(self) -> dict:
+        from desk.review.graduation import graduation
+
+        result = await graduation(self.db, datetime.now(UTC))
+        result["as_of"] = result["as_of"].isoformat()
+        result["started"] = result["started"].isoformat() if result.get("started") else None
+        return result
+
     async def analyst_scores(self) -> dict | None:
         row = await self._latest(Topics.REVIEW_ANALYST_SCORE, days=60)
         return {"id": row["event_id"], "at": row["occurred_at"], **row["payload"]} if row else None

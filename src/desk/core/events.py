@@ -72,6 +72,7 @@ class Topics:
     DESK_BRIEF = "desk.brief"
     REVIEW_POSTMORTEM = "review.trade.postmortem"
     REVIEW_ANALYST_SCORE = "review.analyst.score"
+    REVIEW_WEEKLY = "review.weekly"
 
     @classmethod
     def all(cls) -> list[str]:

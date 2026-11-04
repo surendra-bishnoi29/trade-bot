@@ -14,7 +14,7 @@ from desk.bus.base import Bus
 from desk.core import prompts
 from desk.core.clock import Clock
 from desk.core.events import Event, Topics
-from desk.core.payloads import AnalystScoresPayload, TradePostmortem
+from desk.core.payloads import AnalystScoresPayload, TradePostmortem, WeeklyReviewPayload
 from desk.review.postmortem import (
     Grade,
     grade_closed,
@@ -22,6 +22,7 @@ from desk.review.postmortem import (
     score_analysts,
     write_lessons,
 )
+from desk.review.weekly import render_weekly, weekly_facts
 from desk.storage.db import Database
 
 log = logging.getLogger(__name__)
@@ -77,6 +78,11 @@ class ReviewerAgent(BaseAgent):
                 await self.score(caused_by=event)
         except Exception as exc:  # noqa: BLE001
             log.error("analyst scoring failed: %s", exc)
+        try:
+            if self.clock.now().weekday() == 4:
+                await self.weekly(caused_by=event)
+        except Exception as exc:  # noqa: BLE001
+            log.error("weekly review failed: %s", exc)
 
     async def graded(self, now: datetime) -> set[str]:
         events = await self.db.recent_events(
@@ -118,6 +124,25 @@ class ReviewerAgent(BaseAgent):
             )
         log.info("reviewer: %d post-mortems", len(grades))
         return grades
+
+    async def weekly(self, caused_by: Event | None = None) -> str:
+        """The weekly review as an event: Markdown for the interface and Telegram, facts for later."""
+        now = self.clock.now()
+        facts = await weekly_facts(self.db, now)
+        text = render_weekly(facts)
+        payload = WeeklyReviewPayload(
+            week_ending=now.date(),
+            generated_at=now,
+            markdown=text,
+            facts={
+                k: v
+                for k, v in facts.items()
+                if k not in ("grades", "prompts") and not isinstance(v, datetime)
+            },
+        )
+        await self.emit(Topics.REVIEW_WEEKLY, payload, caused_by=caused_by)
+        log.info("reviewer: weekly review written")
+        return text
 
     async def scores_due(self) -> bool:
         now = self.clock.now()

@@ -87,9 +87,9 @@ Exit criteria:
 Goal: run the desk every trading day on the paper account and learn from it.
 
 Deliverables:
-- Cloud deployment with monitoring, alerting and the daily brief delivered to the chosen channel.
-- Weekly review ritual: performance, post-mortems, analyst scores, incidents, prompt and model changes.
-- Weekly retraining with the promotion gate; monthly prompt review.
+- Cloud deployment with monitoring, alerting and the daily brief delivered to the chosen channel. *Done 2026-11-04: three services on the VM, external health check every five minutes to Telegram, nightly backups with a monthly restore drill.*
+- Weekly review ritual: performance, post-mortems, analyst scores, incidents, prompt and model changes. *Done 2026-11-04: the reviewer writes it every Friday (`desk weekly`); the graduation checklist below is `desk graduation` and the Reviews tab.*
+- Weekly retraining with the promotion gate; monthly prompt review. *Retraining done (Saturday timer); the prompt review is a human ritual.*
 
 Proposed graduation criteria to level 2 (live with approval gate), to confirm:
 - At least 3 months and 60 trading days of uninterrupted paper operation.

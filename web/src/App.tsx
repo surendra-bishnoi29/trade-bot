@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnalystScores, api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Health, JournalItem, MorningNote as NoteT, Postmortem, Report, Trade, User } from "./api";
+import { AnalystScores, api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Graduation, Health, JournalItem, MorningNote as NoteT, Postmortem, Report, Trade, User, WeeklyReview } from "./api";
 import { Agents } from "./components/Agents";
 import { agentKey, describe, Team } from "./agents";
 import { Book } from "./components/Book";
@@ -34,6 +34,8 @@ export default function App() {
   const [reports, setReports] = useState<Report[] | null>(null);
   const [postmortems, setPostmortems] = useState<Postmortem[]>([]);
   const [scores, setScores] = useState<AnalystScores | null>(null);
+  const [weekly, setWeekly] = useState<WeeklyReview | null>(null);
+  const [graduation, setGraduation] = useState<Graduation | null>(null);
   const [now, setNow] = useState(Date.now());
   const pending = useRef<Set<string>>(new Set());
   const refreshTimer = useRef<number | undefined>(undefined);
@@ -52,7 +54,7 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [state, t, j, c, chat, briefs, agents, notes, research, reviews, analystScores] = await Promise.all([
+      const [state, t, j, c, chat, briefs, agents, notes, research, reviews, analystScores, weeklyReview, grad] = await Promise.all([
         api.get<{ book: BookT; health: Health }>("/api/state"),
         api.get<Trade[]>("/api/trades?limit=40"),
         api.get<JournalItem[]>("/api/journal?limit=120"),
@@ -64,7 +66,11 @@ export default function App() {
         api.get<Report[]>("/api/research/latest"),
         api.get<Postmortem[]>("/api/reviews?limit=30"),
         api.get<AnalystScores | null>("/api/reviews/analysts"),
+        api.get<WeeklyReview | null>("/api/reviews/weekly"),
+        api.get<Graduation>("/api/graduation"),
       ]);
+      setWeekly(weeklyReview);
+      setGraduation(grad);
       setReports(research);
       setPostmortems(reviews);
       setScores(analystScores);
@@ -218,6 +224,9 @@ export default function App() {
         case "review.analyst.score":
           setScores({ id: m.id ?? "", at: m.at, ...(p as AnalystScores) });
           break;
+        case "review.weekly":
+          setWeekly({ id: m.id ?? "", at: m.at, week_ending: p.week_ending, markdown: p.markdown, facts: p.facts ?? {} });
+          break;
         case "desk.command.result":
           setResults((rs) => rs.map((r) => (r.request_id === p.request_id ? { ...r, ok: p.ok, text: p.text } : r)));
           refreshSoon();
@@ -344,7 +353,7 @@ export default function App() {
           ) : tab === "cycles" ? (
             <Cycles cycles={cycles} />
           ) : (
-            <Reviews postmortems={postmortems} scores={scores} />
+            <Reviews postmortems={postmortems} scores={scores} weekly={weekly} graduation={graduation} />
           )}
         </div>
       </main>

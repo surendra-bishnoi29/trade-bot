@@ -211,6 +211,14 @@ def create_app(
     ) -> list[dict]:
         return await reader(request).reviews(limit=max(1, min(limit, 100)))
 
+    @app.get("/api/reviews/weekly")
+    async def weekly_review(request: Request, user: User = Depends(current_user)) -> dict | None:
+        return await reader(request).weekly_review()
+
+    @app.get("/api/graduation")
+    async def graduation_checklist(request: Request, user: User = Depends(current_user)) -> dict:
+        return await reader(request).graduation()
+
     @app.get("/api/reviews/analysts")
     async def analyst_scores(request: Request, user: User = Depends(current_user)) -> dict | None:
         return await reader(request).analyst_scores()

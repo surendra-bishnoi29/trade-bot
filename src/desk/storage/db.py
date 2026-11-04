@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -423,6 +423,106 @@ class Database:
             )
             cols = [d.name for d in cur.description]
             return [self._thesis_from_row(cols, r) for r in await cur.fetchall()]
+
+    # ---- operations: the weekly review and the graduation checklist ----
+
+    async def count_events_between(
+        self,
+        types: list[str],
+        since: datetime,
+        until: datetime,
+        *,
+        kind: str | None = None,
+        book: str | None = None,
+        engaged: bool | None = None,
+        status_not: str | None = None,
+    ) -> int:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT count(*) FROM events WHERE type = ANY(%s) AND occurred_at >= %s AND occurred_at < %s "
+                "AND (%s::text IS NULL OR payload->>'kind' = %s) "
+                "AND (%s::text IS NULL OR book = %s) "
+                "AND (%s::boolean IS NULL OR coalesce((payload->>'engaged')::boolean, true) = %s) "
+                "AND (%s::text IS NULL OR coalesce(payload->>'status', '') <> %s)",
+                (
+                    types,
+                    since,
+                    until,
+                    kind,
+                    kind,
+                    book,
+                    book,
+                    engaged,
+                    engaged,
+                    status_not,
+                    status_not,
+                ),
+            )
+            return int((await cur.fetchone())[0])
+
+    async def equity_series(
+        self, since: datetime, until: datetime
+    ) -> list[tuple[datetime, Decimal]]:
+        """Every portfolio snapshot's equity in the window, oldest first."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT occurred_at, (payload->>'equity')::numeric FROM events WHERE type = 'portfolio.reconciled' "
+                "AND occurred_at >= %s AND occurred_at <= %s AND payload->>'equity' IS NOT NULL ORDER BY occurred_at",
+                (since, until),
+            )
+            return [(r[0], Decimal(str(r[1]))) for r in await cur.fetchall()]
+
+    async def first_event_at(self) -> datetime | None:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute("SELECT min(occurred_at) FROM events")
+            row = await cur.fetchone()
+            return row[0] if row else None
+
+    async def sessions_seen(self, since: datetime, until: datetime) -> list[date]:
+        """Dates on which the desk was alive (sent heartbeats), oldest first."""
+        return await self.sessions_with_events("system.heartbeat", since, until)
+
+    async def sessions_with_events(self, type: str, since: datetime, until: datetime) -> list[date]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT DISTINCT (occurred_at AT TIME ZONE 'UTC')::date AS d FROM events WHERE type = %s "
+                "AND occurred_at >= %s AND occurred_at <= %s ORDER BY d",
+                (type, since, until),
+            )
+            return [r[0] for r in await cur.fetchall()]
+
+    async def restart_gaps(self, since: datetime, until: datetime) -> list[dict]:
+        events = await self.recent_events(["system.restarted"], since, limit=200, until=until)
+        return [
+            {
+                "started_at": str(e.payload.get("started_at", "")),
+                "gap_seconds": e.payload.get("gap_seconds"),
+                "during_session": bool(e.payload.get("during_session")),
+            }
+            for e in reversed(events)
+        ]
+
+    async def bar_count_per_session(
+        self, symbol: str, since: datetime, until: datetime
+    ) -> dict[date, int]:
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT (ts AT TIME ZONE 'UTC')::date AS d, count(*) FROM bars WHERE symbol = %s AND interval = '1m' "
+                "AND ts >= %s AND ts <= %s GROUP BY d",
+                (symbol, since, until),
+            )
+            return {r[0]: int(r[1]) for r in await cur.fetchall()}
+
+    async def fills_without_approval(self, since: datetime, until: datetime) -> int:
+        """Fills whose intent never got a risk approval: must be zero, always."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT count(DISTINCT f.payload->>'intent_id') FROM events f WHERE f.type = 'order.filled' "
+                "AND f.occurred_at >= %s AND f.occurred_at <= %s AND NOT EXISTS ("
+                "SELECT 1 FROM events a WHERE a.type = 'risk.approved' AND a.payload->>'intent_id' = f.payload->>'intent_id')",
+                (since, until),
+            )
+            return int((await cur.fetchone())[0])
 
     async def peak_equity(self) -> Decimal | None:
         """The highest equity any portfolio snapshot ever recorded: the drawdown ladder's peak."""

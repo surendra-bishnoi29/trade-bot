@@ -42,10 +42,13 @@ fi
 echo "== services"
 install -m 644 deploy/systemd/desk-bot.service deploy/systemd/desk-api.service \
   deploy/systemd/desk-backup.service deploy/systemd/desk-backup.timer \
-  deploy/systemd/desk-train.service deploy/systemd/desk-train.timer /etc/systemd/system/
+  deploy/systemd/desk-train.service deploy/systemd/desk-train.timer \
+  deploy/systemd/desk-healthcheck.service deploy/systemd/desk-healthcheck.timer \
+  deploy/systemd/desk-drill.service deploy/systemd/desk-drill.timer /etc/systemd/system/
+mkdir -p /opt/desk/health /opt/desk/backups && chown desk:desk /opt/desk/backups
 install -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
 systemctl daemon-reload
-systemctl enable --now desk-backup.timer desk-train.timer >/dev/null
+systemctl enable --now desk-backup.timer desk-train.timer desk-healthcheck.timer desk-drill.timer >/dev/null
 systemctl enable desk-bot desk-api caddy >/dev/null
 systemctl restart desk-api
 if [ "$RESTART_BOT" = 1 ]; then systemctl restart desk-bot; fi

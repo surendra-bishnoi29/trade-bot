@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the trading desk from the outside every five minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
