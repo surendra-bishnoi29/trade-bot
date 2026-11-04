@@ -44,13 +44,13 @@ def test_technical_report_reads_the_scorecard_row():
     row = ScoreRow(
         symbol="CVX",
         last_close=Decimal("226.06"),
-        ret_5d=-1.1,
-        ret_20d=8.7,
+        ret_5d=-0.011,
+        ret_20d=0.087,
         vol_20d=0.22,
         rvol=1.3,
-        dist_high_20d=-4.6,
-        dist_low_20d=10.2,
-        sma20_rel=0.9,
+        dist_high_20d=-0.046,
+        dist_low_20d=0.102,
+        sma20_rel=0.009,
         rank=3,
     )
     r = technical_report(row, 30)
@@ -61,10 +61,10 @@ def test_technical_report_reads_the_scorecard_row():
     assert 0.3 <= r["conviction"] <= 0.9 and r["data"]["rank"] == 3
 
 
-def ranked_rows(spy_sma=1.0, breadth_up=24):
+def ranked_rows(spy_sma=0.01, breadth_up=24):
     rows = [
-        {"symbol": "SPY", "ret_5d": 0.5, "ret_20d": 2.0, "sma20_rel": spy_sma, "vol_20d": 0.12},
-        {"symbol": "QQQ", "ret_5d": 0.8, "ret_20d": 3.0, "sma20_rel": 1.2, "vol_20d": 0.18},
+        {"symbol": "SPY", "ret_5d": 0.005, "ret_20d": 0.02, "sma20_rel": spy_sma, "vol_20d": 0.12},
+        {"symbol": "QQQ", "ret_5d": 0.008, "ret_20d": 0.03, "sma20_rel": 0.012, "vol_20d": 0.18},
     ]
     names = [s for s in DEFAULT_UNIVERSE if s not in ("SPY", "QQQ")]
     for i, s in enumerate(names):
@@ -72,9 +72,9 @@ def ranked_rows(spy_sma=1.0, breadth_up=24):
         rows.append(
             {
                 "symbol": s,
-                "ret_5d": 1.0 if up else -1.0,
-                "ret_20d": 4.0 if up else -3.0,
-                "sma20_rel": 1.5 if up else -2.0,
+                "ret_5d": 0.01 if up else -0.01,
+                "ret_20d": 0.04 if up else -0.03,
+                "sma20_rel": 0.015 if up else -0.02,
                 "vol_20d": 0.2,
             }
         )
@@ -85,9 +85,9 @@ def test_regime_and_sector_reports():
     on = regime_report(ranked_rows())
     assert on["stance"] == "bullish" and on["data"]["label"] == "risk-on"
     assert "SPY +2.0% over 20 days" in on["summary"] and "low" in on["summary"]
-    off = regime_report(ranked_rows(spy_sma=-1.0, breadth_up=5))
+    off = regime_report(ranked_rows(spy_sma=-0.01, breadth_up=5))
     assert off["data"]["label"] == "risk-off" and off["stance"] == "bearish"
-    mixed = regime_report(ranked_rows(spy_sma=1.0, breadth_up=14))
+    mixed = regime_report(ranked_rows(spy_sma=0.01, breadth_up=14))
     assert mixed["data"]["label"] == "mixed"
     sectors = sector_report(ranked_rows(breadth_up=4))  # the first four names (IT) lead
     assert sectors["data"]["leaders"][0] == "Information Technology"

@@ -48,7 +48,8 @@ class ResearchReport(Payload):
 
 
 def _pct(v: float | None) -> str:
-    return "n/a" if v is None else f"{v:+.1f}%"
+    """Returns and distances arrive as fractions (0.087 is 8.7%)."""
+    return "n/a" if v is None else f"{v * 100:+.1f}%"
 
 
 def vol_label(vol: float | None) -> str:
@@ -209,7 +210,7 @@ def sector_report(ranked: list[dict[str, Any]]) -> dict[str, Any]:
         "kind": "sector",
         "symbol": None,
         "stance": "none",
-        "conviction": round(min(1.0, abs(spread) / 5), 2) if spread is not None else 0.0,
+        "conviction": round(min(1.0, abs(spread) * 100 / 5), 2) if spread is not None else 0.0,
         "horizon": "days",
         "summary": summary.strip() or "No sector data yet.",
         "data": {

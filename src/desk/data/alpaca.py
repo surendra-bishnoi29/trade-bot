@@ -3,6 +3,7 @@
 alpaca-py is synchronous for REST, so calls run in a worker thread. Nothing here knows about the
 bus or the clock; agents own those.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -62,23 +63,38 @@ class AlpacaMarketData:
         self._data = StockHistoricalDataClient(key, secret)
         self._news = NewsClient(key, secret)
 
-    async def daily_bars(self, symbols: Iterable[str], start: datetime, end: datetime) -> dict[str, list[MarketBar]]:
+    async def daily_bars(
+        self, symbols: Iterable[str], start: datetime, end: datetime
+    ) -> dict[str, list[MarketBar]]:
         request = StockBarsRequest(
-            symbol_or_symbols=list(symbols), timeframe=TimeFrame.Day, feed=DataFeed.SIP, start=start, end=end
+            symbol_or_symbols=list(symbols),
+            timeframe=TimeFrame.Day,
+            feed=DataFeed.SIP,
+            start=start,
+            end=end,
         )
         result = await asyncio.to_thread(self._data.get_stock_bars, request)
         return {s: [bar_to_model(b, "1d", s) for b in bars] for s, bars in result.data.items()}
 
-    async def minute_bars(self, symbols: Iterable[str], start: datetime, end: datetime) -> dict[str, list[MarketBar]]:
+    async def minute_bars(
+        self, symbols: Iterable[str], start: datetime, end: datetime
+    ) -> dict[str, list[MarketBar]]:
         request = StockBarsRequest(
-            symbol_or_symbols=list(symbols), timeframe=TimeFrame(1, TimeFrameUnit.Minute), feed=DataFeed.SIP,
-            start=start, end=end,
+            symbol_or_symbols=list(symbols),
+            timeframe=TimeFrame(1, TimeFrameUnit.Minute),
+            feed=DataFeed.SIP,
+            start=start,
+            end=end,
         )
         result = await asyncio.to_thread(self._data.get_stock_bars, request)
         return {s: [bar_to_model(b, "1m", s) for b in bars] for s, bars in result.data.items()}
 
-    async def news(self, symbols: Iterable[str], start: datetime | None, limit: int = 50) -> list[NewsArticleRaw]:
-        request = NewsRequest(symbols=",".join(symbols), start=start, limit=limit, include_content=False)
+    async def news(
+        self, symbols: Iterable[str], start: datetime | None, limit: int = 50
+    ) -> list[NewsArticleRaw]:
+        request = NewsRequest(
+            symbols=",".join(symbols), start=start, limit=limit, include_content=False
+        )
         result = await asyncio.to_thread(self._news.get_news, request)
         items = getattr(result, "news", None)
         if items is None and hasattr(result, "data"):
@@ -92,7 +108,9 @@ class AlpacaLiveBars:
     def __init__(self, key: str, secret: str, feed: DataFeed = DataFeed.IEX) -> None:
         self._stream = StockDataStream(key, secret, feed=feed)
 
-    async def run(self, symbols: Iterable[str], on_bar: Callable[[MarketBar], Awaitable[None]]) -> None:
+    async def run(
+        self, symbols: Iterable[str], on_bar: Callable[[MarketBar], Awaitable[None]]
+    ) -> None:
         async def handler(bar: Any) -> None:
             await on_bar(bar_to_model(bar, "1m"))
 
@@ -157,8 +175,11 @@ class AlpacaTrading:
         rows = await asyncio.to_thread(self._client.get_all_positions)
         return [
             PositionInfo(
-                symbol=r.symbol, qty=_dec(r.qty) or Decimal(0), avg_entry=_dec(r.avg_entry_price),
-                market_value=_dec(r.market_value), unrealized_pl=_dec(r.unrealized_pl),
+                symbol=r.symbol,
+                qty=_dec(r.qty) or Decimal(0),
+                avg_entry=_dec(r.avg_entry_price),
+                market_value=_dec(r.market_value),
+                unrealized_pl=_dec(r.unrealized_pl),
             )
             for r in rows
         ]
@@ -175,10 +196,15 @@ class AlpacaTrading:
             side=str(getattr(getattr(o, "side", None), "value", getattr(o, "side", "")) or ""),
         )
 
-    async def submit_market_order(self, symbol: str, qty: Decimal, side: str, client_order_id: str) -> BrokerOrder:
+    async def submit_market_order(
+        self, symbol: str, qty: Decimal, side: str, client_order_id: str
+    ) -> BrokerOrder:
         request = MarketOrderRequest(
-            symbol=symbol, qty=float(qty), side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
-            time_in_force=TimeInForce.DAY, client_order_id=client_order_id,
+            symbol=symbol,
+            qty=float(qty),
+            side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
+            time_in_force=TimeInForce.DAY,
+            client_order_id=client_order_id,
         )
         return self._order(await asyncio.to_thread(self._client.submit_order, request))
 

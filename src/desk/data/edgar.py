@@ -124,7 +124,9 @@ def parse_submissions(data: dict[str, Any], symbol: str, cik: str) -> list[Filin
                 items=items,
                 document=document,
                 description=description,
-                url=ARCHIVE_URL.format(cik_int=int(cik), accession=accession.replace("-", ""), document=document),
+                url=ARCHIVE_URL.format(
+                    cik_int=int(cik), accession=accession.replace("-", ""), document=document
+                ),
             )
         )
     return out
