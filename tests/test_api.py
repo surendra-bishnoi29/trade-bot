@@ -21,7 +21,8 @@ from tests.conftest import make_event
 
 pytestmark = pytest.mark.usefixtures("database_url")
 
-T0 = datetime(2026, 11, 3, 15, 13, tzinfo=UTC)
+# twenty days back, so the seeded events stay clear of other tests' time windows
+T0 = (datetime.now(UTC) - timedelta(days=20)).replace(hour=15, minute=13, second=0, microsecond=0)
 
 
 async def seed(db: Database, clock: SimClock) -> None:
@@ -150,7 +151,7 @@ async def seed(db: Database, clock: SimClock) -> None:
     )
     await db.insert_event(
         make_event(
-            clock,
+            SimClock(datetime.now(UTC)),  # the book is only trusted when the snapshot is recent
             type=Topics.PORTFOLIO_RECONCILED,
             payload={
                 "equity": "100000",
@@ -165,7 +166,7 @@ async def seed(db: Database, clock: SimClock) -> None:
     )
     await db.insert_event(
         make_event(
-            clock,
+            SimClock(datetime.now(UTC)),
             type=Topics.SYSTEM_HEARTBEAT,
             payload={
                 "status": "ok",

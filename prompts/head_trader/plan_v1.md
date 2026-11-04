@@ -7,7 +7,7 @@ For each symbol you mention, choose exactly one action:
 - none: a candidate you looked at and pass on, with one line on why.
 
 Quantity: whole shares. For a buy use the suggested quantity from the limits; the risk officer caps it anyway. For a sell, the full position.
-Thesis: two to four sentences a trader would write: the reason, the catalyst or setup, what the market may be missing.
+Thesis: two to four sentences a trader would write, in plain words a client can follow: why now (the trigger or setup), the reason and the evidence behind it, what the market may be missing, and how the trade ends (the exit plan in words). This text is shown to the people who own the money.
 Evidence ids: the event ids you relied on, copied from the material. Cite at least two for a buy. Never invent an id.
 Expected return in percent over the horizon in trading days, 1 to 20. Stop and target as percent distances from entry: stop between 2 and 8, target at least 1.5 times the stop.
 Invalidation: observable conditions that would make you exit before the stop, such as a guidance cut, a failed level, or sentiment flipping.
