@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -25,6 +25,9 @@ class Snapshot:
     buying_power: Decimal
     positions: dict[str, PositionSnapshot]
     as_of: datetime
+    open_orders: dict[str, set[str]] = field(
+        default_factory=dict
+    )  # symbol -> sides working at the broker
 
 
 class BackOffice(BaseAgent):
@@ -43,6 +46,15 @@ class BackOffice(BaseAgent):
     async def refresh(self) -> Snapshot:
         account = await self.trading.account()
         positions = await self.trading.positions()
+        working: dict[str, set[str]] = {}
+        fetch_open = getattr(self.trading, "open_orders", None)
+        if fetch_open is not None:
+            try:
+                for o in await fetch_open():
+                    if o.symbol and o.side in ("buy", "sell"):
+                        working.setdefault(o.symbol, set()).add(o.side)
+            except Exception as exc:  # noqa: BLE001 - a missing list means no protection, not a crash
+                log.warning("open orders unavailable: %s", exc)
         try:
             notes = await self.reconcile_orders()
             if notes:
@@ -64,6 +76,7 @@ class BackOffice(BaseAgent):
                 for p in positions
             },
             as_of=self.clock.now(),
+            open_orders=working,
         )
         await self.emit(
             Topics.PORTFOLIO_RECONCILED,
@@ -129,6 +142,7 @@ class BackOffice(BaseAgent):
         return PortfolioView(
             equity=self.snapshot.equity,
             positions={s: p.qty for s, p in self.snapshot.positions.items()},
+            open_orders={s: set(v) for s, v in self.snapshot.open_orders.items()},
         )
 
     def price_of(self, symbol: str) -> Decimal | None:

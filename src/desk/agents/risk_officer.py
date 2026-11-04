@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -33,6 +33,9 @@ class RiskLimits:
 class PortfolioView:
     equity: Decimal
     positions: dict[str, Decimal]  # symbol -> signed quantity
+    open_orders: dict[str, set[str]] = field(
+        default_factory=dict
+    )  # symbol -> sides working at the broker
 
 
 @dataclass
@@ -78,6 +81,14 @@ def evaluate(
     )
     whole = intent.quantity == intent.quantity.to_integral_value() and intent.quantity >= 1
     rule("quantity", whole, f"{intent.quantity} shares")
+    working = portfolio.open_orders.get(intent.symbol, set())
+    rule(
+        "duplicate_order",
+        intent.side not in working,
+        f"a {intent.side} order for {intent.symbol} is already working at the broker"
+        if intent.side in working
+        else "no working order on this side",
+    )
     rule(
         "price_known",
         price is not None,

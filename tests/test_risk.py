@@ -168,3 +168,14 @@ def test_no_order_on_a_stale_price_while_the_market_is_open():
         price_age=timedelta(hours=5),
     )
     assert exit_.decision == "approved"
+
+
+def test_a_second_order_on_a_side_already_working_at_the_broker_is_rejected():
+    """Queued sells from another process must not be doubled into a short at the open."""
+    view = PortfolioView(
+        equity=Decimal(100000), positions={"AAPL": Decimal(8)}, open_orders={"AAPL": {"sell"}}
+    )
+    dup = evaluate(intent(side="sell", qty="8"), view, Decimal(250), OPEN, LIMITS, RiskState())
+    assert failed(dup) == ["duplicate_order"] and "already working" in dup.reason
+    buy = evaluate(intent(side="buy", qty="2"), view, Decimal(250), OPEN, LIMITS, RiskState())
+    assert "duplicate_order" not in failed(buy)

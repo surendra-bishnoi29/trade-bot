@@ -196,6 +196,11 @@ class SimulatedBroker:
     async def get_order(self, broker_order_id: str) -> BrokerOrder:
         return self._broker_order(self.orders[broker_order_id])
 
+    async def open_orders(self, limit: int = 100) -> list[BrokerOrder]:
+        return [self._broker_order(o) for o in self.orders.values() if o.status == "accepted"][
+            :limit
+        ]
+
     async def recent_orders(self, limit: int = 50) -> list[BrokerOrder]:
         orders = sorted(self.orders.values(), key=lambda o: o.submitted_at, reverse=True)
         return [self._broker_order(o) for o in orders[:limit]]
