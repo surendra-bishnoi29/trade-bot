@@ -528,6 +528,16 @@ class StateReader:
             )
         return out
 
+    # ---- research reports (scorecards, morning notes) ----
+
+    async def research(self, kind: str, limit: int = 1) -> list[dict]:
+        rows = await self._query(
+            f"SELECT {EVENT_COLS} FROM events WHERE type = %s AND payload->>'kind' = %s "
+            "ORDER BY occurred_at DESC LIMIT %s",
+            (Topics.RESEARCH_REPORT, kind, limit),
+        )
+        return [{"id": r["event_id"], "at": r["occurred_at"], **r["payload"]} for r in rows]
+
     # ---- daily briefs ----
 
     async def briefs(self, limit: int = 5) -> list[dict]:

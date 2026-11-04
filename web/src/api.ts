@@ -153,6 +153,19 @@ export interface Brief {
   };
 }
 
+export interface MorningNote {
+  id: string;
+  at: string;
+  day: string;
+  note: {
+    headline: string;
+    tape: string;
+    overnight_news: string[];
+    watchlist: { symbol: string; why: string; what_to_watch: string }[];
+    risks: string;
+  };
+}
+
 export interface Bar {
   ts: string;
   open: number;

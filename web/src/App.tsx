@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Health, JournalItem, Trade, User } from "./api";
+import { api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Health, JournalItem, MorningNote as NoteT, Trade, User } from "./api";
 import { Agents } from "./components/Agents";
 import { agentKey, describe, Team } from "./agents";
 import { Book } from "./components/Book";
+import { MorningNote } from "./components/MorningNote";
 import { Brief } from "./components/Brief";
 import { Chat, ChatMessage } from "./components/Chat";
 import { Controls, CommandResult } from "./components/Controls";
@@ -24,6 +25,7 @@ export default function App() {
   const [cycles, setCycles] = useState<Cycle[] | null>(null);
   const [brief, setBrief] = useState<BriefT | null>(null);
   const [team, setTeam] = useState<Team>({});
+  const [note, setNote] = useState<NoteT | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [results, setResults] = useState<CommandResult[]>([]);
   const [tab, setTab] = useState<Tab>("activity");
@@ -45,7 +47,7 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [state, t, j, c, chat, briefs, agents] = await Promise.all([
+      const [state, t, j, c, chat, briefs, agents, notes] = await Promise.all([
         api.get<{ book: BookT; health: Health }>("/api/state"),
         api.get<Trade[]>("/api/trades?limit=40"),
         api.get<JournalItem[]>("/api/journal?limit=120"),
@@ -53,9 +55,11 @@ export default function App() {
         api.get<ChatPair[]>("/api/chat/history?limit=20"),
         api.get<BriefT[]>("/api/brief?limit=1"),
         api.get<{ agent: string; last_type: string; last_at: string; last_text: string; events_10m: number }[]>("/api/agents"),
+        api.get<NoteT[]>("/api/research?kind=morning_note&limit=1"),
       ]);
       setBook(state.book);
       setBrief(briefs[0] ?? null);
+      setNote(notes[0] ?? null);
       setTeam((prev) => {
         const next: Team = { ...prev };
         for (const a of agents) {
@@ -187,6 +191,9 @@ export default function App() {
             return [...ms, { id, role: "desk", text: p.text, at: m.at }];
           });
           break;
+        case "research.report":
+          if (p.kind === "morning_note") setNote({ id: m.id ?? "", at: m.at, day: p.day, note: p.note });
+          break;
         case "desk.brief":
           setBrief({ id: m.id ?? "", day: p.day, generated_at: p.generated_at ?? m.at, brief: p.brief });
           break;
@@ -286,6 +293,7 @@ export default function App() {
         </div>
         <div className="col">
           <Book book={book} now={now} />
+          <MorningNote note={note} />
           <Brief brief={brief} user={user} onSent={(id) => setResults((rs) => [{ request_id: id, command: "brief", ok: null, text: null }, ...rs])} />
           <Trades trades={trades} />
         </div>

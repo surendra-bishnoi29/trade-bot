@@ -268,6 +268,10 @@ class SwingCycle(BaseAgent):
             correlation_id=cycle_id,
         )
         try:
+            self.head.current_cycle_id = cycle_id
+            await self._stage(
+                cycle_id, "scorecard", "ranking the universe and reading the book", started
+            )
             await self.back_office.refresh()
             snap = self.back_office.snapshot
             positions = {s: (p.qty, p.avg_entry) for s, p in snap.positions.items()}
@@ -287,6 +291,12 @@ class SwingCycle(BaseAgent):
                 book="swing",
                 caused_by=started,
             )
+            await self._stage(
+                cycle_id,
+                "material",
+                "collecting the news, alerts and theses behind the top names",
+                started,
+            )
             material = await self._material(rows, open_theses)
             limits = self._limits(rows, open_theses)
             self.head.material_rows = rows
@@ -294,6 +304,12 @@ class SwingCycle(BaseAgent):
             usage = {"plan": dict(self.head.last_usage)}
             challenge = await self.head.challenge(material, plan)
             usage["challenge"] = dict(self.head.last_usage)
+            await self._stage(
+                cycle_id,
+                "merge",
+                "applying the desk's rules to the plan and the objections",
+                started,
+            )
             actions = merge_plan(
                 plan,
                 challenge,
@@ -323,6 +339,13 @@ class SwingCycle(BaseAgent):
                 caused_by=plan_event,
             )
             if not dry_run:
+                orders = sum(a.action in ("buy", "sell") for a in actions)
+                await self._stage(
+                    cycle_id,
+                    "act",
+                    f"{orders} orders to the risk officer" if orders else "nothing to do",
+                    plan_event,
+                )
                 await self._act(actions, plan, rows, cycle_id, plan_event)
             await self.emit(
                 Topics.CYCLE_COMPLETED,
@@ -363,6 +386,16 @@ class SwingCycle(BaseAgent):
                 [],
                 failed=f"{type(exc).__name__}: {exc}",
             )
+
+    async def _stage(self, cycle_id: str, stage: str, detail: str, caused_by: Event) -> None:
+        await self.emit(
+            Topics.CYCLE_STAGE,
+            CycleEvent(
+                cycle_id=cycle_id, book="swing", stage=stage, status="started", detail=detail
+            ),
+            book="swing",
+            caused_by=caused_by,
+        )
 
     async def _act(
         self,

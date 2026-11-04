@@ -23,7 +23,15 @@ from desk.core import calendar
 from desk.core.clock import Clock
 from desk.core.config import Settings
 from desk.core.events import Event, Topics
-from desk.core.payloads import Challenge, CyclePlan, DailyBrief, OrderIntent, ResearchRequest
+from desk.core.payloads import (
+    Challenge,
+    CycleEvent,
+    CyclePlan,
+    DailyBrief,
+    MorningNote,
+    OrderIntent,
+    ResearchRequest,
+)
 from desk.storage.db import Database
 
 log = logging.getLogger(__name__)
@@ -32,6 +40,7 @@ PROMPT_PATH = PROMPTS / "head_trader" / "v1.md"
 PLAN_PROMPT_PATH = PROMPTS / "head_trader" / "plan_v1.md"
 SKEPTIC_PROMPT_PATH = PROMPTS / "skeptic" / "v1.md"
 BRIEF_PROMPT_PATH = PROMPTS / "head_trader" / "brief_v1.md"
+MORNING_PROMPT_PATH = PROMPTS / "head_trader" / "morning_v1.md"
 FALLBACK_HEADERS = {"anthropic-beta": "server-side-fallback-2026-07-01"}
 FALLBACK_BODY = {"fallbacks": "default"}
 
@@ -70,6 +79,8 @@ class HeadTrader(BaseAgent):
         self.plan_prompt = PLAN_PROMPT_PATH.read_text()
         self.skeptic_prompt = SKEPTIC_PROMPT_PATH.read_text()
         self.brief_prompt = BRIEF_PROMPT_PATH.read_text()
+        self.morning_prompt = MORNING_PROMPT_PATH.read_text()
+        self.current_cycle_id: str | None = None  # set by the cycle so progress events can name it
         self._scores: dict[str, asyncio.Queue[Event]] = {}
         self._decisions: dict[str, asyncio.Future[Event]] = {}
         self.last_usage: dict[str, int] = {}
@@ -507,6 +518,7 @@ class HeadTrader(BaseAgent):
             "plan": self.static_prompt + self.plan_prompt,
             "challenge": self.skeptic_prompt,
             "brief": self.static_prompt + self.brief_prompt,
+            "morning": self.static_prompt + self.morning_prompt,
         }[kind]
         return cache_key(kind, self.model, prompt, *parts)
 
@@ -517,7 +529,12 @@ class HeadTrader(BaseAgent):
             if hit is not None:
                 self.last_usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
                 return CyclePlan.model_validate(hit)
+        await self._stage("plan", "started", f"writing the plan on {self.model}")
         plan = await self._plan_llm(material, limits)
+        trades = sum(d.action in ("buy", "sell") for d in plan.decisions)
+        await self._stage(
+            "plan", "completed", f"{len(plan.decisions)} names considered, {trades} trades proposed"
+        )
         if self.cache is not None:
             await self.cache.put(key, "plan", self.model, plan.model_dump(mode="json"))
         return plan
@@ -565,7 +582,16 @@ class HeadTrader(BaseAgent):
             if hit is not None:
                 self.last_usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
                 return Challenge.model_validate(hit)
+        await self._stage("challenge", "started", "the skeptic is reading the plan")
         challenge = await self._challenge_llm(material, plan)
+        worst = max(
+            (o.severity for o in challenge.objections),
+            key=lambda s: {"blocking": 2, "concern": 1}.get(s, 0),
+            default="none",
+        )
+        await self._stage(
+            "challenge", "completed", f"{len(challenge.objections)} objections, worst {worst}"
+        )
         if self.cache is not None:
             await self.cache.put(key, "challenge", self.model, challenge.model_dump(mode="json"))
         return challenge
@@ -655,3 +681,71 @@ class HeadTrader(BaseAgent):
         if self.cache is not None:
             await self.cache.put(key, "brief", self.model, brief.model_dump(mode="json"))
         return brief
+
+    async def _stage(self, stage: str, status: str, detail: str) -> None:
+        """A progress event the interface shows while the model works."""
+        try:
+            await self.emit(
+                Topics.CYCLE_STAGE,
+                CycleEvent(
+                    cycle_id=self.current_cycle_id or "-",
+                    book="swing",
+                    stage=stage,
+                    status=status,  # type: ignore[arg-type]
+                    detail=detail,
+                ),
+                book="swing",
+            )
+        except Exception as exc:  # noqa: BLE001 - progress is decoration, never a failure
+            log.debug("stage event failed: %s", exc)
+
+    # ---- the morning note: structured output, no tool loop ----
+
+    async def morning_note(self, material: str) -> MorningNote:
+        key = self._cache_key("morning", self.daily_layer(), material)
+        if self.cache is not None:
+            hit = await self.cache.get(key)
+            if hit is not None:
+                return MorningNote.model_validate(hit)
+        await self._stage("morning_note", "started", "reading the overnight news and the scorecard")
+        response = await self.client.messages.parse(
+            model=self.model,
+            max_tokens=4000,
+            system=[
+                {
+                    "type": "text",
+                    "text": self.static_prompt + "\n\n" + self.morning_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                },
+                {
+                    "type": "text",
+                    "text": self.daily_layer(),
+                    "cache_control": {"type": "ephemeral"},
+                },
+            ],
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{self.context_line()}\nMATERIAL\n{material}\n\nWrite the morning note.",
+                }
+            ],
+            output_format=MorningNote,
+            output_config={"effort": "medium"},
+            extra_headers=FALLBACK_HEADERS,
+            extra_body=FALLBACK_BODY,
+        )
+        self._usage(response)
+        if response.stop_reason == "refusal" or response.parsed_output is None:
+            note = MorningNote(
+                headline="The model declined to write the morning note.",
+                tape=str(getattr(response, "stop_details", "")),
+                overnight_news=[],
+                watchlist=[],
+                risks="",
+            )
+        else:
+            note = response.parsed_output
+        await self._stage("morning_note", "completed", note.headline)
+        if self.cache is not None:
+            await self.cache.put(key, "morning", self.model, note.model_dump(mode="json"))
+        return note

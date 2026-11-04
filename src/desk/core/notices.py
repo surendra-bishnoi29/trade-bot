@@ -80,6 +80,16 @@ def render(event: Event) -> str | None:
         return f"🏁 Closed {event.symbol}: {p.get('reason', '')}" + (
             f". P&L {money(pnl)}" if pnl is not None else ""
         )
+    if t == Topics.RESEARCH_REPORT and p.get("kind") == "morning_note":
+        n = p.get("note") or {}
+        watch = "\n".join(
+            f"• {w.get('symbol')}: {w.get('why')}" for w in (n.get("watchlist") or [])[:5]
+        )
+        return (
+            f"🌅 Morning note: {n.get('headline', '')}\n{n.get('tape', '')}"
+            + (f"\nWatchlist:\n{watch}" if watch else "")
+            + (f"\nRisks: {n.get('risks')}" if n.get("risks") else "")
+        )
     if t == Topics.DESK_BRIEF:
         b = p.get("brief") or {}
         return (

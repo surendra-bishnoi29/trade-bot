@@ -22,6 +22,7 @@ from desk.agents.head_trader import HeadTrader
 from desk.agents.monitor import Monitor
 from desk.agents.news_agent import NewsAgent, NewsScorer
 from desk.agents.prices import PriceCache
+from desk.agents.quant_screen import QuantScreen
 from desk.agents.risk_officer import RiskLimits, RiskOfficer
 from desk.agents.swing_strategy import SwingStrategy
 from desk.agents.telegram import TelegramNotifier
@@ -71,6 +72,7 @@ class Desk:
     scheduler: CycleScheduler | None = None
     commands: CommandAgent | None = None
     brief: DailyBriefAgent | None = None
+    screen: QuantScreen | None = None
     telegram: TelegramNotifier | None = None
     ops: Ops | None = None
     data: DataAgent | None = None
@@ -179,6 +181,7 @@ class Desk:
             desk.telegram.start()
             log.info("telegram notifier on")
         if live:
+            desk.screen = QuantScreen(bus, clock, db, universe, back_office, head=head, cycle=cycle)
             desk.data = DataAgent(bus, clock, db, market, universe)
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
             desk.watcher = WatcherAgent(
@@ -271,6 +274,8 @@ class Desk:
             self.tasks.append(asyncio.create_task(self.news.run_forever(), name="news"))
         if self.scheduler is not None:
             self.tasks.append(asyncio.create_task(self.scheduler.run_forever(), name="scheduler"))
+        if self.screen is not None:
+            self.tasks.append(asyncio.create_task(self.screen.run_forever(), name="quant_screen"))
         self.ops = Ops(self.bus, self.clock)
         await self.ops.announce_start(self)
         self.tasks.append(asyncio.create_task(self.ops.heartbeat(self), name="heartbeat"))

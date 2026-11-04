@@ -170,6 +170,17 @@ def create_app(
         }
         return out
 
+    @app.get("/api/research")
+    async def research(
+        request: Request,
+        kind: str = "morning_note",
+        limit: int = 1,
+        user: User = Depends(current_user),
+    ) -> list[dict]:
+        if kind not in ("morning_note", "scorecard"):
+            raise HTTPException(status_code=400, detail="kind must be morning_note or scorecard")
+        return await reader(request).research(kind, limit=max(1, min(limit, 20)))
+
     @app.get("/api/brief")
     async def briefs(
         request: Request, limit: int = 5, user: User = Depends(current_user)

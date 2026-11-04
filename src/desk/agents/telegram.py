@@ -34,6 +34,7 @@ class TelegramNotifier(BaseAgent):
         Topics.THESIS_CLOSED,
         Topics.CYCLE_PLAN,
         Topics.DESK_BRIEF,
+        Topics.RESEARCH_REPORT,
     )
 
     def __init__(

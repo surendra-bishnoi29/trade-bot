@@ -385,3 +385,22 @@ class DailyBriefPayload(Payload):
     generated_at: datetime
     brief: DailyBrief
     facts: dict[str, Any] = Field(default_factory=dict)
+
+
+# ---- the morning note ----
+
+
+class WatchItem(BaseModel):
+    symbol: str
+    why: str
+    what_to_watch: str
+
+
+class MorningNote(BaseModel):
+    """What the head trader reads out before the open. All fields required: a structured model output."""
+
+    headline: str
+    tape: str
+    overnight_news: list[str]
+    watchlist: list[WatchItem]
+    risks: str

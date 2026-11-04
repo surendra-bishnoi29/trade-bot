@@ -143,3 +143,22 @@ async def test_sliced_schedule_runs_a_due_cycle_after_a_long_sleep():
     with contextlib.suppress(asyncio.CancelledError):
         await task
     assert s.cycle.runs == ["mid_session"]
+
+
+def test_quant_screen_schedule_covers_pre_market_session_and_post_close():
+    from desk.agents.quant_screen import next_slot, slots_for
+
+    day = datetime(2026, 11, 4, tzinfo=UTC).date()  # open 14:30, close 21:00 UTC
+    slots = slots_for(day)
+    kinds = [k for _, k in slots]
+    assert slots[0] == (datetime(2026, 11, 4, 11, 0, tzinfo=UTC), "pre_market")
+    assert (
+        kinds.count("pre_market") == 14
+        and kinds.count("session") == 12
+        and kinds[-1] == "post_close"
+    )
+    assert slots[-1][0] == datetime(2026, 11, 4, 21, 5, tzinfo=UTC)
+    at, kind = next_slot(datetime(2026, 11, 4, 12, 58, tzinfo=UTC))
+    assert (at, kind) == (datetime(2026, 11, 4, 13, 0, tzinfo=UTC), "pre_market")
+    at, kind = next_slot(datetime(2026, 11, 4, 22, 0, tzinfo=UTC))  # after the close: tomorrow
+    assert (at, kind) == (datetime(2026, 11, 5, 11, 0, tzinfo=UTC), "pre_market")

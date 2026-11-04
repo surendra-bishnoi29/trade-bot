@@ -10,6 +10,7 @@ export interface AgentInfo {
 export const TEAM: AgentInfo[] = [
   { key: "head_trader", label: "Head trader", role: "plans the book, answers questions" },
   { key: "cycle", label: "Swing cycle", role: "scorecard, plan, challenge, orders" },
+  { key: "quant_screen", label: "Quant screen", role: "ranks the universe every 15 min pre-market, 30 in session" },
   { key: "scheduler", label: "Scheduler", role: "pre-market, mid-session, post-close" },
   { key: "risk", label: "Risk officer", role: "approves or rejects every order" },
   { key: "execution", label: "Execution", role: "orders to the broker, fills" },
@@ -52,7 +53,11 @@ export function describe(m: LiveMessage): string {
     case "research.request":
       return `research requested: ${s}`;
     case "research.report":
+      if (p.kind === "scorecard") return `scorecard (${p.when ?? ""}): top ${(p.top ?? []).slice(0, 5).join(", ")}`;
+      if (p.kind === "morning_note") return `morning note: ${p.note?.headline ?? ""}`;
       return `report: ${p.analyst ?? ""}`;
+    case "cycle.stage.completed":
+      return `${p.stage}: ${p.detail ?? ""}`;
     case "watcher.alert":
       return `${p.kind} ${s}`;
     case "order.intent":
