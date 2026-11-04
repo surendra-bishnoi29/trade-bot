@@ -17,7 +17,14 @@ from desk.core.clock import SimClock
 from desk.core.events import Topics
 from desk.core.payloads import ThesisPayload
 from desk.storage.db import Database
-from tests.conftest import make_event
+from tests.conftest import make_event as _make_event
+
+SOURCE = "apitest@0.1"
+
+
+def make_event(clock, **kw):
+    return _make_event(clock, **kw).model_copy(update={"source": SOURCE})
+
 
 pytestmark = pytest.mark.usefixtures("database_url")
 
@@ -202,6 +209,9 @@ async def api(database_url):
     )
     with TestClient(app) as client:
         yield client, bus, live
+    async with db.pool.connection() as conn:
+        await conn.execute("DELETE FROM events WHERE source = %s", (SOURCE,))
+        await conn.execute("DELETE FROM theses WHERE thesis_id LIKE '01THESISTEST%'")
     await db.close()
 
 
