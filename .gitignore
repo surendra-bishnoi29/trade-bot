@@ -1,7 +1,7 @@
 # secrets and local state
 .env
 *.local.json
-data/
+/data/
 logs/
 # python
 .venv/
