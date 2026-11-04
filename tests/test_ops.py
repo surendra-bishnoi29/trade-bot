@@ -78,6 +78,10 @@ def test_late_cycles_only_run_when_it_still_makes_sense():
     assert CycleScheduler.may_run_late("post_close", closed)
     assert not CycleScheduler.may_run_late("mid_session", closed)
     assert CycleScheduler.may_run_late("mid_session", datetime(2026, 11, 4, 19, 0, tzinfo=UTC))
+    # a pre-market cycle that is late by an hour still runs before the open, or during the session
+    assert CycleScheduler.may_run_late("pre_market", datetime(2026, 11, 4, 14, 0, tzinfo=UTC))
+    assert CycleScheduler.may_run_late("pre_market", datetime(2026, 11, 4, 16, 0, tzinfo=UTC))
+    assert not CycleScheduler.may_run_late("pre_market", datetime(2026, 11, 4, 22, 0, tzinfo=UTC))
 
 
 async def test_catch_up_runs_a_missed_cycle_once():

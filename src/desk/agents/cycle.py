@@ -509,9 +509,13 @@ class CycleScheduler(BaseAgent):
 
     @staticmethod
     def may_run_late(trigger: str, now: datetime) -> bool:
-        """A late pre-market or mid-session cycle only makes sense while the market is still open;
-        a late post-close review is fine any time."""
-        return trigger == "post_close" or calendar.is_open(now)
+        """When a missed cycle is still worth running: a post-close review any time, a pre-market cycle
+        any time before that session's close, a mid-session cycle only while the market is open."""
+        if trigger == "post_close":
+            return True
+        if trigger == "pre_market":
+            return calendar.is_session(now.date()) and now < calendar.session_bounds(now.date())[1]
+        return calendar.is_open(now)
 
     async def catch_up(self) -> bool:
         """After a start: run the most recent scheduled cycle if the journal shows it never happened."""
