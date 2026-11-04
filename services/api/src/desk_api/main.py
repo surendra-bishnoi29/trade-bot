@@ -208,12 +208,25 @@ def create_app(
         out = await reader(request).command_result(request_id)
         return out or {"request_id": request_id, "ok": None, "text": None}
 
+    async def require_bot(request: Request) -> None:
+        health = await reader(request).health()
+        if not health["bot"]["alive"]:
+            raise HTTPException(
+                status_code=503,
+                detail="the bot is not running right now, so nobody can answer; try again once it is back",
+            )
+
+    @app.get("/api/agents")
+    async def agents(request: Request, user: User = Depends(current_user)) -> list[dict]:
+        return await reader(request).agents()
+
     # ---- requests to the bot ----
 
     @app.post("/api/ask")
     async def ask(
         body: AskBody, request: Request, user: User = Depends(current_user)
     ) -> dict[str, str]:
+        await require_bot(request)
         request_id = await request.app.state.commands.ask(body.text.strip(), user)
         return {"request_id": request_id}
 
@@ -226,6 +239,7 @@ def create_app(
             await require_operator(request)
         elif name not in VIEWER_COMMANDS:
             raise HTTPException(status_code=400, detail=f"unknown command {name}")
+        await require_bot(request)
         request_id = await request.app.state.commands.run(name, body.args.strip(), user)
         return {"request_id": request_id}
 

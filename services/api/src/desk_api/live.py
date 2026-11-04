@@ -17,6 +17,15 @@ log = logging.getLogger(__name__)
 
 LIVE_TOPICS: tuple[str, ...] = (
     Topics.MARKET_BAR_1M,
+    Topics.MARKET_BAR_1D,
+    Topics.NEWS_ARTICLE_RAW,
+    Topics.NEWS_ARTICLE_SCORED,
+    Topics.RESEARCH_REQUEST,
+    Topics.RESEARCH_REPORT,
+    Topics.ORDER_PARTIAL,
+    Topics.THESIS_INVALIDATED,
+    Topics.PORTFOLIO_POSITION,
+    Topics.CYCLE_STAGE,
     Topics.WATCHER_ALERT,
     Topics.ORDER_INTENT,
     Topics.ORDER_SUBMITTED,

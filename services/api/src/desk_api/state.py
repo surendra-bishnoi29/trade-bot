@@ -498,6 +498,36 @@ class StateReader:
             return None
         return {"request_id": request_id, **r["payload"], "at": r["occurred_at"]}
 
+    # ---- the team: last activity per agent ----
+
+    async def agents(self) -> list[dict]:
+        last = await self._query(
+            f"SELECT DISTINCT ON (source) {EVENT_COLS} FROM events "
+            "WHERE occurred_at >= now() - interval '2 days' ORDER BY source, occurred_at DESC"
+        )
+        counts = {
+            r["source"]: r["n"]
+            for r in await self._query(
+                "SELECT source, count(*) AS n FROM events WHERE occurred_at >= now() - interval '10 minutes' "
+                "GROUP BY source"
+            )
+        }
+        out = []
+        for r in last:
+            name, _, version = r["source"].partition("@")
+            out.append(
+                {
+                    "agent": name,
+                    "version": version,
+                    "last_type": r["type"],
+                    "last_at": r["occurred_at"],
+                    "last_symbol": r["symbol"],
+                    "last_text": summarize(Event(**r)),
+                    "events_10m": counts.get(r["source"], 0),
+                }
+            )
+        return out
+
     # ---- daily briefs ----
 
     async def briefs(self, limit: int = 5) -> list[dict]:

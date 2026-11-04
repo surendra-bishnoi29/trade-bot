@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Health, JournalItem, Trade, User } from "./api";
+import { Agents } from "./components/Agents";
+import { agentKey, describe, Team } from "./agents";
 import { Book } from "./components/Book";
 import { Brief } from "./components/Brief";
 import { Chat, ChatMessage } from "./components/Chat";
@@ -21,6 +23,7 @@ export default function App() {
   const [journal, setJournal] = useState<JournalItem[] | null>(null);
   const [cycles, setCycles] = useState<Cycle[] | null>(null);
   const [brief, setBrief] = useState<BriefT | null>(null);
+  const [team, setTeam] = useState<Team>({});
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [results, setResults] = useState<CommandResult[]>([]);
   const [tab, setTab] = useState<Tab>("activity");
@@ -42,16 +45,27 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [state, t, j, c, chat, briefs] = await Promise.all([
+      const [state, t, j, c, chat, briefs, agents] = await Promise.all([
         api.get<{ book: BookT; health: Health }>("/api/state"),
         api.get<Trade[]>("/api/trades?limit=40"),
         api.get<JournalItem[]>("/api/journal?limit=120"),
         api.get<Cycle[]>("/api/cycles?limit=20"),
         api.get<ChatPair[]>("/api/chat/history?limit=20"),
         api.get<BriefT[]>("/api/brief?limit=1"),
+        api.get<{ agent: string; last_type: string; last_at: string; last_text: string; events_10m: number }[]>("/api/agents"),
       ]);
       setBook(state.book);
       setBrief(briefs[0] ?? null);
+      setTeam((prev) => {
+        const next: Team = { ...prev };
+        for (const a of agents) {
+          const cur = next[a.agent];
+          if (!cur || !cur.lastAt || new Date(a.last_at) > new Date(cur.lastAt)) {
+            next[a.agent] = { lastType: a.last_type, lastAt: a.last_at, lastText: a.last_text, count10m: a.events_10m, recent: cur?.recent ?? [] };
+          }
+        }
+        return next;
+      });
       setHealth(state.health);
       setTrades(t);
       setJournal(j);
@@ -83,6 +97,23 @@ export default function App() {
   const onLive = useCallback(
     (m: LiveMessage) => {
       const p = m.payload ?? {};
+      const who = agentKey(m.source);
+      if (who) {
+        const text = describe(m);
+        setTeam((prev) => {
+          const cur = prev[who] ?? { lastType: null, lastAt: null, lastText: "", count10m: 0, recent: [] };
+          return {
+            ...prev,
+            [who]: {
+              lastType: m.type,
+              lastAt: m.at,
+              lastText: text,
+              count10m: cur.count10m + 1,
+              recent: [{ at: m.at, text }, ...cur.recent].slice(0, 8),
+            },
+          };
+        });
+      }
       switch (m.type) {
         case "market.bar.1m":
           setBook((b) => {
@@ -198,9 +229,24 @@ export default function App() {
         { id: r.request_id + ":a", role: "desk", text: "", at: new Date().toISOString(), streaming: true, progress: "sending" },
       ]);
     } catch (e) {
-      setMessages((ms) => [...ms, { id: "err" + Date.now(), role: "desk", text: `Could not send: ${(e as Error).message}`, at: new Date().toISOString() }]);
+      const why = e instanceof ApiError && e.status === 503 ? e.message : `Could not send: ${(e as Error).message}`;
+      setMessages((ms) => [...ms, { id: "err" + Date.now(), role: "desk", text: why, at: new Date().toISOString() }]);
     }
   };
+
+  // a question the bot never picked up (it was down, or restarted) must not spin forever
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      setMessages((ms) =>
+        ms.map((m) =>
+          m.streaming && m.text === "" && Date.now() - new Date(m.at).getTime() > 90_000
+            ? { ...m, streaming: false, progress: null, text: "No answer arrived. The bot may have been down or restarting; please ask again." }
+            : m,
+        ),
+      );
+    }, 5000);
+    return () => window.clearInterval(t);
+  }, []);
 
   const busy = messages.some((m) => m.streaming);
 
@@ -229,7 +275,15 @@ export default function App() {
           </button>
         </div>
       </header>
+      {health && !health.bot.alive && (
+        <div className="banner">
+          The bot is not running. Prices, questions and controls resume when it is back; the interface keeps showing the journal.
+        </div>
+      )}
       <main className="grid">
+        <div className="wide">
+          <Agents team={team} now={now} botAlive={!!health?.bot.alive} />
+        </div>
         <div className="col">
           <Book book={book} now={now} />
           <Brief brief={brief} user={user} onSent={(id) => setResults((rs) => [{ request_id: id, command: "brief", ok: null, text: null }, ...rs])} />
