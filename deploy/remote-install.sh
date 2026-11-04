@@ -4,8 +4,20 @@ set -euo pipefail
 APP=/opt/desk/app
 UV=/usr/local/bin/uv
 RESTART_BOT=1
-[ "${1:-}" = "--no-bot" ] && RESTART_BOT=0
+PULL=0
+for a in "$@"; do
+  case "$a" in
+    --no-bot) RESTART_BOT=0 ;;
+    --pull) PULL=1 ;;
+  esac
+done
 cd "$APP"
+if [ "$PULL" = 1 ]; then
+  echo "== git: origin/main"
+  sudo -u desk -H git -C "$APP" fetch --quiet origin
+  sudo -u desk -H git -C "$APP" reset --quiet --hard origin/main
+  sudo -u desk -H git -C "$APP" log --oneline -1
+fi
 chown -R desk:desk /opt/desk
 chmod 755 /opt/desk /opt/desk/web  # caddy (its own user) must reach the web build; the app dir stays private
 chmod 750 /opt/desk/app

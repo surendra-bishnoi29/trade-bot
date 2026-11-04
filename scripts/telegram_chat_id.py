@@ -4,8 +4,10 @@ DESK_TELEGRAM_CHAT_ID. Reads the token from .env; never prints it."""
 import json
 import urllib.request
 
+import truststore
 from dotenv import load_dotenv
 
+truststore.inject_into_ssl()  # this machine's Python has no CA bundle of its own
 load_dotenv()
 
 from desk.core.config import Settings

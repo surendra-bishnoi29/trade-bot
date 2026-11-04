@@ -4,8 +4,10 @@ Operator tool, run by hand: `uv run python scripts/close_positions.py`. While th
 orders queue and fill at the next open. Prints symbols, order ids and statuses; never prints keys.
 """
 
+import truststore
 from dotenv import load_dotenv
 
+truststore.inject_into_ssl()  # this machine's Python has no CA bundle of its own
 load_dotenv()
 
 from alpaca.trading.client import TradingClient
