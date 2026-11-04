@@ -92,6 +92,16 @@ uv run desk models                         # every trained model, its out-of-sam
 
 `desk train` refuses a frame that fails the lookahead audit, and a model becomes champion only through the promotion gate (300 or more out-of-sample predictions, positive rank correlation, hit rate at least 50%, no regression against the incumbent). With a champion in the registry the forecaster agent publishes a `forecast` report per name after every quant screen, with the model's own record in the text, and the scorecard gives the expected return a third of its weight. Without one the desk runs exactly as before. Model files live under `data/models` (git-ignored); retrain weekly after the close on Friday.
 
+## The performance reviewer (phase 4)
+
+```bash
+uv run desk review                   # post-mortems of the theses closed in the last 30 days, and the analyst scoreboard
+uv run desk compare --days 5         # replay the last five sessions with the rules-only baseline (costs on, SPY as the tape)
+uv run desk compare --days 5 --llm   # the same sessions with the real head trader and skeptic (model outputs cached)
+```
+
+After the post-close cycle the reviewer grades every thesis closed since the last review (realized against expected, how it exited, the best and worst point during the hold) and asks the model for one lesson per trade in a single call (`DESK_REVIEW_NARRATIVE=false` turns that off). Every Friday it scores each analyst's calls against what prices did over the next five sessions and publishes credibility weights; the head trader reads them in every plan. Both appear in the Reviews tab and on Telegram.
+
 ## Costs and the intraday baselines (phase 2)
 
 ```bash

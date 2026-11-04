@@ -566,6 +566,17 @@ class StateReader:
 
     # ---- daily briefs ----
 
+    async def reviews(self, limit: int = 20) -> list[dict]:
+        rows = await self._query(
+            f"SELECT {EVENT_COLS} FROM events WHERE type = %s ORDER BY occurred_at DESC LIMIT %s",
+            (Topics.REVIEW_POSTMORTEM, limit),
+        )
+        return [{"id": r["event_id"], "at": r["occurred_at"], **r["payload"]} for r in rows]
+
+    async def analyst_scores(self) -> dict | None:
+        row = await self._latest(Topics.REVIEW_ANALYST_SCORE, days=60)
+        return {"id": row["event_id"], "at": row["occurred_at"], **row["payload"]} if row else None
+
     async def briefs(self, limit: int = 5) -> list[dict]:
         rows = await self._query(
             f"SELECT {EVENT_COLS} FROM events WHERE type = %s ORDER BY occurred_at DESC LIMIT %s",

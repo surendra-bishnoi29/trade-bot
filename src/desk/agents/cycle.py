@@ -15,6 +15,7 @@ from desk.agents.back_office import BackOffice
 from desk.agents.base import BaseAgent
 from desk.agents.head_trader import HeadTrader
 from desk.agents.research import research_digest
+from desk.agents.reviewer import analyst_record
 from desk.agents.risk_officer import RiskOfficer
 from desk.agents.scorecard import ScoreRow, build_scorecard, render_scorecard
 from desk.agents.swing_strategy import SwingStrategy
@@ -230,7 +231,9 @@ class SwingCycle(BaseAgent):
             f"PORTFOLIO\n{await self.head.q_portfolio()}\n\n"
             f"OPEN THESES\n{theses}\n\n"
             f"RESEARCH TEAM (latest reports; their ids are evidence you can cite)\n"
-            f"{await research_digest(self.db, self.clock.now(), candidates)}"
+            f"{await research_digest(self.db, self.clock.now(), candidates)}\n\n"
+            f"ANALYST TRACK RECORD (the reviewer's scores of each analyst's calls against what prices did; weigh their reports accordingly)\n"
+            f"{await analyst_record(self.db, self.clock.now())}"
         )
 
     def _limits(self, rows: list[ScoreRow], open_theses: list[ThesisPayload]) -> str:

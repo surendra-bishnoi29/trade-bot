@@ -15,6 +15,8 @@ export const timeUTC = (iso: string | null | undefined): string => {
   return d.toISOString().slice(11, 16) + " UTC";
 };
 
+export const dateUTC = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : "");
+
 export const dateTimeUTC = (iso: string | null | undefined): string => {
   if (!iso) return "–";
   const d = new Date(iso);

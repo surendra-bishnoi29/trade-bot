@@ -68,6 +68,8 @@ async def _run(no_console: bool) -> None:
             await asyncio.Event().wait()
         else:
             await desk.console.repl()
+    except asyncio.CancelledError:
+        logging.getLogger("desk").info("stop requested; shutting the desk down")
     finally:
         await desk.stop()
 
@@ -278,6 +280,43 @@ async def _features(action: str, days: int) -> None:
         await db.close()
 
 
+async def _review(days: int, score_days: int) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from desk.review.postmortem import grade_closed, render_grades, render_weights, score_analysts
+    from desk.storage.db import Database
+
+    settings = load_settings()
+    db = Database(settings.database_url)
+    await db.open()
+    try:
+        now = datetime.now(UTC)
+        print(render_grades(await grade_closed(db, now - timedelta(days=days), now)))
+        scores = await score_analysts(db, now, days=score_days)
+        print(f"\nANALYST SCOREBOARD ({scores['calls']} calls over {score_days} days)")
+        print(render_weights(scores["weights"]))
+    finally:
+        await db.close()
+
+
+async def _compare(args: argparse.Namespace) -> None:
+    import json
+    from decimal import Decimal
+
+    from desk.review.compare import compare, render
+
+    result = await compare(
+        load_settings(),
+        args.days,
+        llm=args.llm,
+        capital=Decimal(args.capital),
+        slippage_bps=Decimal(args.slippage_bps),
+    )
+    print(render(result))
+    if args.json:
+        print(json.dumps(result, default=str))
+
+
 async def _models() -> None:
     from desk.storage.db import Database
 
@@ -348,6 +387,24 @@ def main(argv: list[str] | None = None) -> int:
     features.add_argument("action", choices=["build", "audit"])
     features.add_argument("--days", type=int, default=400)
     sub.add_parser("models", help="list trained forecasters and the champion")
+    review = sub.add_parser(
+        "review", help="post-mortems of closed theses and the analyst scoreboard"
+    )
+    review.add_argument("--days", type=int, default=30, help="closed theses in the last N days")
+    review.add_argument(
+        "--score-days", type=int, default=60, help="analyst calls in the last N days"
+    )
+    compare = sub.add_parser(
+        "compare",
+        help="replay recent sessions: rules-only baseline, optionally the head trader too",
+    )
+    compare.add_argument("--days", type=int, default=5)
+    compare.add_argument(
+        "--llm", action="store_true", help="also replay with the real head trader (cached)"
+    )
+    compare.add_argument("--capital", default="100000")
+    compare.add_argument("--slippage-bps", default="5")
+    compare.add_argument("--json", action="store_true")
     replay = sub.add_parser(
         "replay", help="replay one past session through the agents with a simulated broker"
     )
@@ -360,7 +417,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     _logging(args.verbose, console=(args.command == "run" and not args.no_console))
     if args.command == "run":
-        asyncio.run(_run(args.no_console))
+        try:
+            asyncio.run(_run(args.no_console))
+        except KeyboardInterrupt:
+            pass  # SIGINT from systemd or the terminal: the desk has already shut down cleanly
     elif args.command == "ask":
         asyncio.run(_ask(args.question))
     elif args.command == "backfill":
@@ -387,6 +447,10 @@ def main(argv: list[str] | None = None) -> int:
         asyncio.run(_features(args.action, args.days))
     elif args.command == "models":
         asyncio.run(_models())
+    elif args.command == "review":
+        asyncio.run(_review(args.days, args.score_days))
+    elif args.command == "compare":
+        asyncio.run(_compare(args))
     return 0
 
 

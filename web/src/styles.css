@@ -381,6 +381,15 @@ tr:last-child td {
   color: var(--good);
   border-color: transparent;
 }
+.tag.exit-target,
+.tag.standing-trusted {
+  background: var(--good-bg);
+  color: var(--good);
+  border-color: transparent;
+}
+.tag.exit-stop,
+.tag.exit-kill,
+.tag.standing-doubted,
 .tag.closed,
 .tag.rejected,
 .tag.sev-blocking {

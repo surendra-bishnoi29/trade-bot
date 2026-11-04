@@ -28,6 +28,7 @@ export const TEAM: AgentInfo[] = [
   { key: "data", label: "Data agent", role: "price history from the broker" },
   { key: "monitor", label: "Monitor", role: "kill switch on stale feed or broker trouble" },
   { key: "brief", label: "Daily brief", role: "writes the day up after the close" },
+  { key: "reviewer", label: "Performance reviewer", role: "post-mortems of closed trades, weekly analyst scores" },
   { key: "telegram", label: "Telegram", role: "notifications to your phone" },
   { key: "commands", label: "Commands", role: "requests from this interface" },
   { key: "ops", label: "Ops", role: "heartbeat, restarts, watchdog" },

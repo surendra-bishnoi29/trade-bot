@@ -70,6 +70,8 @@ class Topics:
     SYSTEM_RESTARTED = "system.restarted"
     SYSTEM_HEARTBEAT = "system.heartbeat"
     DESK_BRIEF = "desk.brief"
+    REVIEW_POSTMORTEM = "review.trade.postmortem"
+    REVIEW_ANALYST_SCORE = "review.analyst.score"
 
     @classmethod
     def all(cls) -> list[str]:

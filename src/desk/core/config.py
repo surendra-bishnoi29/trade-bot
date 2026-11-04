@@ -93,6 +93,7 @@ class Settings(BaseSettings):
     )
     models_dir: str = "data/models"  # trained forecasters (git-ignored)
     forecast_horizon: int = 5  # sessions ahead the champion forecaster predicts (1, 5 or 20)
+    review_narrative: bool = True  # one model call per review day for the post-mortem lessons
     rss_news: bool = True  # keyless RSS headlines per symbol behind the same scoring
     fred_api_key: SecretStr | None = None  # macro strategist; free key from fred.stlouisfed.org
     finnhub_api_key: SecretStr | None = (

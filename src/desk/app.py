@@ -28,6 +28,7 @@ from desk.agents.news_agent import NewsAgent, NewsScorer
 from desk.agents.prices import PriceCache
 from desk.agents.quant_screen import QuantScreen
 from desk.agents.research import NewsAnalyst, RegimeStrategist, SectorSpecialist
+from desk.agents.reviewer import ReviewerAgent
 from desk.agents.risk_officer import RiskLimits, RiskOfficer
 from desk.agents.swing_strategy import SwingStrategy
 from desk.agents.telegram import TelegramNotifier
@@ -79,6 +80,7 @@ class Desk:
     brief: DailyBriefAgent | None = None
     screen: QuantScreen | None = None
     forecaster: ForecastAnalyst | None = None
+    reviewer: ReviewerAgent | None = None
     news_analyst: NewsAnalyst | None = None
     filings: FilingAnalyst | None = None
     macro: MacroStrategist | None = None
@@ -234,6 +236,8 @@ class Desk:
                 bus, clock, db, universe, horizon=settings.forecast_horizon
             )
             desk.forecaster.start()
+            desk.reviewer = ReviewerAgent(bus, clock, db, head, narrative=settings.review_narrative)
+            desk.reviewer.start()
             desk.data = DataAgent(bus, clock, db, market, universe)
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
             desk.watcher = WatcherAgent(

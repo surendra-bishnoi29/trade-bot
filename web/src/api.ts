@@ -142,6 +142,34 @@ export interface ChatPair {
   answered_at: string | null;
 }
 
+export interface Postmortem {
+  id?: string;
+  at?: string;
+  thesis_id: string;
+  symbol: string;
+  direction: string;
+  conviction: number;
+  expected_pct: number;
+  realized_pct: number | null;
+  realized_pnl: number | null;
+  exit_kind: string;
+  holding_sessions: number;
+  mfe_pct: number | null;
+  mae_pct: number | null;
+  closed_at: string;
+  verdict: string;
+  lesson?: string;
+  process_sound?: boolean | null;
+}
+
+export interface AnalystScores {
+  id?: string;
+  at?: string;
+  days: number;
+  calls: number;
+  weights: Record<string, { weight: number; hit_5d: number | null; n: number; status: string }>;
+}
+
 export interface Brief {
   id: string;
   day: string;

@@ -412,6 +412,18 @@ class Database:
             cols = [d.name for d in cur.description]
             return [self._thesis_from_row(cols, r) for r in await cur.fetchall()]
 
+    async def closed_theses(self, since: datetime, until: datetime) -> list[ThesisPayload]:
+        """Theses closed in the window, oldest close first."""
+        async with self.pool.connection() as conn:
+            cur = await conn.execute(
+                f"SELECT {self._THESIS_COLS} FROM theses WHERE status = 'closed' "
+                "AND coalesce(closed_at, updated_at) >= %s AND coalesce(closed_at, updated_at) <= %s "
+                "ORDER BY coalesce(closed_at, updated_at)",
+                (since, until),
+            )
+            cols = [d.name for d in cur.description]
+            return [self._thesis_from_row(cols, r) for r in await cur.fetchall()]
+
     async def peak_equity(self) -> Decimal | None:
         """The highest equity any portfolio snapshot ever recorded: the drawdown ladder's peak."""
         async with self.pool.connection() as conn:

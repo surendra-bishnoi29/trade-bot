@@ -410,6 +410,46 @@ class MorningNote(BaseModel):
     risks: str
 
 
+# ---- the performance reviewer ----
+
+
+@payload_for(Topics.REVIEW_POSTMORTEM)
+class TradePostmortem(Payload):
+    thesis_id: str
+    symbol: str
+    direction: str
+    conviction: float
+    expected_pct: float
+    realized_pct: float | None = None
+    realized_pnl: float | None = None
+    exit_kind: str
+    holding_sessions: int
+    mfe_pct: float | None = None
+    mae_pct: float | None = None
+    entry_price: float | None = None
+    stop_pct: float
+    target_pct: float
+    horizon_days: int
+    opened_at: datetime
+    closed_at: datetime
+    reason: str = ""
+    verdict: str
+    lesson: str = ""
+    process_sound: bool | None = None
+    evidence_ids: list[str] | None = None
+    prompt_version: str = ""
+
+
+@payload_for(Topics.REVIEW_ANALYST_SCORE)
+class AnalystScoresPayload(Payload):
+    since: datetime
+    until: datetime
+    days: int
+    calls: int
+    scores: list[dict[str, Any]] = Field(default_factory=list)
+    weights: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
 @payload_for(Topics.FILING_NEW)
 class FilingNew(Payload):
     symbol: str

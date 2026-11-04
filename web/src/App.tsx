@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Health, JournalItem, MorningNote as NoteT, Report, Trade, User } from "./api";
+import { AnalystScores, api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Health, JournalItem, MorningNote as NoteT, Postmortem, Report, Trade, User } from "./api";
 import { Agents } from "./components/Agents";
 import { agentKey, describe, Team } from "./agents";
 import { Book } from "./components/Book";
 import { MorningNote } from "./components/MorningNote";
 import { Brief } from "./components/Brief";
+import { Reviews } from "./components/Reviews";
 import { Chat, ChatMessage } from "./components/Chat";
 import { Controls, CommandResult } from "./components/Controls";
 import { Cycles } from "./components/Cycles";
@@ -15,7 +16,7 @@ import { Research } from "./components/Research";
 import { Trades } from "./components/Trades";
 import { LiveMessage, useLive } from "./live";
 
-type Tab = "research" | "activity" | "cycles";
+type Tab = "research" | "activity" | "cycles" | "reviews";
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -31,6 +32,8 @@ export default function App() {
   const [results, setResults] = useState<CommandResult[]>([]);
   const [tab, setTab] = useState<Tab>("research");
   const [reports, setReports] = useState<Report[] | null>(null);
+  const [postmortems, setPostmortems] = useState<Postmortem[]>([]);
+  const [scores, setScores] = useState<AnalystScores | null>(null);
   const [now, setNow] = useState(Date.now());
   const pending = useRef<Set<string>>(new Set());
   const refreshTimer = useRef<number | undefined>(undefined);
@@ -49,7 +52,7 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [state, t, j, c, chat, briefs, agents, notes, research] = await Promise.all([
+      const [state, t, j, c, chat, briefs, agents, notes, research, reviews, analystScores] = await Promise.all([
         api.get<{ book: BookT; health: Health }>("/api/state"),
         api.get<Trade[]>("/api/trades?limit=40"),
         api.get<JournalItem[]>("/api/journal?limit=120"),
@@ -59,8 +62,12 @@ export default function App() {
         api.get<{ agent: string; last_type: string; last_at: string; last_text: string; events_10m: number }[]>("/api/agents"),
         api.get<NoteT[]>("/api/research?kind=morning_note&limit=1"),
         api.get<Report[]>("/api/research/latest"),
+        api.get<Postmortem[]>("/api/reviews?limit=30"),
+        api.get<AnalystScores | null>("/api/reviews/analysts"),
       ]);
       setReports(research);
+      setPostmortems(reviews);
+      setScores(analystScores);
       setBook(state.book);
       setBrief(briefs[0] ?? null);
       setNote(notes[0] ?? null);
@@ -205,6 +212,12 @@ export default function App() {
         case "desk.brief":
           setBrief({ id: m.id ?? "", day: p.day, generated_at: p.generated_at ?? m.at, brief: p.brief });
           break;
+        case "review.trade.postmortem":
+          setPostmortems((ps) => [{ id: m.id ?? "", at: m.at, ...(p as Postmortem) }, ...ps.filter((x) => x.thesis_id !== p.thesis_id)]);
+          break;
+        case "review.analyst.score":
+          setScores({ id: m.id ?? "", at: m.at, ...(p as AnalystScores) });
+          break;
         case "desk.command.result":
           setResults((rs) => rs.map((r) => (r.request_id === p.request_id ? { ...r, ok: p.ok, text: p.text } : r)));
           refreshSoon();
@@ -320,8 +333,19 @@ export default function App() {
             <button type="button" className={tab === "cycles" ? "on" : ""} onClick={() => setTab("cycles")}>
               Decision cycles
             </button>
+            <button type="button" className={tab === "reviews" ? "on" : ""} onClick={() => setTab("reviews")}>
+              Reviews
+            </button>
           </nav>
-          {tab === "research" ? <Research reports={reports} now={now} /> : tab === "activity" ? <Journal items={journal} /> : <Cycles cycles={cycles} />}
+          {tab === "research" ? (
+            <Research reports={reports} now={now} />
+          ) : tab === "activity" ? (
+            <Journal items={journal} />
+          ) : tab === "cycles" ? (
+            <Cycles cycles={cycles} />
+          ) : (
+            <Reviews postmortems={postmortems} scores={scores} />
+          )}
         </div>
       </main>
     </>

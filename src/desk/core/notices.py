@@ -90,6 +90,28 @@ def render(event: Event) -> str | None:
             + (f"\nWatchlist:\n{watch}" if watch else "")
             + (f"\nRisks: {n.get('risks')}" if n.get("risks") else "")
         )
+    if t == Topics.REVIEW_POSTMORTEM:
+        lesson = f"\nLesson: {p.get('lesson')}" if p.get("lesson") else ""
+        return f"🔍 Post-mortem {event.symbol}: {p.get('verdict', '')}{lesson}"
+    if t == Topics.REVIEW_ANALYST_SCORE:
+        weights = p.get("weights") or {}
+        ranked = sorted(
+            ((k, w) for k, w in weights.items() if w.get("status") != "unproven"),
+            key=lambda kv: -float(kv[1].get("weight", 1)),
+        )
+        if not ranked:
+            return (
+                f"📊 Analyst scoreboard: {p.get('calls', 0)} calls, none with ten scored calls yet"
+            )
+        best = ", ".join(f"{k} {float(w['hit_5d']):.0%}" for k, w in ranked[:3])
+        worst = (
+            ", ".join(f"{k} {float(w['hit_5d']):.0%}" for k, w in ranked[-2:])
+            if len(ranked) > 3
+            else ""
+        )
+        return f"📊 Analyst scoreboard ({p.get('days')} days): best {best}" + (
+            f"; weakest {worst}" if worst else ""
+        )
     if t == Topics.DESK_BRIEF:
         b = p.get("brief") or {}
         return (
