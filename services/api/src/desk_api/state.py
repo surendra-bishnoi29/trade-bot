@@ -538,6 +538,29 @@ class StateReader:
         )
         return [{"id": r["event_id"], "at": r["occurred_at"], **r["payload"]} for r in rows]
 
+    async def research_latest(self, hours: int = 24) -> list[dict]:
+        rows = await self._query(
+            f"SELECT DISTINCT ON (payload->>'analyst', payload->>'kind', symbol) {EVENT_COLS} FROM events "
+            "WHERE type = %s AND occurred_at >= now() - make_interval(hours => %s) "
+            "ORDER BY payload->>'analyst', payload->>'kind', symbol, occurred_at DESC",
+            (Topics.RESEARCH_REPORT, hours),
+        )
+        return [
+            {
+                "id": r["event_id"],
+                "at": r["occurred_at"],
+                "analyst": r["payload"].get("analyst"),
+                "kind": r["payload"].get("kind"),
+                "symbol": r["symbol"] or r["payload"].get("symbol"),
+                "stance": r["payload"].get("stance"),
+                "conviction": r["payload"].get("conviction"),
+                "summary": r["payload"].get("summary"),
+                "data": r["payload"].get("data"),
+            }
+            for r in rows
+            if r["payload"].get("kind") not in ("scorecard",)
+        ]
+
     # ---- daily briefs ----
 
     async def briefs(self, limit: int = 5) -> list[dict]:

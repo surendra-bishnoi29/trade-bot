@@ -33,7 +33,7 @@ export function Agents({ team, now, botAlive }: { team: Team; now: number; botAl
               <div className="agent-head">
                 <i aria-hidden="true" />
                 <b>{a.label}</b>
-                <span className="muted small">{act?.count10m ? `${act.count10m} / 10 min` : ""}</span>
+                <span className="muted small" title="events in the last ten minutes">{act?.count10m ? `${act.count10m} events / 10 min` : ""}</span>
               </div>
               <div className="agent-role muted small">{a.role}</div>
               <div className="agent-last">

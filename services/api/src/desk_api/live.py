@@ -22,6 +22,8 @@ LIVE_TOPICS: tuple[str, ...] = (
     Topics.NEWS_ARTICLE_SCORED,
     Topics.RESEARCH_REQUEST,
     Topics.RESEARCH_REPORT,
+    Topics.NEWS_STATE,
+    Topics.FILING_NEW,
     Topics.ORDER_PARTIAL,
     Topics.THESIS_INVALIDATED,
     Topics.PORTFOLIO_POSITION,

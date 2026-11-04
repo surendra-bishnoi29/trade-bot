@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: str | None = None
     heartbeat_minutes: int = 5
+    sec_user_agent: str | None = (
+        None  # EDGAR asks for a descriptive agent with a contact; unset = off
+    )
 
     # unprefixed on purpose: the Anthropic SDK reads ANTHROPIC_API_KEY itself
     anthropic_api_key: SecretStr | None = Field(default=None, validation_alias="ANTHROPIC_API_KEY")

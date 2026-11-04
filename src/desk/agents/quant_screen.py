@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from desk.agents.base import BaseAgent
+from desk.agents.research import technical_report
 from desk.agents.scorecard import build_scorecard, render_scorecard
 from desk.bus.base import Bus
 from desk.core import calendar
@@ -52,7 +53,7 @@ def next_slot(now: datetime) -> tuple[datetime, str]:
 
 
 class QuantScreen(BaseAgent):
-    name = "quant_screen"
+    name = "quant_analyst"
     topics = ()
 
     def __init__(
@@ -100,6 +101,8 @@ class QuantScreen(BaseAgent):
                         "ret_1d": r.ret_1d,
                         "ret_5d": r.ret_5d,
                         "ret_20d": r.ret_20d,
+                        "sma20_rel": r.sma20_rel,
+                        "vol_20d": r.vol_20d,
                         "news_5d": r.news_5d,
                         "news_count_5d": r.news_count_5d,
                         "alerts_24h": r.alerts_24h,
@@ -110,6 +113,14 @@ class QuantScreen(BaseAgent):
             },
             book="swing",
         )
+        covered = [r for r in rows if r.rank <= 10 or r.position_qty]
+        for r in covered:
+            await self.emit(
+                Topics.RESEARCH_REPORT,
+                technical_report(r, len(rows)),
+                symbol=r.symbol,
+                book="swing",
+            )
         log.info("quant screen (%s): top %s", kind, ", ".join(r.symbol for r in rows[:5]))
         return rows
 

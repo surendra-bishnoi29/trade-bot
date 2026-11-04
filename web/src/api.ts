@@ -166,6 +166,18 @@ export interface MorningNote {
   };
 }
 
+export interface Report {
+  id: string;
+  at: string;
+  analyst: string | null;
+  kind: string | null;
+  symbol: string | null;
+  stance: string | null;
+  conviction: number | null;
+  summary: string | null;
+  data: any;
+}
+
 export interface Bar {
   ts: string;
   open: number;

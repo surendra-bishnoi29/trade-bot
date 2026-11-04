@@ -404,3 +404,16 @@ class MorningNote(BaseModel):
     overnight_news: list[str]
     watchlist: list[WatchItem]
     risks: str
+
+
+@payload_for(Topics.FILING_NEW)
+class FilingNew(Payload):
+    symbol: str
+    cik: str
+    accession: str
+    form: str
+    filed_at: datetime
+    items: list[str] = Field(default_factory=list)
+    document: str = ""
+    description: str = ""
+    url: str = ""

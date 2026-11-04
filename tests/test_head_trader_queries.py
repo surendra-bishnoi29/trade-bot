@@ -83,7 +83,7 @@ async def test_queries_read_the_database_and_format_for_the_model(database_url, 
     assert "nothing in the journal" in await head.q_journal(1)
     assert "no portfolio snapshot" in await head.q_portfolio()
     assert "autonomy level 1" in head.daily_layer() and head.context_line().startswith("[now ")
-    assert len(head.tools()) == 9
+    assert len(head.tools()) == 10  # get_research joined the toolbox
     assert "not available" in head.q_risk_state()
     assert "no cycles" in await head.q_cycles(24)
     async with db.pool.connection() as conn:

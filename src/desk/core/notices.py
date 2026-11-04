@@ -137,6 +137,22 @@ def summarize(event: Event) -> str:
     if t == Topics.RISK_APPROVED:
         intent = p.get("intent") or {}
         return f"Risk officer approved {intent.get('side', '')} {intent.get('quantity', '')} {sym}: {p.get('reason', '')}"
+    if t == Topics.CYCLE_STAGE:
+        return f"{p.get('stage', '')}: {p.get('detail', '')}"
+    if t == Topics.RESEARCH_REPORT:
+        kind = p.get("kind")
+        if kind == "scorecard":
+            return f"scorecard ({p.get('when', '')}): top {', '.join((p.get('top') or [])[:5])}"
+        if kind == "morning_note":
+            return f"morning note: {(p.get('note') or {}).get('headline', '')}"
+        stance = f"{p.get('stance')} " if p.get("stance") not in (None, "none") else ""
+        return f"{kind} {sym}: {stance}{first_sentence(p.get('summary', ''), 160)}".replace(
+            "  ", " "
+        )
+    if t == Topics.NEWS_STATE:
+        return f"news state {sym}: tone {p.get('tone_48h')}, {p.get('count_24h')} articles in 24h"
+    if t == Topics.FILING_NEW:
+        return f"{p.get('form')} filed by {sym}: items {', '.join(p.get('items') or []) or 'none'}"
     if t == Topics.CYCLE_STARTED:
         return "Cycle started"
     if t == Topics.CYCLE_COMPLETED:

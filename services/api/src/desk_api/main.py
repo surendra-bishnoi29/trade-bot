@@ -170,6 +170,12 @@ def create_app(
         }
         return out
 
+    @app.get("/api/research/latest")
+    async def research_latest(
+        request: Request, hours: int = 24, user: User = Depends(current_user)
+    ) -> list[dict]:
+        return await reader(request).research_latest(hours=max(1, min(hours, 168)))
+
     @app.get("/api/research")
     async def research(
         request: Request,
@@ -177,8 +183,16 @@ def create_app(
         limit: int = 1,
         user: User = Depends(current_user),
     ) -> list[dict]:
-        if kind not in ("morning_note", "scorecard"):
-            raise HTTPException(status_code=400, detail="kind must be morning_note or scorecard")
+        if kind not in (
+            "morning_note",
+            "scorecard",
+            "regime",
+            "sector",
+            "technical",
+            "news",
+            "filing",
+        ):
+            raise HTTPException(status_code=400, detail="unknown research kind")
         return await reader(request).research(kind, limit=max(1, min(limit, 20)))
 
     @app.get("/api/brief")

@@ -31,6 +31,7 @@ class Topics:
     NEWS_ARTICLE_RAW = "news.article.raw"
     NEWS_ARTICLE_SCORED = "news.article.scored"
     NEWS_STATE = "news.state"
+    FILING_NEW = "filing.new"
     WATCHER_ALERT = "watcher.alert"
     RESEARCH_REQUEST = "research.request"
     RESEARCH_REPORT = "research.report"

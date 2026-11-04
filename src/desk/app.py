@@ -18,11 +18,13 @@ from desk.agents.commands import CommandAgent
 from desk.agents.cycle import CycleScheduler, SwingCycle
 from desk.agents.data_agent import DataAgent
 from desk.agents.execution import ExecutionAgent
+from desk.agents.filings import FilingAnalyst
 from desk.agents.head_trader import HeadTrader
 from desk.agents.monitor import Monitor
 from desk.agents.news_agent import NewsAgent, NewsScorer
 from desk.agents.prices import PriceCache
 from desk.agents.quant_screen import QuantScreen
+from desk.agents.research import NewsAnalyst, RegimeStrategist, SectorSpecialist
 from desk.agents.risk_officer import RiskLimits, RiskOfficer
 from desk.agents.swing_strategy import SwingStrategy
 from desk.agents.telegram import TelegramNotifier
@@ -73,6 +75,8 @@ class Desk:
     commands: CommandAgent | None = None
     brief: DailyBriefAgent | None = None
     screen: QuantScreen | None = None
+    news_analyst: NewsAnalyst | None = None
+    filings: FilingAnalyst | None = None
     telegram: TelegramNotifier | None = None
     ops: Ops | None = None
     data: DataAgent | None = None
@@ -181,6 +185,21 @@ class Desk:
             desk.telegram.start()
             log.info("telegram notifier on")
         if live:
+            RegimeStrategist(bus, clock).start()
+            SectorSpecialist(bus, clock).start()
+            desk.news_analyst = NewsAnalyst(bus, clock, db)
+            warmed = await desk.news_analyst.warm()
+            desk.news_analyst.start()
+            log.info("news analyst warmed with %d scored articles", warmed)
+            if settings.sec_user_agent:
+                from desk.data.edgar import Edgar
+
+                desk.filings = FilingAnalyst(
+                    bus, clock, db, Edgar(settings.sec_user_agent), universe
+                )
+                await desk.filings.warm()
+            else:
+                log.info("filing analyst off: set DESK_SEC_USER_AGENT to poll EDGAR")
             desk.screen = QuantScreen(bus, clock, db, universe, back_office, head=head, cycle=cycle)
             desk.data = DataAgent(bus, clock, db, market, universe)
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
@@ -276,6 +295,12 @@ class Desk:
             self.tasks.append(asyncio.create_task(self.scheduler.run_forever(), name="scheduler"))
         if self.screen is not None:
             self.tasks.append(asyncio.create_task(self.screen.run_forever(), name="quant_screen"))
+        if self.news_analyst is not None:
+            self.tasks.append(
+                asyncio.create_task(self.news_analyst.flush_forever(), name="news_analyst")
+            )
+        if self.filings is not None:
+            self.tasks.append(asyncio.create_task(self.filings.run_forever(), name="filings"))
         self.ops = Ops(self.bus, self.clock)
         await self.ops.announce_start(self)
         self.tasks.append(asyncio.create_task(self.ops.heartbeat(self), name="heartbeat"))

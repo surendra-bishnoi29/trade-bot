@@ -269,6 +269,14 @@ class HeadTrader(BaseAgent):
             )
         return "\n".join(out)
 
+    async def q_research(self, symbol: str = "", hours: int = 24) -> str:
+        from desk.agents.research import research_digest
+
+        symbols = [symbol.upper()] if symbol else list(self.settings.core_universe)
+        return await research_digest(
+            self.db, self.clock.now(), symbols, hours=min(max(hours, 1), 168)
+        )
+
     def q_risk_state(self) -> str:
         if self.risk is None:
             return "risk officer state not available in this process"
@@ -404,6 +412,13 @@ class HeadTrader(BaseAgent):
             return await head.q_cycles(hours)
 
         @beta_async_tool
+        async def get_research(symbol: str = "", hours: int = 24) -> str:
+            """The research team's latest reports: the market regime, the sectors, and per name the
+            technical read, the news state and recent filings, each with its event id. Empty symbol
+            means the whole universe."""
+            return await head.q_research(symbol, hours)
+
+        @beta_async_tool
         async def get_risk_state() -> str:
             """The risk officer's live state: whether the kill switch is engaged, orders used today, and the limits."""
             return head.q_risk_state()
@@ -436,6 +451,7 @@ class HeadTrader(BaseAgent):
             get_alerts,
             get_journal,
             get_cycles,
+            get_research,
             get_risk_state,
             scan_news,
             propose_order,

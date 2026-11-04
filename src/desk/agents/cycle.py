@@ -14,6 +14,7 @@ from ulid import ULID
 from desk.agents.back_office import BackOffice
 from desk.agents.base import BaseAgent
 from desk.agents.head_trader import HeadTrader
+from desk.agents.research import research_digest
 from desk.agents.risk_officer import RiskOfficer
 from desk.agents.scorecard import ScoreRow, build_scorecard, render_scorecard
 from desk.agents.swing_strategy import SwingStrategy
@@ -227,7 +228,9 @@ class SwingCycle(BaseAgent):
             f"NEWS (last 48 hours, with scores)\n" + "\n".join(news) + "\n\n"
             f"ALERTS (last 24 hours)\n{await self.head.q_alerts(24)}\n\n"
             f"PORTFOLIO\n{await self.head.q_portfolio()}\n\n"
-            f"OPEN THESES\n{theses}"
+            f"OPEN THESES\n{theses}\n\n"
+            f"RESEARCH TEAM (latest reports; their ids are evidence you can cite)\n"
+            f"{await research_digest(self.db, self.clock.now(), candidates)}"
         )
 
     def _limits(self, rows: list[ScoreRow], open_theses: list[ThesisPayload]) -> str:

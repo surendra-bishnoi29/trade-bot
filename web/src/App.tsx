@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Health, JournalItem, MorningNote as NoteT, Trade, User } from "./api";
+import { api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Health, JournalItem, MorningNote as NoteT, Report, Trade, User } from "./api";
 import { Agents } from "./components/Agents";
 import { agentKey, describe, Team } from "./agents";
 import { Book } from "./components/Book";
@@ -11,10 +11,11 @@ import { Cycles } from "./components/Cycles";
 import { HealthStrip } from "./components/HealthStrip";
 import { Journal } from "./components/Journal";
 import { Login } from "./components/Login";
+import { Research } from "./components/Research";
 import { Trades } from "./components/Trades";
 import { LiveMessage, useLive } from "./live";
 
-type Tab = "activity" | "cycles";
+type Tab = "research" | "activity" | "cycles";
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -28,7 +29,8 @@ export default function App() {
   const [note, setNote] = useState<NoteT | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [results, setResults] = useState<CommandResult[]>([]);
-  const [tab, setTab] = useState<Tab>("activity");
+  const [tab, setTab] = useState<Tab>("research");
+  const [reports, setReports] = useState<Report[] | null>(null);
   const [now, setNow] = useState(Date.now());
   const pending = useRef<Set<string>>(new Set());
   const refreshTimer = useRef<number | undefined>(undefined);
@@ -47,7 +49,7 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [state, t, j, c, chat, briefs, agents, notes] = await Promise.all([
+      const [state, t, j, c, chat, briefs, agents, notes, research] = await Promise.all([
         api.get<{ book: BookT; health: Health }>("/api/state"),
         api.get<Trade[]>("/api/trades?limit=40"),
         api.get<JournalItem[]>("/api/journal?limit=120"),
@@ -56,7 +58,9 @@ export default function App() {
         api.get<BriefT[]>("/api/brief?limit=1"),
         api.get<{ agent: string; last_type: string; last_at: string; last_text: string; events_10m: number }[]>("/api/agents"),
         api.get<NoteT[]>("/api/research?kind=morning_note&limit=1"),
+        api.get<Report[]>("/api/research/latest"),
       ]);
+      setReports(research);
       setBook(state.book);
       setBrief(briefs[0] ?? null);
       setNote(notes[0] ?? null);
@@ -193,6 +197,10 @@ export default function App() {
           break;
         case "research.report":
           if (p.kind === "morning_note") setNote({ id: m.id ?? "", at: m.at, day: p.day, note: p.note });
+          else if (p.kind !== "scorecard") {
+            const r: Report = { id: m.id ?? "", at: m.at, analyst: p.analyst, kind: p.kind, symbol: m.symbol ?? p.symbol ?? null, stance: p.stance, conviction: p.conviction, summary: p.summary, data: p.data };
+            setReports((rs) => [r, ...(rs ?? []).filter((x) => !(x.analyst === r.analyst && x.kind === r.kind && x.symbol === r.symbol))]);
+          }
           break;
         case "desk.brief":
           setBrief({ id: m.id ?? "", day: p.day, generated_at: p.generated_at ?? m.at, brief: p.brief });
@@ -303,6 +311,9 @@ export default function App() {
         </div>
         <div className="wide">
           <nav className="tabs">
+            <button type="button" className={tab === "research" ? "on" : ""} onClick={() => setTab("research")}>
+              Research
+            </button>
             <button type="button" className={tab === "activity" ? "on" : ""} onClick={() => setTab("activity")}>
               Activity
             </button>
@@ -310,7 +321,7 @@ export default function App() {
               Decision cycles
             </button>
           </nav>
-          {tab === "activity" ? <Journal items={journal} /> : <Cycles cycles={cycles} />}
+          {tab === "research" ? <Research reports={reports} now={now} /> : tab === "activity" ? <Journal items={journal} /> : <Cycles cycles={cycles} />}
         </div>
       </main>
     </>

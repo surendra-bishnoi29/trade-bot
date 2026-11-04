@@ -10,7 +10,11 @@ export interface AgentInfo {
 export const TEAM: AgentInfo[] = [
   { key: "head_trader", label: "Head trader", role: "plans the book, answers questions" },
   { key: "cycle", label: "Swing cycle", role: "scorecard, plan, challenge, orders" },
-  { key: "quant_screen", label: "Quant screen", role: "ranks the universe every 15 min pre-market, 30 in session" },
+  { key: "quant_analyst", label: "Quant analyst", role: "scorecard and a technical read per name" },
+  { key: "regime", label: "Regime strategist", role: "trend, breadth and volatility of the tape" },
+  { key: "sector", label: "Sector specialist", role: "leaders and laggards across sectors" },
+  { key: "news_analyst", label: "News analyst", role: "tone and themes per name from the scored news" },
+  { key: "filings", label: "Filing analyst", role: "new 8-K, 10-Q and 10-K filings from EDGAR" },
   { key: "scheduler", label: "Scheduler", role: "pre-market, mid-session, post-close" },
   { key: "risk", label: "Risk officer", role: "approves or rejects every order" },
   { key: "execution", label: "Execution", role: "orders to the broker, fills" },
@@ -52,7 +56,13 @@ export function describe(m: LiveMessage): string {
       return `scored ${s}: ${p.impact} impact, tone ${num(p.polarity, 1)}`;
     case "research.request":
       return `research requested: ${s}`;
+    case "news.state":
+      return `news state ${s}: tone ${num(p.tone_48h)}, ${p.count_24h ?? 0} in 24h`;
+    case "filing.new":
+      return `${p.form} filed by ${s}: ${(p.items ?? []).join(", ") || "no items"}`;
     case "research.report":
+      if (p.kind === "technical" || p.kind === "news" || p.kind === "filing") return `${p.kind} ${s}: ${p.stance ?? ""} ${String(p.summary ?? "").slice(0, 90)}`;
+      if (p.kind === "regime" || p.kind === "sector") return `${p.kind}: ${String(p.summary ?? "").slice(0, 100)}`;
       if (p.kind === "scorecard") return `scorecard (${p.when ?? ""}): top ${(p.top ?? []).slice(0, 5).join(", ")}`;
       if (p.kind === "morning_note") return `morning note: ${p.note?.headline ?? ""}`;
       return `report: ${p.analyst ?? ""}`;
