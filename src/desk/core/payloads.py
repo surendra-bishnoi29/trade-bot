@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -329,7 +329,7 @@ class DeskCommand(Payload):
     """A request to the bot from the api service or another client."""
 
     request_id: str
-    command: Literal["ask", "cycle", "plan", "kill", "resume", "status", "theses"]
+    command: Literal["ask", "cycle", "plan", "kill", "resume", "status", "theses", "brief"]
     args: str = ""
     user: str = ""
     role: Literal["operator", "viewer", "system"] = "operator"
@@ -355,3 +355,33 @@ class ConsoleDelta(Payload):
     request_id: str
     seq: int
     text: str
+
+
+# ---- the daily brief ----
+
+
+class BriefTrade(BaseModel):
+    symbol: str
+    side: Literal["buy", "sell"]
+    quantity: int
+    price: float
+    why: str
+
+
+class DailyBrief(BaseModel):
+    """What the head trader writes after the close. All fields required: a structured model output."""
+
+    headline: str
+    summary: str
+    trades: list[BriefTrade]
+    book: str
+    incidents: str
+    tomorrow: str
+
+
+@payload_for(Topics.DESK_BRIEF)
+class DailyBriefPayload(Payload):
+    day: date
+    generated_at: datetime
+    brief: DailyBrief
+    facts: dict[str, Any] = Field(default_factory=dict)

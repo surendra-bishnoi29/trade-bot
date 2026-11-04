@@ -35,7 +35,7 @@ from desk_api.users import User, Users
 
 log = logging.getLogger(__name__)
 
-OPERATOR_COMMANDS = {"cycle", "plan", "kill", "resume"}
+OPERATOR_COMMANDS = {"cycle", "plan", "kill", "resume", "brief"}
 VIEWER_COMMANDS = {"status", "theses"}
 
 
@@ -169,6 +169,12 @@ def create_app(
             "clients": len(request.app.state.live.clients),
         }
         return out
+
+    @app.get("/api/brief")
+    async def briefs(
+        request: Request, limit: int = 5, user: User = Depends(current_user)
+    ) -> list[dict]:
+        return await reader(request).briefs(limit=max(1, min(limit, 30)))
 
     @app.get("/api/bars")
     async def bars(

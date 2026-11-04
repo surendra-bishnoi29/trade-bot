@@ -498,6 +498,23 @@ class StateReader:
             return None
         return {"request_id": request_id, **r["payload"], "at": r["occurred_at"]}
 
+    # ---- daily briefs ----
+
+    async def briefs(self, limit: int = 5) -> list[dict]:
+        rows = await self._query(
+            f"SELECT {EVENT_COLS} FROM events WHERE type = %s ORDER BY occurred_at DESC LIMIT %s",
+            (Topics.DESK_BRIEF, limit),
+        )
+        return [
+            {
+                "id": r["event_id"],
+                "day": r["payload"].get("day"),
+                "generated_at": r["payload"].get("generated_at"),
+                "brief": r["payload"].get("brief"),
+            }
+            for r in rows
+        ]
+
     # ---- bars for charts ----
 
     async def bars(self, symbol: str, interval: str, n: int) -> list[dict]:

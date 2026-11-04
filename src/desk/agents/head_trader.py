@@ -23,7 +23,7 @@ from desk.core import calendar
 from desk.core.clock import Clock
 from desk.core.config import Settings
 from desk.core.events import Event, Topics
-from desk.core.payloads import Challenge, CyclePlan, OrderIntent, ResearchRequest
+from desk.core.payloads import Challenge, CyclePlan, DailyBrief, OrderIntent, ResearchRequest
 from desk.storage.db import Database
 
 log = logging.getLogger(__name__)
@@ -31,6 +31,7 @@ PROMPTS = Path(__file__).resolve().parents[3] / "prompts"
 PROMPT_PATH = PROMPTS / "head_trader" / "v1.md"
 PLAN_PROMPT_PATH = PROMPTS / "head_trader" / "plan_v1.md"
 SKEPTIC_PROMPT_PATH = PROMPTS / "skeptic" / "v1.md"
+BRIEF_PROMPT_PATH = PROMPTS / "head_trader" / "brief_v1.md"
 FALLBACK_HEADERS = {"anthropic-beta": "server-side-fallback-2026-07-01"}
 FALLBACK_BODY = {"fallbacks": "default"}
 
@@ -68,6 +69,7 @@ class HeadTrader(BaseAgent):
         self.static_prompt = PROMPT_PATH.read_text()
         self.plan_prompt = PLAN_PROMPT_PATH.read_text()
         self.skeptic_prompt = SKEPTIC_PROMPT_PATH.read_text()
+        self.brief_prompt = BRIEF_PROMPT_PATH.read_text()
         self._scores: dict[str, asyncio.Queue[Event]] = {}
         self._decisions: dict[str, asyncio.Future[Event]] = {}
         self.last_usage: dict[str, int] = {}
@@ -501,7 +503,11 @@ class HeadTrader(BaseAgent):
     def _cache_key(self, kind: str, *parts: str) -> str:
         from desk.storage.llm_cache import cache_key
 
-        prompt = self.static_prompt + self.plan_prompt if kind == "plan" else self.skeptic_prompt
+        prompt = {
+            "plan": self.static_prompt + self.plan_prompt,
+            "challenge": self.skeptic_prompt,
+            "brief": self.static_prompt + self.brief_prompt,
+        }[kind]
         return cache_key(kind, self.model, prompt, *parts)
 
     async def plan(self, material: str, limits: str) -> CyclePlan:
@@ -598,3 +604,54 @@ class HeadTrader(BaseAgent):
                 objections=[],
             )
         return response.parsed_output
+
+    # ---- the daily brief: structured output, no tool loop ----
+
+    async def brief(self, material: str) -> DailyBrief:
+        key = self._cache_key("brief", self.daily_layer(), material)
+        if self.cache is not None:
+            hit = await self.cache.get(key)
+            if hit is not None:
+                self.last_usage = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
+                return DailyBrief.model_validate(hit)
+        response = await self.client.messages.parse(
+            model=self.model,
+            max_tokens=4000,
+            system=[
+                {
+                    "type": "text",
+                    "text": self.static_prompt + "\n\n" + self.brief_prompt,
+                    "cache_control": {"type": "ephemeral"},
+                },
+                {
+                    "type": "text",
+                    "text": self.daily_layer(),
+                    "cache_control": {"type": "ephemeral"},
+                },
+            ],
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{self.context_line()}\n{material}\n\nWrite the brief.",
+                }
+            ],
+            output_format=DailyBrief,
+            output_config={"effort": "medium"},
+            extra_headers=FALLBACK_HEADERS,
+            extra_body=FALLBACK_BODY,
+        )
+        self._usage(response)
+        if response.stop_reason == "refusal" or response.parsed_output is None:
+            brief = DailyBrief(
+                headline="The model declined to write today's brief.",
+                summary=str(getattr(response, "stop_details", "")),
+                trades=[],
+                book="",
+                incidents="",
+                tomorrow="",
+            )
+        else:
+            brief = response.parsed_output
+        if self.cache is not None:
+            await self.cache.put(key, "brief", self.model, brief.model_dump(mode="json"))
+        return brief

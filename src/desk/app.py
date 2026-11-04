@@ -13,6 +13,7 @@ from alpaca.data.enums import DataFeed
 
 from desk.agents.back_office import BackOffice
 from desk.agents.base import BaseAgent
+from desk.agents.brief import DailyBriefAgent
 from desk.agents.commands import CommandAgent
 from desk.agents.cycle import CycleScheduler, SwingCycle
 from desk.agents.data_agent import DataAgent
@@ -69,6 +70,7 @@ class Desk:
     cycle: SwingCycle
     scheduler: CycleScheduler | None = None
     commands: CommandAgent | None = None
+    brief: DailyBriefAgent | None = None
     telegram: TelegramNotifier | None = None
     ops: Ops | None = None
     data: DataAgent | None = None
@@ -162,6 +164,8 @@ class Desk:
             strategy,
             cycle,
         )
+        desk.brief = DailyBriefAgent(bus, clock, db, head, back_office)
+        desk.brief.start()
         console.commands = desk.console_commands()
         desk.commands = CommandAgent(bus, clock, console.commands, head)
         desk.commands.start()
@@ -233,7 +237,12 @@ class Desk:
                 )
             )
 
+        async def brief_cmd(arg: str) -> str:
+            assert self.brief is not None
+            return DailyBriefAgent.render(await self.brief.write())
+
         return {
+            "brief": brief_cmd,
             "cycle": cycle_cmd,
             "plan": plan_cmd,
             "kill": kill_cmd,

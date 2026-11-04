@@ -23,7 +23,7 @@ from desk.core.payloads import (
 
 log = logging.getLogger(__name__)
 
-OPERATOR_ONLY = {"cycle", "kill", "resume"}
+OPERATOR_ONLY = {"cycle", "kill", "resume", "brief"}
 
 
 class CommandAgent(BaseAgent):

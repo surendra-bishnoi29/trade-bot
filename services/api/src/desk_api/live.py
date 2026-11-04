@@ -42,6 +42,7 @@ LIVE_TOPICS: tuple[str, ...] = (
     Topics.CONSOLE_ANSWER_DELTA,
     Topics.CONSOLE_ANSWER,
     Topics.DESK_COMMAND_RESULT,
+    Topics.DESK_BRIEF,
 )
 
 

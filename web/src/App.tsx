@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, Book as BookT, ChatPair, Cycle, Health, JournalItem, Trade, User } from "./api";
+import { api, ApiError, Book as BookT, Brief as BriefT, ChatPair, Cycle, Health, JournalItem, Trade, User } from "./api";
 import { Book } from "./components/Book";
+import { Brief } from "./components/Brief";
 import { Chat, ChatMessage } from "./components/Chat";
 import { Controls, CommandResult } from "./components/Controls";
 import { Cycles } from "./components/Cycles";
@@ -19,6 +20,7 @@ export default function App() {
   const [trades, setTrades] = useState<Trade[] | null>(null);
   const [journal, setJournal] = useState<JournalItem[] | null>(null);
   const [cycles, setCycles] = useState<Cycle[] | null>(null);
+  const [brief, setBrief] = useState<BriefT | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [results, setResults] = useState<CommandResult[]>([]);
   const [tab, setTab] = useState<Tab>("activity");
@@ -40,14 +42,16 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [state, t, j, c, chat] = await Promise.all([
+      const [state, t, j, c, chat, briefs] = await Promise.all([
         api.get<{ book: BookT; health: Health }>("/api/state"),
         api.get<Trade[]>("/api/trades?limit=40"),
         api.get<JournalItem[]>("/api/journal?limit=120"),
         api.get<Cycle[]>("/api/cycles?limit=20"),
         api.get<ChatPair[]>("/api/chat/history?limit=20"),
+        api.get<BriefT[]>("/api/brief?limit=1"),
       ]);
       setBook(state.book);
+      setBrief(briefs[0] ?? null);
       setHealth(state.health);
       setTrades(t);
       setJournal(j);
@@ -152,6 +156,9 @@ export default function App() {
             return [...ms, { id, role: "desk", text: p.text, at: m.at }];
           });
           break;
+        case "desk.brief":
+          setBrief({ id: m.id ?? "", day: p.day, generated_at: p.generated_at ?? m.at, brief: p.brief });
+          break;
         case "desk.command.result":
           setResults((rs) => rs.map((r) => (r.request_id === p.request_id ? { ...r, ok: p.ok, text: p.text } : r)));
           refreshSoon();
@@ -225,6 +232,7 @@ export default function App() {
       <main className="grid">
         <div className="col">
           <Book book={book} now={now} />
+          <Brief brief={brief} user={user} onSent={(id) => setResults((rs) => [{ request_id: id, command: "brief", ok: null, text: null }, ...rs])} />
           <Trades trades={trades} />
         </div>
         <div className="col">

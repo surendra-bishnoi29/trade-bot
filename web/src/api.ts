@@ -139,6 +139,20 @@ export interface ChatPair {
   answered_at: string | null;
 }
 
+export interface Brief {
+  id: string;
+  day: string;
+  generated_at: string;
+  brief: {
+    headline: string;
+    summary: string;
+    trades: { symbol: string; side: string; quantity: number; price: number; why: string }[];
+    book: string;
+    incidents: string;
+    tomorrow: string;
+  };
+}
+
 export interface Bar {
   ts: string;
   open: number;

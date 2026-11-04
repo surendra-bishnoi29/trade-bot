@@ -68,6 +68,7 @@ class Topics:
     DESK_COMMAND_RESULT = "desk.command.result"
     SYSTEM_RESTARTED = "system.restarted"
     SYSTEM_HEARTBEAT = "system.heartbeat"
+    DESK_BRIEF = "desk.brief"
 
     @classmethod
     def all(cls) -> list[str]:

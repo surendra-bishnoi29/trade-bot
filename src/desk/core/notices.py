@@ -80,6 +80,12 @@ def render(event: Event) -> str | None:
         return f"🏁 Closed {event.symbol}: {p.get('reason', '')}" + (
             f". P&L {money(pnl)}" if pnl is not None else ""
         )
+    if t == Topics.DESK_BRIEF:
+        b = p.get("brief") or {}
+        return (
+            f"📋 Daily brief {p.get('day', '')}: {b.get('headline', '')}\n{b.get('summary', '')}\n"
+            f"Tomorrow: {b.get('tomorrow', '')}"
+        )
     if t == Topics.CYCLE_PLAN:
         if p.get("dry_run"):
             return None
