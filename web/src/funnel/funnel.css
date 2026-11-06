@@ -762,6 +762,11 @@
   border-radius: 10px;
   container-type: size;
 }
+@container (max-height: 136px) {
+  .half > .pick:first-child .pick-why {
+    -webkit-line-clamp: 1;
+  }
+}
 /* a short card says the essentials on one line */
 @container (max-height: 104px) {
   .pick-left {

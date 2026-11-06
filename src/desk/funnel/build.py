@@ -550,13 +550,17 @@ def market_sentiment(
     return {"score": round(total, 1), "verdict": verdict, "evidence": ev}
 
 
-async def wire_events(db: Database, open_at: datetime, asof: datetime) -> list[Any]:
+async def wire_events(
+    db: Database, open_at: datetime, asof: datetime, symbols: set[str] | None = None
+) -> list[Any]:
     """The latest events between agents: decisions first, and only the newest few watcher alerts,
     which would otherwise drown everything else."""
     since = open_at - timedelta(hours=2)
     quiet = [t for t in WIRE_TYPES if t != Topics.WATCHER_ALERT]
-    events = await db.recent_events(quiet, since, limit=9, until=asof)
+    events = await db.recent_events(quiet, since, limit=40, until=asof)
     events += await db.recent_events([Topics.WATCHER_ALERT], since, limit=3, until=asof)
+    if symbols is not None:  # headlines about names the desk does not watch are noise here
+        events = [e for e in events if e.symbol is None or e.symbol in symbols]
     return sorted(events, key=lambda e: e.occurred_at, reverse=True)[:10]
 
 
@@ -694,7 +698,7 @@ async def build_funnel(
                 "symbol": e.symbol,
                 "text": describe(e).split("\n")[0][:200],
             }
-            for e in (await wire_events(db, open_at, asof) if market.traded else [])
+            for e in (await wire_events(db, open_at, asof, set(symbols)) if market.traded else [])
         ],
         "breadth": breadth([r["day_pct"] for r in rows if r["day_pct"] is not None]),
         "symbols": rows,
