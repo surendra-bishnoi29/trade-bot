@@ -233,8 +233,18 @@ class SwingCycle(BaseAgent):
             f"RESEARCH TEAM (latest reports; their ids are evidence you can cite)\n"
             f"{await research_digest(self.db, self.clock.now(), candidates)}\n\n"
             f"ANALYST TRACK RECORD (the reviewer's scores of each analyst's calls against what prices did; weigh their reports accordingly)\n"
-            f"{await analyst_record(self.db, self.clock.now())}"
+            f"{await analyst_record(self.db, self.clock.now())}\n\n"
+            f"FUNNEL (what the client sees on the interface right now: market sentiment, then the day's strongest and weakest names "
+            f"with the agent checks each has passed; a bearish market or a name on the weak side needs a stronger case)\n"
+            f"{await self._funnel()}"
         )
+
+    async def _funnel(self) -> str:
+        try:
+            return await self.head.q_funnel()
+        except Exception as exc:  # noqa: BLE001 - the funnel is context; a plan must not fail on it
+            log.warning("funnel digest unavailable: %s", exc)
+            return "unavailable"
 
     def _limits(self, rows: list[ScoreRow], open_theses: list[ThesisPayload]) -> str:
         s = self.settings

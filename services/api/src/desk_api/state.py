@@ -598,6 +598,58 @@ class StateReader:
         row = await self._latest(Topics.REVIEW_ANALYST_SCORE, days=60)
         return {"id": row["event_id"], "at": row["occurred_at"], **row["payload"]} if row else None
 
+    # ---- the funnel ----
+
+    def _markets(self):
+        from desk.core.config import DEFAULT_UNIVERSE
+        from desk.funnel.markets import markets
+
+        return markets(list(DEFAULT_UNIVERSE))
+
+    @staticmethod
+    def _at(at: str | None) -> datetime | None:
+        if not at:
+            return None
+        t = datetime.fromisoformat(at)
+        return t if t.tzinfo else t.replace(tzinfo=UTC)
+
+    async def funnel(self, market: str, at: str | None = None) -> dict:
+        from desk.funnel.build import build_funnel
+
+        return await build_funnel(
+            self.db, self._markets()[market], datetime.now(UTC), at=self._at(at)
+        )
+
+    async def funnel_detail(self, market: str, symbol: str, at: str | None = None) -> dict:
+        from desk.funnel.build import symbol_detail
+
+        m = self._markets()[market]
+        if symbol not in m.all_symbols:
+            raise KeyError(symbol)
+        return await symbol_detail(self.db, m, symbol, datetime.now(UTC), at=self._at(at))
+
+    async def funnel_markets(self) -> list[dict]:
+        out = []
+        for m in self._markets().values():
+            rows = await self._query(
+                "SELECT max(ts) AS last, array_agg(DISTINCT (ts AT TIME ZONE 'UTC')::date) AS days FROM bars "
+                "WHERE interval = '1m' AND symbol = ANY(%s) AND ts >= now() - interval '21 days'",
+                (list(m.all_symbols),),
+            )
+            out.append(
+                {
+                    "key": m.key,
+                    "label": m.label,
+                    "traded": m.traded,
+                    "note": m.note,
+                    "instruments": len(m.symbols),
+                    "last_bar": rows[0]["last"] if rows else None,
+                    "has_data": bool(rows and rows[0]["last"]),
+                    "days": sorted(str(d) for d in (rows[0]["days"] or [])) if rows else [],
+                }
+            )
+        return out
+
     async def briefs(self, limit: int = 5) -> list[dict]:
         rows = await self._query(
             f"SELECT {EVENT_COLS} FROM events WHERE type = %s ORDER BY occurred_at DESC LIMIT %s",

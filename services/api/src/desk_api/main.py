@@ -224,6 +224,39 @@ def create_app(
     async def analyst_scores(request: Request, user: User = Depends(current_user)) -> dict | None:
         return await reader(request).analyst_scores()
 
+    @app.get("/api/funnel")
+    async def funnel(
+        request: Request,
+        market: str = "stocks",
+        at: str | None = None,
+        user: User = Depends(current_user),
+    ) -> dict:
+        try:
+            return await reader(request).funnel(market, at)
+        except KeyError as exc:
+            raise HTTPException(status_code=400, detail="unknown market") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="bad time") from exc
+
+    @app.get("/api/funnel/detail")
+    async def funnel_detail(
+        request: Request,
+        symbol: str,
+        market: str = "stocks",
+        at: str | None = None,
+        user: User = Depends(current_user),
+    ) -> dict:
+        try:
+            return await reader(request).funnel_detail(market, symbol.upper(), at)
+        except KeyError as exc:
+            raise HTTPException(status_code=400, detail="unknown market or symbol") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="bad time") from exc
+
+    @app.get("/api/funnel/markets")
+    async def funnel_markets(request: Request, user: User = Depends(current_user)) -> list[dict]:
+        return await reader(request).funnel_markets()
+
     @app.get("/api/bars")
     async def bars(
         request: Request,

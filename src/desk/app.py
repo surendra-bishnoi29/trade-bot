@@ -24,6 +24,7 @@ from desk.agents.fundamentals import FundamentalAnalyst
 from desk.agents.head_trader import HeadTrader
 from desk.agents.intraday import IntradayBook
 from desk.agents.macro import MacroStrategist
+from desk.agents.market_feeds import MarketFeeds
 from desk.agents.monitor import Monitor
 from desk.agents.news_agent import NewsAgent, NewsScorer
 from desk.agents.prices import PriceCache
@@ -83,6 +84,7 @@ class Desk:
     forecaster: ForecastAnalyst | None = None
     reviewer: ReviewerAgent | None = None
     intraday: IntradayBook | None = None
+    feeds: MarketFeeds | None = None
     news_analyst: NewsAnalyst | None = None
     filings: FilingAnalyst | None = None
     macro: MacroStrategist | None = None
@@ -263,6 +265,12 @@ class Desk:
                     "intraday book off (DESK_INTRADAY_ENABLED=false): the baselines do not beat costs yet"
                 )
             desk.data = DataAgent(bus, clock, db, market, universe)
+            if settings.watch_markets:
+                from desk.data.watch import WatchData
+                from desk.funnel.markets import markets as funnel_markets
+
+                watched = [m for m in funnel_markets(universe).values() if not m.traded]
+                desk.feeds = MarketFeeds(bus, clock, db, WatchData(key, secret), watched)
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
             desk.watcher = WatcherAgent(
                 bus, clock, db, AlpacaLiveBars(key, secret, feed=feed), universe
@@ -351,6 +359,8 @@ class Desk:
             self.tasks.append(asyncio.create_task(self.watcher.run_forever(), name="watcher"))
         if self.intraday is not None:
             self.tasks.append(asyncio.create_task(self.intraday.run_forever(), name="intraday"))
+        if self.feeds is not None:
+            self.tasks.append(asyncio.create_task(self.feeds.run_forever(), name="market_feeds"))
             self.tasks.append(asyncio.create_task(self.watcher.stale_loop(), name="watcher_stale"))
         if self.data is not None:
             self.tasks.append(asyncio.create_task(self.news.run_forever(), name="news"))

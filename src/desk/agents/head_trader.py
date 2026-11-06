@@ -262,6 +262,14 @@ class HeadTrader(BaseAgent):
             )
         return "\n".join(out)
 
+    async def q_funnel(self) -> str:
+        """The funnel the interface draws, as text: market sentiment and the ranked names per side."""
+        from desk.funnel.build import build_funnel, digest
+        from desk.funnel.markets import markets
+
+        market = markets(list(self.settings.core_universe))["stocks"]
+        return digest(await build_funnel(self.db, market, self.clock.now()))
+
     async def q_research(self, symbol: str = "", hours: int = 24) -> str:
         from desk.agents.research import research_digest
 
@@ -412,6 +420,13 @@ class HeadTrader(BaseAgent):
             return await head.q_research(symbol, hours)
 
         @beta_async_tool
+        async def get_funnel() -> str:
+            """The live funnel the client sees: market sentiment with its evidence, then the strongest
+            and weakest names today with their score, setup, book (swing, intraday candidate, watch)
+            and which agent checks each has passed."""
+            return await head.q_funnel()
+
+        @beta_async_tool
         async def get_risk_state() -> str:
             """The risk officer's live state: whether the kill switch is engaged, orders used today, and the limits."""
             return head.q_risk_state()
@@ -445,6 +460,7 @@ class HeadTrader(BaseAgent):
             get_journal,
             get_cycles,
             get_research,
+            get_funnel,
             get_risk_state,
             scan_news,
             propose_order,

@@ -878,3 +878,118 @@ table.research td {
   color: var(--warn);
   border-color: transparent;
 }
+
+/* ---- the shell: a dark terminal with a left rail (2026-11-06) ---- */
+:root {
+  --bg: #05070b;
+  --card: #0b1018;
+  --ink: #e3eaf3;
+  --muted: #8b96a6;
+  --line: #19212d;
+  --accent: #6c9bff;
+  --accent-ink: #06101f;
+  --good: #2fe38f;
+  --good-bg: #0e2a1f;
+  --warn: #f5a524;
+  --warn-bg: #33240e;
+  --bad: #ff4d6a;
+  --bad-bg: #341019;
+  --mark: #5b4d10;
+  color-scheme: dark;
+}
+.shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg);
+}
+.shell > .fb,
+.shell-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rail {
+  flex: 0 0 62px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0;
+  border-right: 1px solid var(--line);
+  background: #070a10;
+}
+.rail-logo {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 12px;
+}
+.rail-logo i {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+}
+.rail-logo i:nth-child(1) {
+  width: 24px;
+  background: #2fe38f;
+}
+.rail-logo i:nth-child(2) {
+  width: 16px;
+  background: #5b8cff;
+}
+.rail-logo i:nth-child(3) {
+  width: 21px;
+  background: #ff4d6a;
+}
+.rail button {
+  width: 50px;
+  padding: 8px 0 6px;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+.rail button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+}
+.rail button.on {
+  background: #141c2a;
+  color: var(--ink);
+}
+.rail-dot {
+  margin-top: auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--bad);
+}
+.rail-dot.on {
+  background: var(--good);
+  box-shadow: 0 0 8px var(--good);
+}
+@media (max-width: 700px) {
+  .shell {
+    flex-direction: column;
+  }
+  .rail {
+    flex: 0 0 auto;
+    flex-direction: row;
+    padding: 8px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .rail-logo {
+    margin: 0 8px 0 0;
+  }
+  .rail-dot {
+    margin: 0 0 0 auto;
+  }
+}

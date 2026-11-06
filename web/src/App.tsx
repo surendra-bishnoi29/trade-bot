@@ -14,9 +14,11 @@ import { Journal } from "./components/Journal";
 import { Login } from "./components/Login";
 import { Research } from "./components/Research";
 import { Trades } from "./components/Trades";
+import { FunnelBoard } from "./funnel/FunnelBoard";
 import { LiveMessage, useLive } from "./live";
 
 type Tab = "research" | "activity" | "cycles" | "reviews";
+type View = "funnel" | "desk";
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -31,6 +33,7 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [results, setResults] = useState<CommandResult[]>([]);
   const [tab, setTab] = useState<Tab>("research");
+  const [view, setView] = useState<View>("funnel");
   const [reports, setReports] = useState<Report[] | null>(null);
   const [postmortems, setPostmortems] = useState<Postmortem[]>([]);
   const [scores, setScores] = useState<AnalystScores | null>(null);
@@ -291,8 +294,41 @@ export default function App() {
   if (user === undefined) return <main className="login muted">loading…</main>;
   if (user === null) return <Login onLogin={setUser} />;
 
+  const rail = (
+    <nav className="rail" aria-label="Views">
+      <span className="rail-logo" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <button type="button" className={view === "funnel" ? "on" : ""} onClick={() => setView("funnel")} title="Funnel: every instrument, live">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 5h18l-7 8v6l-4-2v-4z" />
+        </svg>
+        <span>Funnel</span>
+      </button>
+      <button type="button" className={view === "desk" ? "on" : ""} onClick={() => setView("desk")} title="Desk: agents, book, chat, reviews">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 5h7v6H4zM13 5h7v9h-7zM4 13h7v6H4zM13 16h7v3h-7z" />
+        </svg>
+        <span>Desk</span>
+      </button>
+      <span className={`rail-dot ${health?.bot.alive ? "on" : ""}`} title={health?.bot.alive ? "bot running" : "bot not running"} />
+    </nav>
+  );
+
+  if (view === "funnel")
+    return (
+      <div className="shell">
+        {rail}
+        <FunnelBoard />
+      </div>
+    );
+
   return (
-    <>
+    <div className="shell">
+      {rail}
+      <div className="shell-main">
       <header className="top">
         <div className="brand">
           <h1>Trading Desk</h1>
@@ -358,6 +394,7 @@ export default function App() {
           )}
         </div>
       </main>
-    </>
+      </div>
+    </div>
   );
 }

@@ -92,6 +92,16 @@ uv run desk models                         # every trained model, its out-of-sam
 
 `desk train` refuses a frame that fails the lookahead audit, and a model becomes champion only through the promotion gate (300 or more out-of-sample predictions, positive rank correlation, hit rate at least 50%, no regression against the incumbent). With a champion in the registry the forecaster agent publishes a `forecast` report per name after every quant screen, with the model's own record in the text, and the scorecard gives the expected return a third of its weight. Without one the desk runs exactly as before. Model files live under `data/models` (git-ignored); retrain weekly after the close on Friday.
 
+## The funnel (the main screen)
+
+One picture of every instrument the desk watches, read left to right: the day's fan (one line per instrument from the prior close), then five columns that narrow it (Moving, Confirmed, Shortlist, Cleared, Picks), with lines joining each instrument through the columns it survives. Hover a card and that instrument lights up everywhere; click to pin its detail: candles, the book it belongs to and why, the sentiment evidence with the agent that measured each reading, the desk's decision trail.
+
+- **Engine:** `desk.funnel.build` (deterministic, no model calls) turns bars, watcher alerts, news tone and the desk's own journal into a score from −100 to +100, five agent checks, a setup tag, a book label with reasons, and levels. `desk.funnel.markets` defines the markets: US stocks (traded), oil and gold through their funds, and crypto (both watch-only, kept fresh by the `market_feeds` agent; `DESK_WATCH_MARKETS=false` turns that off).
+- **Agents read the same thing:** every plan's material carries the funnel as text, and the head trader has a `get_funnel` tool for questions.
+- **API:** `/api/funnel?market=stocks&at=<time>`, `/api/funnel/detail`, `/api/funnel/markets`. `at` replays any moment of a stored session; nothing after that moment is read.
+- **Components** (`web/src/funnel/`): `FanChart`, `BreadthStrip`, `StageCard`, `PickCard`, `MiniChart`, `LevelBar`, `FocusPanel`, `SentimentChip`, composed by `FunnelBoard`. A new market is one entry in `markets()`; the board needs no change.
+- **Local development:** `createdb desk_dev`, run `DESK_DATABASE_URL=postgresql://localhost:5432/desk_dev uv run desk-api serve --port 8090` and `DESK_API=http://127.0.0.1:8090 npx vite` in `web/`.
+
 ## HTTPS
 
 The interface runs on plain HTTP at the VM's address until a domain exists. When one points at the VM:
