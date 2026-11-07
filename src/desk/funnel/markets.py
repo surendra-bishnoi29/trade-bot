@@ -66,18 +66,22 @@ GROUPS: dict[str, str] = {
 }  # fmt: skip
 
 
-def markets(universe: list[str]) -> dict[str, Market]:
+def markets(universe: list[str], traded: set[str] | None = None) -> dict[str, Market]:
+    """The markets; `traded` names the ones the desk trades (the lab desk trades all three)."""
+    traded = {"stocks"} if traded is None else set(traded)
     stocks = tuple(s for s in universe if s not in REFERENCES)
     return {
-        "stocks": Market("stocks", "US stocks", stocks, "SPY", "nyse", True),
+        "stocks": Market("stocks", "US stocks", stocks, "SPY", "nyse", "stocks" in traded),
         "commodities": Market(
             "commodities",
             "Oil and gold",
             COMMODITIES,
             "GLD",
             "nyse",
-            False,
-            "Watched through their exchange-traded funds. The desk does not trade this market yet.",
+            "commodities" in traded,
+            "Traded through their exchange-traded funds."
+            if "commodities" in traded
+            else "Watched through their exchange-traded funds. The desk does not trade this market yet.",
         ),
         "crypto": Market(
             "crypto",
@@ -85,8 +89,9 @@ def markets(universe: list[str]) -> dict[str, Market]:
             CRYPTO,
             "BTC/USD",
             "utc_day",
-            False,
-            "Trades around the clock; the day runs midnight to midnight UTC. The desk does not trade this market yet.",
+            "crypto" in traded,
+            "Trades around the clock; the day runs midnight to midnight UTC."
+            + ("" if "crypto" in traded else " The desk does not trade this market yet."),
         ),
     }
 

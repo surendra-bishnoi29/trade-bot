@@ -21,8 +21,13 @@ from alpaca.data.live import StockDataStream
 from alpaca.data.requests import NewsRequest, StockBarsRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import OrderSide, QueryOrderStatus, TimeInForce
-from alpaca.trading.requests import GetOrdersRequest, MarketOrderRequest
+from alpaca.trading.enums import OrderClass, OrderSide, QueryOrderStatus, TimeInForce
+from alpaca.trading.requests import (
+    GetOrdersRequest,
+    MarketOrderRequest,
+    ReplaceOrderRequest,
+    StopLossRequest,
+)
 
 from desk.core.payloads import MarketBar, NewsArticleRaw
 
@@ -139,6 +144,15 @@ class AccountInfo:
     last_equity: Decimal | None = None  # the previous close's equity: the day's P&L baseline
 
 
+def canon_symbol(symbol: str, asset_class: str = "") -> str:
+    """Alpaca reports crypto positions as BTCUSD; the desk names them BTC/USD everywhere."""
+    if "/" in symbol:
+        return symbol
+    if "crypto" in asset_class.lower() and symbol.endswith("USD"):
+        return f"{symbol[:-3]}/USD"
+    return symbol
+
+
 @dataclass(frozen=True)
 class PositionInfo:
     symbol: str
@@ -180,7 +194,7 @@ class AlpacaTrading:
         rows = await asyncio.to_thread(self._client.get_all_positions)
         return [
             PositionInfo(
-                symbol=r.symbol,
+                symbol=canon_symbol(str(r.symbol), str(getattr(r, "asset_class", "") or "")),
                 qty=_dec(r.qty) or Decimal(0),
                 avg_entry=_dec(r.avg_entry_price),
                 market_value=_dec(r.market_value),
@@ -202,16 +216,47 @@ class AlpacaTrading:
         )
 
     async def submit_market_order(
-        self, symbol: str, qty: Decimal, side: str, client_order_id: str
+        self,
+        symbol: str,
+        qty: Decimal,
+        side: str,
+        client_order_id: str,
+        *,
+        stop_price: Decimal | None = None,
     ) -> BrokerOrder:
+        """A market order; with `stop_price` a stop-loss leg rests at the broker once it fills
+        (one-triggers-other), so the position is protected even if the desk is down. Crypto takes
+        no legs and only GTC, so its lines live in the desk."""
+        crypto = "/" in symbol
         request = MarketOrderRequest(
             symbol=symbol,
             qty=float(qty),
             side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
-            time_in_force=TimeInForce.DAY,
+            time_in_force=TimeInForce.GTC if crypto else TimeInForce.DAY,
             client_order_id=client_order_id,
+            order_class=OrderClass.OTO if stop_price is not None and not crypto else None,
+            stop_loss=StopLossRequest(stop_price=float(stop_price))
+            if stop_price is not None and not crypto
+            else None,
         )
         return self._order(await asyncio.to_thread(self._client.submit_order, request))
+
+    async def stop_leg(self, parent_order_id: str) -> BrokerOrder | None:
+        """The resting stop that belongs to an entry, if the broker holds one."""
+        o = await asyncio.to_thread(self._client.get_order_by_id, parent_order_id)
+        for leg in getattr(o, "legs", None) or []:
+            if str(getattr(getattr(leg, "type", None), "value", "")) in ("stop", "stop_limit"):
+                return self._order(leg)
+        return None
+
+    async def replace_stop(self, order_id: str, stop_price: Decimal) -> BrokerOrder:
+        request = ReplaceOrderRequest(stop_price=float(stop_price))
+        return self._order(
+            await asyncio.to_thread(self._client.replace_order_by_id, order_id, request)
+        )
+
+    async def cancel_order(self, order_id: str) -> None:
+        await asyncio.to_thread(self._client.cancel_order_by_id, order_id)
 
     async def get_order(self, broker_order_id: str) -> BrokerOrder:
         return self._order(await asyncio.to_thread(self._client.get_order_by_id, broker_order_id))

@@ -79,7 +79,11 @@ def create_app(
         users = Users(db.pool)
         await users.migrate()
         app.state.users = users
-        app.state.reader = StateReader(db, heartbeat_minutes=settings.heartbeat_minutes)
+        app.state.reader = StateReader(
+            db,
+            heartbeat_minutes=settings.heartbeat_minutes,
+            traded=set(settings.lab_markets) if settings.lab_enabled else None,
+        )
         task = asyncio.create_task(live.run(), name="live-feed") if run_live else None
         try:
             yield

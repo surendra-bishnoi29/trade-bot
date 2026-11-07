@@ -12,7 +12,16 @@ T = datetime(2026, 10, 20, 15, 0, tzinfo=UTC)
 
 def test_prompt_registry_versions_follow_the_text():
     reg = prompts.registry()
-    assert set(reg) == {"head_trader", "plan", "brief", "morning", "skeptic", "postmortem"}
+    assert set(reg) == {
+        "head_trader",
+        "plan",
+        "brief",
+        "morning",
+        "skeptic",
+        "postmortem",
+        "predictor_call",
+        "predictor_skeptic",
+    }
     assert reg["plan"].startswith("plan_v1@") and len(reg["plan"].split("@")[1]) == 8
     assert "plan_v1@" in prompts.render_registry()
 

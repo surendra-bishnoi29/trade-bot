@@ -1,0 +1,26 @@
+[Unit]
+Description=Lab desk api: the lab interface on port 8081
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=desk
+Group=desk
+WorkingDirectory=/opt/desk/lab
+EnvironmentFile=/opt/desk/lab/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/desk/lab/.venv/bin/desk-api serve --host 127.0.0.1 --port 8081
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/desk
+
+[Install]
+WantedBy=multi-user.target

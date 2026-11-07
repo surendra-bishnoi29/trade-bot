@@ -7,6 +7,7 @@ import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Any
 
 import redis.asyncio as aioredis
 from alpaca.data.enums import DataFeed
@@ -85,6 +86,9 @@ class Desk:
     reviewer: ReviewerAgent | None = None
     intraday: IntradayBook | None = None
     feeds: MarketFeeds | None = None
+    lines: Any = None
+    sentinel: Any = None
+    predictor: Any = None
     news_analyst: NewsAnalyst | None = None
     filings: FilingAnalyst | None = None
     macro: MacroStrategist | None = None
@@ -93,6 +97,7 @@ class Desk:
     ops: Ops | None = None
     data: DataAgent | None = None
     watcher: WatcherAgent | None = None
+    sim: Any = None  # the simulated broker's filler when DESK_BROKER=sim
     tasks: list[asyncio.Task[None]] = field(default_factory=list)
 
     @classmethod
@@ -120,7 +125,23 @@ class Desk:
             )
 
         market = AlpacaMarketData(key, secret)
-        trading = AlpacaTrading(key, secret, paper=settings.alpaca_paper)
+        trading: Any
+        sim: Any = None
+        if settings.broker == "sim":
+            from desk.replay.broker import SimulatedBroker
+
+            sim = trading = SimulatedBroker(
+                clock,
+                settings.paper_capital,
+                allow_short=True,
+                crypto_fee_pct=settings.sim_crypto_fee_pct,
+            )
+            log.warning(
+                "BROKER: simulated in this process, %s starting cash; fills at the next live bar",
+                settings.paper_capital,
+            )
+        else:
+            trading = AlpacaTrading(key, secret, paper=settings.alpaca_paper)
         universe = list(settings.core_universe)
 
         Persister(bus, db).start()
@@ -143,10 +164,19 @@ class Desk:
             known = [a for a in ages if a is not None]
             return min(known) if known else None
 
+        from desk.funnel.markets import markets as funnel_markets
+
+        lab = settings.lab_enabled
+        all_markets = funnel_markets(universe, set(settings.lab_markets) if lab else None)
+        risk_universe = list(universe)
+        if lab:
+            for m in all_markets.values():
+                if m.traded:
+                    risk_universe += [s for s in m.all_symbols if s not in risk_universe]
         risk = RiskOfficer(
             bus,
             clock,
-            RiskLimits.from_settings(settings, universe),
+            RiskLimits.from_settings(settings, risk_universe),
             back_office.view,
             price_of,
             price_age_of,
@@ -170,7 +200,8 @@ class Desk:
         head.start()
         strategy = SwingStrategy(bus, clock, db)
         await strategy.load()
-        strategy.start()
+        if not lab:
+            strategy.start()  # the lab desk's lines engine owns every exit instead
         Monitor(bus, clock, len(universe)).start()
         cycle = SwingCycle(bus, clock, db, settings, head, back_office, risk, strategy)
         console = ConsoleAgent(bus, clock, head)
@@ -194,6 +225,11 @@ class Desk:
         console.commands = desk.console_commands()
         desk.commands = CommandAgent(bus, clock, console.commands, head)
         desk.commands.start()
+        if sim is not None:
+            from desk.lab.sim import SimFiller
+
+            desk.sim = SimFiller(bus, clock, sim)
+            desk.sim.start()
         if settings.telegram_bot_token and settings.telegram_chat_id:
             desk.telegram = TelegramNotifier(
                 bus,
@@ -265,22 +301,61 @@ class Desk:
                     "intraday book off (DESK_INTRADAY_ENABLED=false): the baselines do not beat costs yet"
                 )
             desk.data = DataAgent(bus, clock, db, market, universe)
-            if settings.watch_markets:
+            if settings.watch_markets or lab:
                 from desk.data.watch import WatchData
-                from desk.funnel.markets import markets as funnel_markets
 
-                watched = [m for m in funnel_markets(universe).values() if not m.traded]
-                desk.feeds = MarketFeeds(bus, clock, db, WatchData(key, secret), watched)
+                others = [m for m in all_markets.values() if m.key != "stocks"]
+                desk.feeds = MarketFeeds(
+                    bus, clock, db, WatchData(key, secret), others, emit_bars=lab
+                )
+            if lab:
+                from desk.lab.lines import LinesAgent
+                from desk.lab.predictor import Predictor
+                from desk.lab.sentinel import Sentinel
+
+                lab_markets = [m for m in all_markets.values() if m.traded]
+                desk.lines = LinesAgent(bus, clock, db, trading, back_office)
+                desk.lines.start()
+                desk.sentinel = Sentinel(
+                    bus,
+                    clock,
+                    db,
+                    lab_markets,
+                    review_minutes=settings.sentinel_review_minutes,
+                    has_position=lambda s: (
+                        s in desk.lines.lines or s in desk.lines.pending_symbols()
+                    ),
+                )
+                desk.predictor = Predictor(
+                    bus,
+                    clock,
+                    db,
+                    all_markets,
+                    desk.sentinel,
+                    back_office,
+                    risk,
+                    min_confidence=settings.predictor_min_confidence,
+                    max_calls_per_hour=settings.predictor_max_calls_per_hour,
+                    position_pct=settings.lab_position_pct,
+                    min_first_profit_pct=settings.lab_min_first_profit_pct,
+                    min_loss_pct=settings.lab_min_loss_pct,
+                )
+                desk.predictor.start()
+                log.warning(
+                    "LAB DESK ON: sentinel, predictor and lines on %s; the swing cycle is off",
+                    ", ".join(m.key for m in lab_markets),
+                )
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
             desk.watcher = WatcherAgent(
                 bus, clock, db, AlpacaLiveBars(key, secret, feed=feed), universe
             )
-            desk.scheduler = CycleScheduler(bus, clock, cycle, strategy, settings)
-            desk.scheduler.start()
-            head.scheduler = desk.scheduler
-            desk.scheduler.on_result = lambda r: print(
-                "\n[scheduled cycle]\n" + r.render() + "\n", flush=True
-            )
+            if not lab:
+                desk.scheduler = CycleScheduler(bus, clock, cycle, strategy, settings)
+                desk.scheduler.start()
+                head.scheduler = desk.scheduler
+                desk.scheduler.on_result = lambda r: print(
+                    "\n[scheduled cycle]\n" + r.render() + "\n", flush=True
+                )
         return desk
 
     def console_commands(self) -> dict:
@@ -361,6 +436,10 @@ class Desk:
             self.tasks.append(asyncio.create_task(self.intraday.run_forever(), name="intraday"))
         if self.feeds is not None:
             self.tasks.append(asyncio.create_task(self.feeds.run_forever(), name="market_feeds"))
+        if self.lines is not None:
+            await self.lines.restore()
+        if self.sentinel is not None:
+            self.tasks.append(asyncio.create_task(self.sentinel.run_forever(), name="sentinel"))
             self.tasks.append(asyncio.create_task(self.watcher.stale_loop(), name="watcher_stale"))
         if self.data is not None:
             self.tasks.append(asyncio.create_task(self.news.run_forever(), name="news"))

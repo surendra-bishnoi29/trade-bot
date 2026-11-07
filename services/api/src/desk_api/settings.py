@@ -16,3 +16,5 @@ class ApiSettings(BaseSettings):
     cookie_secure: bool = False  # true once the interface is served over https
     heartbeat_minutes: int = 5
     web_dist: str = "web/dist"  # served by the api in development; Caddy serves it in production
+    lab_enabled: bool = False  # the lab desk trades oil, gold and crypto too
+    lab_markets: list[str] = ["stocks", "commodities", "crypto"]

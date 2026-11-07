@@ -1242,6 +1242,79 @@
   background: var(--bear-bg);
   color: #ffc1cb;
 }
+
+/* The lab desk: predictor record, the call, and the lines holding the position. */
+.pick-tags .record {
+  font-family: var(--fb-mono);
+  font-size: 8.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #c4cedb;
+}
+.pick-tags .record.good {
+  background: var(--bull-bg);
+  color: var(--bull);
+}
+.pick-tags .record.bad {
+  background: var(--bear-bg);
+  color: var(--bear);
+}
+.pick-levels.lines {
+  grid-template-columns: 1.55fr 1fr 1fr 1fr 0.9fr;
+}
+.pick-levels.lines .res {
+  color: var(--bull);
+}
+.focus-desk.lab .record b {
+  color: #e6edf5;
+}
+.focus-desk.lab .record.muted {
+  color: var(--fb-muted);
+}
+.linebar {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  font-family: var(--fb-mono);
+}
+.linebar li {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-top: 2px solid #6b7a8c;
+}
+.linebar small {
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  color: #a9b6c6;
+}
+.linebar b {
+  font-size: 12px;
+  font-weight: 600;
+}
+.linebar em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--fb-muted);
+}
+.linebar .stop {
+  border-top-color: var(--bear);
+}
+.linebar .base {
+  border-top-color: var(--amber);
+}
+.linebar .last {
+  border-top-color: #e6edf5;
+}
+.linebar .line {
+  border-top-color: var(--bull);
+}
 .focus-trail ol {
   list-style: none;
   margin: 0;

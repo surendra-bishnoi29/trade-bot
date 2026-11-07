@@ -17,6 +17,8 @@ NAMES = {
     "morning": "head_trader/morning_v1.md",
     "skeptic": "skeptic/v1.md",
     "postmortem": "reviewer/postmortem_v1.md",
+    "predictor_call": "predictor/call_v1.md",
+    "predictor_skeptic": "predictor/skeptic_v1.md",
 }
 
 

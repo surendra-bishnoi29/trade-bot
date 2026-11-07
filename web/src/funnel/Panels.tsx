@@ -177,7 +177,8 @@ export function FocusPanel({ s, detail, pinned, onClose }: { s: FunnelSymbol; de
           </ul>
         </section>
       </div>
-      {(d.thesis || d.decision) && (
+      {(s.call || s.lines || s.record) && <LabPanel s={s} />}
+      {(d.thesis || d.decision) && !s.lines && (
         <section className="focus-desk">
           <h3>What the desk decided</h3>
           {d.decision && (
@@ -224,6 +225,71 @@ export function FocusPanel({ s, detail, pinned, onClose }: { s: FunnelSymbol; de
         </section>
       )}
     </aside>
+  );
+}
+
+/** The lab desk on one instrument: the predictor's latest call, the lines that hold the position,
+ * and the record every call is scored against. */
+function LabPanel({ s }: { s: FunnelSymbol }) {
+  const c = s.call;
+  const ln = s.lines;
+  const r = s.record;
+  const longSide = ln?.direction === "long";
+  return (
+    <section className="focus-desk lab">
+      <h3>Predictor and lines</h3>
+      {r && r.n > 0 ? (
+        <p className="record">
+          <b>Record:</b> {r.hits} of {r.n} calls hit ({(r.hit * 100).toFixed(0)}%), {r.avg_pct >= 0 ? "+" : ""}
+          {r.avg_pct.toFixed(2)}% per call after costs.
+        </p>
+      ) : (
+        <p className="record muted">
+          <b>Record:</b> no scored calls yet on this instrument.
+        </p>
+      )}
+      {c && (
+        <p>
+          <b>Predictor</b> {hhmm(c.at)} UTC on {c.trigger}: {c.call.direction} at confidence {Number(c.call.confidence).toFixed(2)}
+          {c.acted ? `, loss line ${c.call.max_loss_pct}%, first profit line ${c.call.first_profit_pct}%, step ${c.call.step_pct}%.` : `, no trade: ${c.skipped_because || "declined"}.`}{" "}
+          {c.call.reason.slice(0, 280)}
+          {c.call.reason.length > 280 ? "…" : ""}
+        </p>
+      )}
+      {c?.objection && (
+        <p className="objection concern">
+          <b>Skeptic:</b> {c.objection.slice(0, 260)}
+          {c.objection.length > 260 ? "…" : ""}
+        </p>
+      )}
+      {ln && (
+        <div className="lines">
+          <p>
+            <b>Lines</b> {hhmm(ln.at)} UTC: {ln.direction} {ln.quantity} from {price(ln.base)}, {ln.event === "opened" ? "waiting for the first profit line" : ln.event === "base" ? "the stop sits on the base, the trade can no longer lose" : `profit line raised ${ln.steps} ${ln.steps === 1 ? "time" : "times"}`}
+            .
+          </p>
+          <ul className="linebar">
+            <li className="stop">
+              <small>{ln.stop === ln.base ? "STOP = BASE" : "MAX LOSS"}</small>
+              <b>{price(ln.stop)}</b>
+            </li>
+            <li className="base">
+              <small>BASE</small>
+              <b>{price(ln.base)}</b>
+            </li>
+            <li className="last">
+              <small>NOW</small>
+              <b>{price(ln.last)}</b>
+              <em>{pct(((ln.last - ln.base) / ln.base) * 100 * (longSide ? 1 : -1))}</em>
+            </li>
+            <li className="line">
+              <small>{ln.armed ? "SELL AT" : "MIN PROFIT"}</small>
+              <b>{price(ln.profit_line)}</b>
+            </li>
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
 

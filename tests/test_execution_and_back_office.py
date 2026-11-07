@@ -38,7 +38,9 @@ class FakeTrading:
             )
         ]
 
-    async def submit_market_order(self, symbol, qty, side, client_order_id) -> BrokerOrder:
+    async def submit_market_order(
+        self, symbol, qty, side, client_order_id, *, stop_price=None
+    ) -> BrokerOrder:
         self.submitted.append((symbol, qty, side, client_order_id))
         return BrokerOrder(
             broker_order_id="b-1", status="accepted", filled_qty=Decimal(0), filled_avg_price=None

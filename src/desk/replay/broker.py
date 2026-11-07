@@ -62,7 +62,14 @@ class SimulatedBroker:
         *,
         slippage_bps: Decimal = Decimal(5),
         commission_per_share: Decimal = Decimal(0),
+        allow_short: bool = False,
+        fee_pct: Decimal = Decimal(0),
+        crypto_fee_pct: Decimal | None = None,
     ) -> None:
+        self.allow_short = allow_short
+        self.fee_pct = Decimal(fee_pct)  # a percentage of notional each side, every instrument
+        # crypto pairs pay this instead when set (a mixed book: free stocks, 0.25% crypto)
+        self.crypto_fee_pct = None if crypto_fee_pct is None else Decimal(crypto_fee_pct)
         self.clock = clock
         self.cash = Decimal(cash)
         self.starting_cash = Decimal(cash)
@@ -74,13 +81,14 @@ class SimulatedBroker:
         self.fills: list[Fill] = []
         self.realized_pnl = Decimal(0)
         self.costs = Decimal(0)
+        self.stops: dict[str, tuple[str, Decimal]] = {}  # entry order id -> (symbol, stop level)
 
     # ---- what the replayer calls ----
 
     def on_bar(self, bar: MarketBar) -> list[Fill]:
         """Mark the symbol and fill its pending orders at this bar's open plus slippage."""
         fills: list[Fill] = []
-        if calendar.is_open(bar.ts):
+        if calendar.is_open(bar.ts) or "/" in bar.symbol:  # crypto trades around the clock
             for order in self.orders.values():
                 if (
                     order.status == "accepted"
@@ -88,27 +96,66 @@ class SimulatedBroker:
                     and bar.ts > order.submitted_at
                 ):
                     fills.append(self._fill(order, bar))
+            fills += self._resting_stops(bar)
         self.last[bar.symbol] = bar.close
+        return fills
+
+    def _resting_stops(self, bar: MarketBar) -> list[Fill]:
+        """A stop that rests at the broker fills at its level when the bar trades through it."""
+        fills: list[Fill] = []
+        for entry_id, (symbol, level) in list(self.stops.items()):
+            entry = self.orders.get(entry_id)
+            pos = self.holdings.get(symbol)
+            if symbol != bar.symbol or entry is None or entry.status != "filled" or pos is None:
+                continue
+            long = pos.qty > 0
+            hit = bar.low <= level if long else bar.high >= level
+            if not hit:
+                continue
+            order = SimOrder(
+                broker_order_id=str(ULID()),
+                client_order_id=f"stop:{entry_id}",
+                symbol=symbol,
+                side="sell" if long else "buy",
+                qty=abs(pos.qty),
+                submitted_at=bar.ts,
+            )
+            self.orders[order.broker_order_id] = order
+            stop_bar = bar.model_copy(update={"open": level})
+            fills.append(self._fill(order, stop_bar))
+            self.stops.pop(entry_id, None)
         return fills
 
     def _fill(self, order: SimOrder, bar: MarketBar) -> Fill:
         reference = bar.open
         slip = (reference * self.slippage_bps / Decimal(10000)).quantize(CENT)
         price = (reference + slip if order.side == "buy" else reference - slip).quantize(CENT)
-        commission = (self.commission_per_share * order.qty).quantize(CENT)
+        fee_pct = (
+            self.crypto_fee_pct
+            if self.crypto_fee_pct is not None and "/" in order.symbol
+            else self.fee_pct
+        )
+        commission = (self.commission_per_share * order.qty).quantize(CENT) + (
+            price * order.qty * fee_pct / 100
+        ).quantize(CENT)
         pos = self.holdings.setdefault(order.symbol, Holding())
         realized = Decimal(0)
-        if order.side == "buy":
-            total = pos.avg_entry * pos.qty + price * order.qty
-            pos.qty += order.qty
-            pos.avg_entry = (total / pos.qty).quantize(CENT)
-            self.cash -= price * order.qty + commission
-        else:
-            realized = ((price - pos.avg_entry) * order.qty).quantize(CENT)
-            pos.qty -= order.qty
-            self.cash += price * order.qty - commission
+        signed = order.qty if order.side == "buy" else -order.qty
+        if pos.qty == 0 or (pos.qty > 0) == (signed > 0):  # opening or adding, long or short
+            total = pos.avg_entry * abs(pos.qty) + price * order.qty
+            pos.qty += signed
+            pos.avg_entry = (total / abs(pos.qty)).quantize(CENT)
+        else:  # closing some or all of a position, either side
+            closing = min(order.qty, abs(pos.qty))
+            direction = 1 if pos.qty > 0 else -1
+            realized = ((price - pos.avg_entry) * closing * direction).quantize(CENT)
+            pos.qty += signed
             if pos.qty == 0:
                 self.holdings.pop(order.symbol, None)
+        if order.side == "buy":
+            self.cash -= price * order.qty + commission
+        else:
+            self.cash += price * order.qty - commission
         self.realized_pnl += realized - commission
         cost = (slip * order.qty + commission).quantize(CENT)
         self.costs += cost
@@ -173,12 +220,18 @@ class SimulatedBroker:
         return out
 
     async def submit_market_order(
-        self, symbol: str, qty: Decimal, side: str, client_order_id: str
+        self,
+        symbol: str,
+        qty: Decimal,
+        side: str,
+        client_order_id: str,
+        *,
+        stop_price: Decimal | None = None,
     ) -> BrokerOrder:
         if qty <= 0:
             raise ValueError("quantity must be positive")
         held = self.holdings.get(symbol, Holding()).qty
-        if side == "sell" and qty > held:
+        if side == "sell" and qty > held and not self.allow_short:
             raise ValueError(f"insufficient position: holding {held} {symbol}, selling {qty}")
         if side == "buy" and symbol in self.last and self.last[symbol] * qty > self.cash:
             raise ValueError("insufficient buying power")
@@ -191,7 +244,23 @@ class SimulatedBroker:
             submitted_at=self.clock.now(),
         )
         self.orders[order.broker_order_id] = order
+        if stop_price is not None:
+            self.stops[order.broker_order_id] = (symbol, Decimal(stop_price))
         return self._broker_order(order)
+
+    async def stop_leg(self, parent_order_id: str) -> BrokerOrder | None:
+        return None  # the simulated broker keeps the stop level, not a separate order
+
+    async def replace_stop(self, order_id: str, stop_price: Decimal) -> BrokerOrder:
+        symbol, _ = self.stops[order_id]
+        self.stops[order_id] = (symbol, Decimal(stop_price))
+        return self._broker_order(self.orders[order_id])
+
+    async def cancel_order(self, order_id: str) -> None:
+        self.stops.pop(order_id, None)
+        o = self.orders.get(order_id)
+        if o is not None and o.status == "accepted":
+            o.status = "canceled"
 
     async def get_order(self, broker_order_id: str) -> BrokerOrder:
         return self._broker_order(self.orders[broker_order_id])

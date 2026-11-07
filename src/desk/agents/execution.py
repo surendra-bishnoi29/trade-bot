@@ -52,6 +52,7 @@ class ExecutionAgent(BaseAgent):
                 decision.approved_quantity,
                 intent.side,
                 client_order_id=intent.intent_id,
+                stop_price=intent.stop_price,
             )
         except Exception as exc:  # noqa: BLE001 - the broker said no; record it, do not retry blindly
             await self.emit(

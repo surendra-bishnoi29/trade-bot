@@ -41,6 +41,7 @@ class BookLimits:
     max_short_pct: Decimal = Decimal(0)  # the book's gross short exposure, of equity
     allow_when_closed: bool = True  # paper: Alpaca queues day orders for the next open
     new_position_pct: Decimal = Decimal("0.02")  # the planner's budget per new name
+    always_open: bool = False  # crypto: no session, no queueing, no price-age rule by the clock
 
 
 @dataclass(frozen=True)
@@ -76,10 +77,14 @@ class RiskLimits:
     drawdown_kill_pct: Decimal = Decimal("0.08")  # kill switch, released by a human
     pdt_equity_floor: Decimal = Decimal(25000)
     pdt_max_day_trades: int = 3  # in five business days, below the floor
+    books: dict[str, BookLimits] = field(default_factory=dict)  # the lab's extra books
+    max_short_pct: Decimal = Decimal("0.25")  # the swing book's gross short exposure, when allowed
 
     def for_book(self, book: str | None) -> BookLimits:
         if book == "intraday":
             return self.intraday
+        if book in self.books:
+            return self.books[book]
         return BookLimits(
             max_order_notional_pct=self.max_order_notional_pct,
             max_position_pct=self.max_position_pct,
@@ -87,17 +92,38 @@ class RiskLimits:
             max_open_positions=self.max_open_positions,
             max_gross_pct=self.max_gross_pct,
             allow_short=self.allow_short,
-            max_short_pct=ZERO,
+            max_short_pct=self.max_short_pct if self.allow_short else ZERO,
             allow_when_closed=self.allow_when_closed,
             new_position_pct=self.new_position_pct,
         )
 
     @classmethod
     def from_settings(cls, settings, universe: list[str]) -> RiskLimits:
+        lab = bool(getattr(settings, "lab_enabled", False))
+        books: dict[str, BookLimits] = {}
+        if lab:
+            books["commodities"] = BookLimits(
+                max_orders_per_day=40,
+                max_gross_pct=settings.commodities_max_gross_pct,
+                allow_short=settings.commodities_allow_short,
+                max_short_pct=settings.commodities_max_gross_pct,
+                allow_when_closed=False,
+                new_position_pct=settings.lab_position_pct,
+            )
+            books["crypto"] = BookLimits(
+                max_orders_per_day=60,
+                max_gross_pct=settings.crypto_max_gross_pct,
+                allow_short=False,
+                allow_when_closed=True,
+                always_open=True,
+                new_position_pct=settings.lab_position_pct,
+            )
         return cls(
             universe=frozenset(universe),
             max_open_positions=settings.max_open_positions,
-            new_position_pct=settings.position_pct,
+            new_position_pct=settings.lab_position_pct if lab else settings.position_pct,
+            allow_short=lab,  # the lab desk may short stocks; the swing cycle stays long-only
+            books=books,
             intraday=BookLimits(
                 max_orders_per_day=40,
                 max_gross_pct=settings.intraday_max_gross_pct,
@@ -209,7 +235,11 @@ def evaluate(
         f"{intent.symbol} {'in' if intent.symbol in limits.universe else 'not in'} universe",
     )
     whole = intent.quantity == intent.quantity.to_integral_value() and intent.quantity >= 1
-    rule("quantity", whole, f"{intent.quantity} shares")
+    rule(
+        "quantity",
+        whole or (intent.allow_fractional and intent.quantity > 0),
+        f"{intent.quantity} {'units' if intent.allow_fractional else 'shares'}",
+    )
     working = portfolio.open_orders.get(intent.symbol, set())
     rule(
         "duplicate_order",
@@ -223,7 +253,7 @@ def evaluate(
         price is not None,
         f"last price {price}" if price is not None else "no recent price",
     )
-    market_open = calendar.is_open(now)
+    market_open = calendar.is_open(now) or book.always_open
     if price is not None and market_open:
         limit_min = int(limits.max_price_age.total_seconds() // 60)
         age_text = (

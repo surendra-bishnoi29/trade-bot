@@ -11,6 +11,7 @@ from typing import Any
 from desk.agents.base import BaseAgent
 from desk.bus.base import Bus
 from desk.core.clock import Clock
+from desk.core.events import Topics
 from desk.funnel.markets import Market, session_window
 from desk.storage.db import Database
 
@@ -33,12 +34,14 @@ class MarketFeeds(BaseAgent):
         markets: list[Market],
         *,
         every_s: float = 60.0,
+        emit_bars: bool = False,
     ) -> None:
         super().__init__(bus, clock)
         self.db = db
         self.data = data
         self.markets = markets
         self.every_s = every_s
+        self.emit_bars = emit_bars  # the lab desk trades these markets, so its agents need the bars
         self.daily_at: dict[str, datetime] = {}
         self.last_minute: dict[str, datetime] = {}
         self.counts: dict[str, int] = {}
@@ -58,7 +61,13 @@ class MarketFeeds(BaseAgent):
             minute = await self.data.bars(symbols, "1m", start)
             written += await self.db.insert_bars(minute, now)
             if minute:
-                self.last_minute[market.key] = max(b.ts for b in minute)
+                newest = max(b.ts for b in minute)
+                if self.emit_bars:
+                    seen = self.last_minute.get(market.key)
+                    for b in sorted(minute, key=lambda b: b.ts):
+                        if seen is None or b.ts > seen:
+                            await self.emit(Topics.MARKET_BAR_1M, b, symbol=b.symbol)
+                self.last_minute[market.key] = newest
         self.counts[market.key] = self.counts.get(market.key, 0) + written
         return written
 

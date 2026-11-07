@@ -17,7 +17,7 @@ from ulid import ULID
 from desk.core.clock import utc
 
 TOPIC_RE = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")
-Book = Literal["swing", "intraday"]
+Book = Literal["swing", "intraday", "commodities", "crypto"]
 
 
 class Topics:
@@ -74,6 +74,11 @@ class Topics:
     REVIEW_ANALYST_SCORE = "review.analyst.score"
     REVIEW_WEEKLY = "review.weekly"
     INTRADAY_TRADE = "intraday.trade"
+    # the lab desk: one eye per instrument, scored predictions, lines on every position
+    SENTINEL_TRIGGER = "sentinel.trigger"
+    PREDICTION_CALL = "prediction.call"
+    PREDICTION_SCORE = "prediction.score"
+    LINES_UPDATED = "lines.updated"
 
     @classmethod
     def all(cls) -> list[str]:

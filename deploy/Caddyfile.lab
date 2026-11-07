@@ -1,0 +1,16 @@
+# The lab desk's interface on port 8090: the lab checkout's web build and its own api (8081).
+# Imported by /etc/caddy/Caddyfile (lab-install.sh adds the import line).
+:8090 {
+	encode gzip
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8081
+	}
+	handle /ws {
+		reverse_proxy 127.0.0.1:8081
+	}
+	handle {
+		root * /opt/desk/lab-web
+		try_files {path} /index.html
+		file_server
+	}
+}

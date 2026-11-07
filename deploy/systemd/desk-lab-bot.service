@@ -1,0 +1,31 @@
+[Unit]
+Description=Lab desk bot: sentinel, predictor and lines on stocks, oil, gold and crypto (second paper account)
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target
+Requires=postgresql.service redis-server.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=all
+User=desk
+Group=desk
+WorkingDirectory=/opt/desk/lab
+EnvironmentFile=/opt/desk/lab/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=DESK_REQUIRE_REDIS=true
+ExecStart=/opt/desk/lab/.venv/bin/desk run --no-console
+Restart=always
+RestartSec=5
+WatchdogSec=300
+TimeoutStartSec=180
+TimeoutStopSec=30
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/desk
+
+[Install]
+WantedBy=multi-user.target

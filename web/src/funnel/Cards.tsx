@@ -183,33 +183,65 @@ export function PickCard({ s, focus, pinned, onFocus, onPin, register }: Omit<Ca
             <span className="pick-tags">
               <span className="book">{s.book.tag}</span>
               <span className="setup">{s.setup}</span>
+              {s.record && s.record.n > 0 && (
+                <span className={`record ${s.record.hit >= 0.55 ? "good" : s.record.hit < 0.45 ? "bad" : ""}`} title={`${s.record.hits} of ${s.record.n} calls hit, ${pct(s.record.avg_pct)} per call after costs`}>
+                  {s.record.hits}/{s.record.n}
+                </span>
+              )}
             </span>
           </span>
         </span>
-        <span className="pick-levels">
-          <span>
-            <small>LAST</small>
-            <b>
-              {price(s.last)} <em>{pct(s.day_pct, 1)}</em>
-            </b>
+        {s.lines ? (
+          <span className="pick-levels lines">
+            <span>
+              <small>LAST</small>
+              <b>
+                {price(s.last)} <em>{pct(s.day_pct, 1)}</em>
+              </b>
+            </span>
+            <span>
+              <small>{s.lines.stop === s.lines.base ? "STOP=BASE" : "MAX LOSS"}</small>
+              <b className="sup">{price(s.lines.stop)}</b>
+            </span>
+            <span>
+              <small>BASE</small>
+              <b>{price(s.lines.base)}</b>
+            </span>
+            <span>
+              <small>{s.lines.armed ? "SELL AT" : "MIN PROFIT"}</small>
+              <b className="res">{price(s.lines.profit_line)}</b>
+            </span>
+            <span>
+              <small>{s.lines.direction.toUpperCase()}</small>
+              <b>{!s.lines.armed ? "waiting" : s.lines.steps > 0 ? `+${s.lines.steps} step${s.lines.steps > 1 ? "s" : ""}` : "no loss"}</b>
+            </span>
           </span>
-          <span>
-            <small>{held ? "STOP" : "S1"}</small>
-            <b className="sup">{price(L.stop ?? L.s1)}</b>
+        ) : (
+          <span className="pick-levels">
+            <span>
+              <small>LAST</small>
+              <b>
+                {price(s.last)} <em>{pct(s.day_pct, 1)}</em>
+              </b>
+            </span>
+            <span>
+              <small>{held ? "STOP" : "S1"}</small>
+              <b className="sup">{price(L.stop ?? L.s1)}</b>
+            </span>
+            <span>
+              <small>R1</small>
+              <b className="res">{price(L.r1)}</b>
+            </span>
+            <span>
+              <small>{held ? "TARGET" : "R2"}</small>
+              <b className="res">{price(L.target ?? L.r2)}</b>
+            </span>
+            <span>
+              <small>R:R</small>
+              <b>{L.rr === null ? "n/a" : L.rr.toFixed(1)}</b>
+            </span>
           </span>
-          <span>
-            <small>R1</small>
-            <b className="res">{price(L.r1)}</b>
-          </span>
-          <span>
-            <small>{held ? "TARGET" : "R2"}</small>
-            <b className="res">{price(L.target ?? L.r2)}</b>
-          </span>
-          <span>
-            <small>R:R</small>
-            <b>{L.rr === null ? "n/a" : L.rr.toFixed(1)}</b>
-          </span>
-        </span>
+        )}
         <LevelBar s={s} />
       </span>
     </button>

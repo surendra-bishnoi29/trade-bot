@@ -62,9 +62,12 @@ def pct(a: Any, b: Any) -> float | None:
 
 
 class StateReader:
-    def __init__(self, db: Database, *, heartbeat_minutes: int = 5) -> None:
+    def __init__(
+        self, db: Database, *, heartbeat_minutes: int = 5, traded: set[str] | None = None
+    ) -> None:
         self.db = db
         self.heartbeat_minutes = heartbeat_minutes
+        self.traded = traded
 
     async def _query(self, sql: str, params: tuple = ()) -> list[dict]:
         async with self.db.pool.connection() as conn:
@@ -604,7 +607,7 @@ class StateReader:
         from desk.core.config import DEFAULT_UNIVERSE
         from desk.funnel.markets import markets
 
-        return markets(list(DEFAULT_UNIVERSE))
+        return markets(list(DEFAULT_UNIVERSE), self.traded)
 
     @staticmethod
     def _at(at: str | None) -> datetime | None:

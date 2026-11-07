@@ -101,6 +101,25 @@ class Settings(BaseSettings):
     models_dir: str = "data/models"  # trained forecasters (git-ignored)
     forecast_horizon: int = 5  # sessions ahead the champion forecaster predicts (1, 5 or 20)
     watch_markets: bool = True  # keep oil, gold and crypto prices fresh for the funnel (watch only)
+
+    # the lab desk (branch `predictor`): one eye per instrument, scored calls, lines on every position.
+    # It replaces the swing cycle, the thesis monitor and the intraday book when switched on.
+    lab_enabled: bool = False
+    # "alpaca": orders go to the Alpaca account in .env. "sim": the in-process simulated broker fills
+    # them at the next live minute bar (data still comes from Alpaca); for a local run without a
+    # second paper account. The journal, the funnel and the scores look the same either way.
+    broker: Literal["alpaca", "sim"] = "alpaca"
+    sim_crypto_fee_pct: Decimal = Decimal("0.25")  # Alpaca's taker fee on crypto, each side
+    lab_markets: list[str] = Field(default_factory=lambda: ["stocks", "commodities", "crypto"])
+    predictor_min_confidence: float = 0.6
+    predictor_max_calls_per_hour: int = 40
+    lab_position_pct: Decimal = Decimal("0.01")  # of equity per position
+    lab_min_first_profit_pct: float = 0.5
+    lab_min_loss_pct: float = 0.5
+    commodities_max_gross_pct: Decimal = Decimal("0.10")
+    commodities_allow_short: bool = True
+    crypto_max_gross_pct: Decimal = Decimal("0.05")
+    sentinel_review_minutes: int = 45
     review_narrative: bool = True  # one model call per review day for the post-mortem lessons
     rss_news: bool = True  # keyless RSS headlines per symbol behind the same scoring
     fred_api_key: SecretStr | None = None  # macro strategist; free key from fred.stlouisfed.org

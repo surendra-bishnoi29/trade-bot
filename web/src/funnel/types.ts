@@ -67,6 +67,44 @@ export interface FunnelSymbol {
   evidence: Evidence[];
   alerts: Record<string, number>;
   alerts_total: number;
+  /** The lab desk: the predictor's record on this instrument, the open lines, its latest call. */
+  record?: LabRecord | null;
+  lines?: LabLines | null;
+  call?: LabCall | null;
+}
+
+export interface LabRecord {
+  n: number;
+  hits: number;
+  hit: number;
+  avg_pct: number;
+}
+
+export interface LabLines {
+  call_id: string;
+  direction: string;
+  base: number;
+  stop: number;
+  profit_line: number | null;
+  step_pct: number;
+  armed: boolean;
+  steps: number;
+  event: string;
+  last: number;
+  quantity: number;
+  opened_at: string | null;
+  at: string;
+}
+
+export interface LabCall {
+  call_id: string;
+  trigger: string;
+  call: { direction: string; confidence: number; horizon_minutes: number; max_loss_pct: number; first_profit_pct: number; step_pct: number; reason: string };
+  price: number;
+  acted: boolean;
+  skipped_because: string;
+  objection: string;
+  at: string;
 }
 
 export interface Funnel {

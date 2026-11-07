@@ -98,6 +98,28 @@ def describe(e: Any) -> str:
     if e.type == Topics.ORDER_FILLED:
         verb = {"buy": "Bought", "sell": "Sold"}.get(str(p.get("side")), "Filled")
         return f"{verb} {p.get('filled_quantity')} {e.symbol} at {p.get('avg_price')}"
+    if e.type == Topics.PREDICTION_CALL:
+        c = p.get("call") or {}
+        if p.get("acted"):
+            return (
+                f"Predictor: {c.get('direction')} {e.symbol} at confidence {float(c.get('confidence') or 0):.2f}, "
+                f"loss line {c.get('max_loss_pct')}%, profit line {c.get('first_profit_pct')}%"
+            )
+        return f"Predictor on {e.symbol}: no trade ({p.get('skipped_because', '')})"
+    if e.type == Topics.LINES_UPDATED:
+        what = p.get("event")
+        if what == "opened":
+            return f"Lines on {e.symbol}: base {p.get('base')}, stop {p.get('stop')}, profit line {p.get('profit_line')}"
+        if what == "base":
+            return f"Lines on {e.symbol}: above the base, the stop moved to {p.get('stop')}"
+        if what == "ratchet":
+            return f"Lines on {e.symbol}: profit line raised to {p.get('profit_line')} (step {p.get('steps')})"
+        return f"Lines on {e.symbol}: closed at {p.get('last')}"
+    if e.type == Topics.PREDICTION_SCORE:
+        r = p.get("realized_pct")
+        if r is not None:
+            return f"Scored {e.symbol}: {'hit' if p.get('hit') else 'miss'} ({p.get('reason')}), {r:+.2f}% after costs"
+        return f"Scored {e.symbol}: {p.get('reason')}"
     if e.type == Topics.CYCLE_PLAN:
         plan = p.get("plan") or {}
         acts = [d for d in plan.get("decisions") or [] if d.get("action") in ("buy", "sell")]
@@ -128,6 +150,8 @@ WIRE_TYPES = [
     Topics.ORDER_FILLED,
     Topics.THESIS_CLOSED,
     Topics.RISK_KILL_SWITCH,
+    Topics.PREDICTION_CALL,
+    Topics.LINES_UPDATED,
 ]
 
 
@@ -302,6 +326,23 @@ def route_book(
     count = int((news or {}).get("count_24h") or 0)
     tone = _f((news or {}).get("tone_48h")) or 0.0
     thesis = desk.get("thesis")
+    if thesis and desk.get("lines"):  # the lab desk: the lines engine holds it
+        ln = desk["lines"]
+        state = (
+            "waiting for the first profit line"
+            if not ln.get("armed")
+            else "the stop sits on the base, so the trade can no longer lose"
+        )
+        return {
+            "tag": "LINES",
+            "reasons": [
+                f"Held by the lines engine, {ln.get('direction')} from {ln.get('base')}: {state}.",
+                (
+                    f"Stop {ln.get('stop')}, profit line {ln.get('profit_line')}; the line ratchets up by "
+                    f"{ln.get('step_pct')}% each step and the position closes when the price comes back to it."
+                ),
+            ],
+        }
     if thesis:
         return {
             "tag": "SWING",
@@ -564,6 +605,44 @@ async def wire_events(
     return sorted(events, key=lambda e: e.occurred_at, reverse=True)[:10]
 
 
+async def lab_state(
+    db: Database, asof: datetime, symbols: set[str]
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Per symbol: the predictor's record, the open lines, and its latest call, as of a moment."""
+    scores = await db.recent_events(
+        [Topics.PREDICTION_SCORE], asof - timedelta(days=60), limit=5000, until=asof
+    )
+    record: dict[str, dict[str, Any]] = {}
+    for e in scores:
+        if e.symbol not in symbols or e.payload.get("hit") is None:
+            continue
+        r = record.setdefault(e.symbol, {"n": 0, "hits": 0, "sum": 0.0})
+        r["n"] += 1
+        r["hits"] += int(bool(e.payload["hit"]))
+        r["sum"] += float(e.payload.get("realized_pct") or 0)
+    for r in record.values():
+        r["hit"] = round(r["hits"] / r["n"], 3)
+        r["avg_pct"] = round(r["sum"] / r["n"], 3)
+    lines: dict[str, dict[str, Any]] = {}
+    seen: set[str] = set()
+    for e in await db.recent_events(
+        [Topics.LINES_UPDATED], asof - timedelta(days=5), limit=3000, until=asof
+    ):
+        cid = e.payload.get("call_id")
+        if cid in seen or e.symbol not in symbols:
+            continue
+        seen.add(cid)
+        if e.payload.get("event") != "exit" and e.symbol not in lines:
+            lines[e.symbol] = {**e.payload, "at": e.occurred_at.isoformat()}
+    calls: dict[str, dict[str, Any]] = {}
+    for e in await db.recent_events(
+        [Topics.PREDICTION_CALL], asof - timedelta(hours=24), limit=2000, until=asof
+    ):
+        if e.symbol in symbols and e.symbol not in calls:
+            calls[e.symbol] = {**e.payload, "at": e.occurred_at.isoformat()}
+    return record, lines, calls
+
+
 async def build_funnel(
     db: Database,
     market: Market,
@@ -607,6 +686,9 @@ async def build_funnel(
         if e.symbol and e.symbol not in news:
             news[e.symbol] = e.payload
     desk = await desk_state(db, open_at, asof, set(symbols)) if market.traded else defaultdict(dict)
+    record, open_lines, calls = (
+        await lab_state(db, asof, set(symbols)) if market.traded else ({}, {}, {})
+    )
 
     shapes = {s: day_shape(minute.get(s, []), daily.get(s, []), grid) for s in symbols}
     for sh in shapes.values():
@@ -621,6 +703,24 @@ async def build_funnel(
             continue
         a = dict(alerts.get(s, {}))
         d = dict(desk.get(s, {}))
+        if s in open_lines:  # a lab position: the lines engine holds it
+            ln = open_lines[s]
+            d["held"] = True
+            d["lines"] = ln
+            d.setdefault(
+                "thesis",
+                {
+                    "narrative": f"Predictor call, {ln.get('direction')}: lines base {ln.get('base')}, stop {ln.get('stop')}, profit line {ln.get('profit_line')}.",
+                    "horizon_days": 0,
+                    "stop": ln.get("stop"),
+                    "target": ln.get("profit_line") or ln.get("stop"),
+                    "entry": ln.get("base"),
+                    "quantity": ln.get("quantity"),
+                    "conviction": 0.0,
+                    "status": "active",
+                    "created_at": ln.get("opened_at") or ln.get("at"),
+                },
+            )
         sc, ev = score(sh, a, news.get(s), bench["day_pct"] if bench else None, bench_label)
         # the side is what the day shows (the fan draws it); the score ranks names within a side
         side = "bull" if (sh["day_pct"] or 0) >= 0 else "bear"
@@ -663,6 +763,9 @@ async def build_funnel(
                 "evidence": ev,
                 "alerts": a,
                 "alerts_total": sum(a.values()),
+                "record": record.get(s),
+                "lines": open_lines.get(s),
+                "call": calls.get(s),
             }
         )
     for side in ("bull", "bear"):

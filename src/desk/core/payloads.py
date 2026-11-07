@@ -104,6 +104,10 @@ class OrderIntent(Payload):
     thesis_id: str | None = None
     urgency: Literal["normal", "now"] = "normal"
     rationale_event_ids: list[str] = Field(default_factory=list)
+    # the lab desk attaches its lines to the entry: the broker holds the stop as a safety net
+    stop_price: Decimal | None = None
+    call_id: str | None = None
+    allow_fractional: bool = False  # crypto trades in fractions
 
 
 class RuleResult(Payload):
@@ -473,6 +477,90 @@ class IntradayTrade(Payload):
     strategy: str
     reason: str = ""
     note: str = ""
+
+
+# ---- the lab desk ----
+
+
+@payload_for(Topics.SENTINEL_TRIGGER)
+class SentinelTrigger(Payload):
+    """One instrument's eye saw something worth a decision."""
+
+    symbol: str
+    market: str
+    reason: str
+    detail: str = ""
+    score: float
+    side: Literal["bull", "bear"]
+    strength: float
+    setup: str = ""
+    last: float
+
+
+class Call(BaseModel):
+    """The predictor's structured answer for one instrument."""
+
+    direction: Literal["long", "short", "none"]
+    confidence: float = Field(ge=0, le=1)
+    horizon_minutes: int = Field(ge=15, le=2400)
+    max_loss_pct: float = Field(ge=0.2, le=5)
+    first_profit_pct: float = Field(ge=0.2, le=10)
+    step_pct: float = Field(ge=0.2, le=5)
+    reason: str
+    evidence_ids: list[str] = Field(default_factory=list)
+
+
+@payload_for(Topics.PREDICTION_CALL)
+class PredictionCall(Payload):
+    call_id: str
+    symbol: str
+    market: str
+    trigger: str
+    call: Call
+    price: float
+    acted: bool  # became an order intent
+    skipped_because: str = ""
+    objection: str = ""
+    model: str = ""
+    prompt_version: str = ""
+    record: dict[str, Any] = Field(default_factory=dict)  # the instrument's hit rate at call time
+
+
+@payload_for(Topics.PREDICTION_SCORE)
+class PredictionScore(Payload):
+    """How one call ended: scored when its position closes or its horizon passes."""
+
+    call_id: str
+    symbol: str
+    market: str
+    direction: str
+    confidence: float
+    entry: float | None = None
+    exit: float | None = None
+    realized_pct: float | None = None  # after costs, in the call's direction
+    hit: bool | None = None
+    reason: str = ""  # stop, base, line, horizon, unfilled, broker
+    opened_at: datetime | None = None
+    closed_at: datetime
+
+
+@payload_for(Topics.LINES_UPDATED)
+class LinesUpdated(Payload):
+    symbol: str
+    market: str
+    call_id: str
+    direction: str
+    base: float
+    stop: float
+    profit_line: float | None
+    step_pct: float
+    armed: bool
+    steps: int
+    event: str  # opened, base, ratchet, exit
+    last: float
+    quantity: float = 0.0
+    stop_order_id: str = ""
+    opened_at: datetime | None = None
 
 
 @payload_for(Topics.FILING_NEW)
