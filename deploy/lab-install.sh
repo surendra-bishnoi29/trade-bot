@@ -5,8 +5,11 @@
 # the main desk's book or journal. It trades the second paper account whose keys sit in
 # /opt/desk/lab/.env (staged by deploy/lab-env.sh). Runs as root. Idempotent.
 #
-#   sudo bash /opt/desk/app/deploy/lab-install.sh            # install or update
-#   sudo bash /opt/desk/app/deploy/lab-install.sh --no-bot   # update without restarting the bot
+# First install, from the laptop (the VM's main checkout does not carry this file):
+#   bash deploy/lab-env.sh
+#   scp deploy/lab-install.sh oracle:/tmp/ && ssh oracle "sudo bash /tmp/lab-install.sh"
+# Updates, on the VM (the script pulls the branch and runs its fresh copy):
+#   sudo bash /opt/desk/lab/deploy/lab-install.sh            # add --no-bot to leave the bot running
 set -euo pipefail
 LAB=/opt/desk/lab
 MAIN=/opt/desk/app
@@ -68,4 +71,10 @@ for s in desk-lab-bot desk-lab-api caddy; do
   printf "%-14s %s\n" "$s" "$(systemctl is-active "$s")"
 done
 journalctl -u desk-lab-bot --no-pager -n 5 -o cat | sed 's/^/  lab: /'
-echo "lab interface: http://$(hostname -I | awk '{print $1}'):8090/"
+echo
+echo "lab interface: port 8090 on this machine. It is not opened to the internet; from the laptop:"
+echo "  ssh -N -L 8090:localhost:8090 oracle      then open http://localhost:8090"
+if ! sudo -u desk -H bash -c "cd $LAB && .venv/bin/desk-api users list" 2>/dev/null | grep -q -E 'operator|viewer'; then
+  echo "no interface login yet for the lab; create one (it asks for a password):"
+  echo "  ssh -t oracle \"cd $LAB && sudo -u desk .venv/bin/desk-api users add <name> --role operator\""
+fi
