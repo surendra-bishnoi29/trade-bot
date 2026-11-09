@@ -1,6 +1,6 @@
 // The lab desk as the api serves it (desk.lab.report): one story per predictor call, graded.
 
-export type Outcome = "passed" | "held_back" | "not_opened" | "ordering" | "open" | "right" | "wrong";
+export type Outcome = "unanswered" | "passed" | "held_back" | "not_opened" | "ordering" | "open" | "right" | "wrong";
 export type TileKey = "equities" | "oil" | "gold" | "crypto";
 
 export interface Reading {
@@ -12,6 +12,8 @@ export interface Reading {
 
 export interface Call {
   direction: "long" | "short" | "none";
+  /** The side it would take if it had to; named on every call from prompt version 3. */
+  lean?: "long" | "short" | null;
   confidence: number;
   horizon_minutes: number;
   max_loss_pct: number;
@@ -105,6 +107,12 @@ export interface Counts {
   paper_hit_rate: number | null;
   paper_avg_pct: number | null;
   missed_moves: number;
+  unanswered: number;
+  lean_right: number;
+  lean_wrong: number;
+  lean_pending: number;
+  lean_hit_rate: number | null;
+  lean_avg_pct: number | null;
   all_right: number;
   all_wrong: number;
   all_hit_rate: number | null;
@@ -185,7 +193,8 @@ export interface DayReport {
 }
 
 export const OUTCOME: Record<Outcome, { word: string; tone: string; what: string }> = {
-  passed: { word: "PASSED", tone: "mute", what: "The predictor saw no edge and named no direction." },
+  unanswered: { word: "NOT LOOKED AT", tone: "mute", what: "The predictor never looked at this trigger: the hourly call budget was spent, or the model gave no answer. It is not a pass." },
+  passed: { word: "PASSED", tone: "mute", what: "The predictor saw no side with better than even odds, so the desk did not trade. The side it leaned to is still graded on paper." },
   held_back: { word: "HELD BACK", tone: "amber", what: "It named a direction, but the call did not clear the bar, so no order was sent." },
   not_opened: { word: "NOT OPENED", tone: "amber", what: "An order was decided but never became a position." },
   ordering: { word: "ORDERING", tone: "held", what: "The order is on its way to the broker." },

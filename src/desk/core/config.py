@@ -115,8 +115,17 @@ class Settings(BaseSettings):
     live_stream: bool | None = None
     sim_crypto_fee_pct: Decimal = Decimal("0.25")  # Alpaca's taker fee on crypto, each side
     lab_markets: list[str] = Field(default_factory=lambda: ["stocks", "commodities", "crypto"])
-    predictor_min_confidence: float = 0.6
-    predictor_max_calls_per_hour: int = 40
+    # The bar: the predictor's own probability that the position reaches its first profit line
+    # before its maximum-loss line, with the profit line at least as far away as the loss line.
+    # 0.5 is a coin toss. The skeptic's "blocking" stops a call; its "concern" is recorded and
+    # raises the bar by the margin (0: a concern alone does not stop a trade. On the first live
+    # session the skeptic raised a concern or worse on every call it was shown, so any margin
+    # above the predictor's usual 0.55 to 0.56 meant no trades at all).
+    predictor_min_confidence: float = 0.55
+    predictor_concern_margin: float = 0.0
+    # A call costs about 1,500 tokens in and 700 out. A third of the hour's budget is kept for
+    # triggers that carry news: a flip, a surge, unusual activity, a change of news tone.
+    predictor_max_calls_per_hour: int = 120
     lab_position_pct: Decimal = Decimal("0.01")  # of equity per position
     lab_min_first_profit_pct: float = 0.5
     # stocks and funds: no new position this close to the bell, and every one closed before it

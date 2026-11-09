@@ -13,7 +13,7 @@ export function ago(iso: string | null | undefined, now: number): string {
 }
 
 /** The predictor's confidence against the bar it must clear to trade. */
-export function Confidence({ value, bar = 0.6, wide = false }: { value: number; bar?: number; wide?: boolean }) {
+export function Confidence({ value, bar = 0.55, wide = false }: { value: number; bar?: number; wide?: boolean }) {
   const clears = value >= bar;
   return (
     <span className={`conf${wide ? " wide" : ""}${clears ? " clears" : ""}`} role="img" aria-label={`confidence ${value.toFixed(2)}, the bar is ${bar.toFixed(2)}`}>
@@ -28,7 +28,12 @@ export function Confidence({ value, bar = 0.6, wide = false }: { value: number; 
 
 export function Direction({ call }: { call: Call }) {
   const d = call.direction;
-  return <span className={`dir ${d}`}>{d === "none" ? "NO CALL" : d.toUpperCase()}</span>;
+  if (d !== "none") return <span className={`dir ${d}`}>{d.toUpperCase()}</span>;
+  return (
+    <span className="dir none" title={call.lean ? `No trade. If it had to pick a side it would go ${call.lean}.` : undefined}>
+      NO CALL{call.lean ? ` · leans ${call.lean}` : ""}
+    </span>
+  );
 }
 
 /** Where a call ended, in one word; for an untraded call, also how it did on paper. */
@@ -43,7 +48,7 @@ export function OutcomePill({ s }: { s: Story }) {
       </span>
       {s.paper && s.paper.result !== "pending" && (
         <span className={`pill ghost ${s.paper.result === "right" ? "bull" : "bear"}`} title="Not traded. The same lines run over the real prices that followed.">
-          on paper {s.paper.result} {pct(s.paper.realized_pct)}
+          {s.outcome === "passed" ? "its lean, " : ""}on paper {s.paper.result} {pct(s.paper.realized_pct)}
         </span>
       )}
       {s.paper && s.paper.result === "pending" && (

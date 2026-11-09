@@ -978,3 +978,108 @@ async def test_predictor_prices_the_stop_to_the_cent_sizes_first_and_stays_out_n
     # crypto has no bell
     rec, intents, _ = await run(late, trigger("BTC/USD", "crypto", 100000.0), call(), fine)
     assert rec.acted and len(intents) == 1
+
+
+class FlakyClient(ScriptedClient):
+    """A scripted client whose answer for one question can be an error instead."""
+
+    async def parse(self, **kw):
+        out = self.answers[kw["output_format"].__name__]
+        if isinstance(out, Exception):
+            self.prompts.append(kw["messages"][0]["content"])
+            raise out
+        return await super().parse(**kw)
+
+
+def _unreadable() -> Exception:
+    try:
+        Objection.model_validate_json('{"severity":"concern","argument":"cut off mid')
+    except Exception as exc:  # noqa: BLE001 - the error the SDK raises on a cut-off answer
+        return exc
+    raise AssertionError("expected a validation error")
+
+
+async def test_the_bar_the_skeptic_the_budget_and_a_cut_off_answer(monkeypatch):
+    clock = SimClock(T0)
+    bus = InMemoryBus(clock)
+    markets = {"stocks": Market("stocks", "US stocks", ("AAPL",), "SPY", "nyse", True)}
+    sentinel = SimpleNamespace(funnels={})
+    office = SimpleNamespace(snapshot=SimpleNamespace(equity=Decimal(100000)), book_of={})
+    risk = SimpleNamespace(limits=RiskLimits(universe=frozenset({"AAPL"}), allow_short=True))
+
+    async def fake_detail(db, market, symbol, now, **kw):
+        return {"symbol": symbol, "candles": [], "trail": []}
+
+    import desk.lab.predictor as mod
+
+    monkeypatch.setattr(mod, "symbol_detail", fake_detail)
+
+    def a_call(**kw):
+        base = {
+            "direction": "long",
+            "confidence": 0.56,
+            "horizon_minutes": 60,
+            "max_loss_pct": 0.8,
+            "first_profit_pct": 1.0,
+            "step_pct": 0.5,
+            "reason": "x",
+        }
+        return Call(**{**base, **kw})
+
+    client = FlakyClient(a_call(), Objection(severity="concern", argument="extended from VWAP"))
+    p = Predictor(bus, clock, FakeDB(), markets, sentinel, office, risk, client=client)  # type: ignore[arg-type]
+    assert p.min_confidence == 0.55 and p.concern_margin == 0.0 and p.max_calls_per_hour == 120
+
+    def trig(reason="surge"):
+        return SentinelTrigger(
+            symbol="AAPL",
+            market="stocks",
+            reason=reason,
+            detail="d",
+            score=55,
+            side="bull",
+            strength=55,
+            setup="MOMENTUM",
+            last=100.0,
+        )
+
+    cause = ev(Topics.SENTINEL_TRIGGER, T0, {}, "AAPL")
+    # a call just over the bar trades, and the skeptic's concern is recorded beside it
+    rec = await p.decide(trig(), cause)
+    assert rec.acted and rec.objection.startswith("concern") and rec.call.lean == "long"
+    assert "confidence 0.55 or more" in client.prompts[0]
+    p.released("AAPL")
+    # with a margin, the same concern holds the same call back
+    p.concern_margin = 0.05
+    rec = await p.decide(trig(), cause)
+    assert not rec.acted and "skeptic concern" in rec.skipped_because
+    p.concern_margin = 0.0
+    # a skeptic whose answer is cut off is not a clean bill, and it does not lose the call
+    client.answers["Objection"] = _unreadable()
+    rec = await p.decide(trig(), cause)
+    assert rec.acted and "no readable answer" in rec.objection
+    p.released("AAPL")
+    client.answers["Objection"] = Objection(severity="none", argument="checked")
+    # a trade that risks more than it aims for is not taken
+    client.answers["Call"] = a_call(max_loss_pct=1.2, first_profit_pct=0.8)
+    rec = await p.decide(trig(), cause)
+    assert not rec.acted and "risks more than it aims for" in rec.skipped_because
+    # a pass keeps its lean, so the report can grade it
+    client.answers["Call"] = a_call(direction="none", lean="short", confidence=0.5)
+    rec = await p.decide(trig(), cause)
+    assert not rec.acted and rec.call.lean == "short" and rec.model
+    # a cut-off call is recorded as unanswered (no model), not lost
+    client.answers["Call"] = _unreadable()
+    rec = await p.decide(trig(), cause)
+    assert not rec.acted and rec.skipped_because == "the model declined" and rec.model == ""
+    # the budget: routine looks stop at two thirds of it, a trigger that carries news still gets in
+    client.answers["Call"] = a_call(direction="none", lean="long", confidence=0.5)
+    p.max_calls_per_hour = 6
+    p.calls_at = [clock.now()] * 4
+    rec = await p.decide(trig("review"), cause)
+    assert rec.skipped_because.startswith("budget") and rec.model == ""
+    rec = await p.decide(trig("surge"), cause)
+    assert rec.skipped_because == "the predictor sees no edge"
+    p.calls_at = [clock.now()] * 6
+    rec = await p.decide(trig("surge"), cause)
+    assert rec.skipped_because.startswith("budget")

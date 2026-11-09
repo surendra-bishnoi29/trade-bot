@@ -31,7 +31,7 @@ export function LabBoard() {
     return () => window.clearInterval(id);
   }, []);
 
-  const bar = live?.stories.find((s) => s.inputs?.rules)?.inputs.rules?.min_confidence ?? 0.6;
+  const bar = live?.stories.find((s) => s.inputs?.rules)?.inputs.rules?.min_confidence ?? 0.55;
   const stories = useMemo(() => {
     const rows = live?.stories ?? [];
     return rows.filter((s) => (filter === null || s.tile === filter) && (show === "all" || (show === "sided" && s.call.direction !== "none") || (show === "traded" && s.acted)));

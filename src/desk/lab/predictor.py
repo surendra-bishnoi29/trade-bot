@@ -15,7 +15,7 @@ from decimal import ROUND_DOWN, Decimal
 from typing import Any, Literal
 
 import anthropic
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from ulid import ULID
 
 from desk.agents.base import BaseAgent
@@ -34,6 +34,10 @@ FALLBACK_HEADERS = {"anthropic-beta": "server-side-fallback-2026-07-01"}
 FALLBACK_BODY = {"fallbacks": "default"}
 BOOK_OF_MARKET = {"stocks": "swing", "commodities": "commodities", "crypto": "crypto"}
 ROUND_TRIP_PCT = {"stocks": 0.1, "commodities": 0.1, "crypto": 0.5}
+# Triggers that only say "look again". When the hour's budget runs low they give way to the ones
+# that carry news: a flip, a surge, unusual activity, a change of news tone.
+ROUTINE_TRIGGERS = ("first look", "review", "market turned")
+ROUTINE_SHARE = 2 / 3
 
 
 class Objection(BaseModel):
@@ -79,8 +83,9 @@ class Predictor(BaseAgent):
         risk: Any = None,
         *,
         model: str = "claude-opus-5-5",
-        min_confidence: float = 0.6,
-        max_calls_per_hour: int = 40,
+        min_confidence: float = 0.55,
+        concern_margin: float = 0.0,
+        max_calls_per_hour: int = 120,
         position_pct: Decimal = Decimal("0.01"),
         min_first_profit_pct: float = 0.5,
         min_loss_pct: float = 0.5,
@@ -96,6 +101,7 @@ class Predictor(BaseAgent):
         self.risk = risk
         self.model = model
         self.min_confidence = min_confidence
+        self.concern_margin = concern_margin
         self.max_calls_per_hour = max_calls_per_hour
         self.position_pct = Decimal(position_pct)
         self.min_first_profit_pct = min_first_profit_pct
@@ -176,8 +182,9 @@ class Predictor(BaseAgent):
             )
         parts.append(
             f"BOOK RULES: shorts {'allowed' if shorts else 'not allowed'}; round-trip cost {ROUND_TRIP_PCT[t.market]:.2f}%; "
-            f"first profit line at least {max(self.min_first_profit_pct, 3 * ROUND_TRIP_PCT[t.market]):.2f}%; "
-            f"maximum loss at least {self.min_loss_pct:.2f}%."
+            f"first profit line at least {max(self.min_first_profit_pct, 3 * ROUND_TRIP_PCT[t.market]):.2f}% "
+            f"and never nearer than the maximum loss; maximum loss at least {self.min_loss_pct:.2f}%; "
+            f"the desk trades a call at confidence {self.min_confidence:.2f} or more."
         )
         parts.append(f"TRACK RECORD on {t.symbol}: {render_record(record)}.")
         inputs: dict[str, Any] = {
@@ -245,16 +252,21 @@ class Predictor(BaseAgent):
             hit = await self.cache.get(key)
             if hit is not None:
                 return output.model_validate(hit)
-        response = await self.client.messages.parse(
-            model=self.model,
-            max_tokens=max_tokens,
-            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": user}],
-            output_format=output,
-            output_config={"effort": "medium"},
-            extra_headers=FALLBACK_HEADERS,
-            extra_body=FALLBACK_BODY,
-        )
+        try:
+            response = await self.client.messages.parse(
+                model=self.model,
+                max_tokens=max_tokens,
+                system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+                messages=[{"role": "user", "content": user}],
+                output_format=output,
+                output_config={"effort": "medium"},
+                extra_headers=FALLBACK_HEADERS,
+                extra_body=FALLBACK_BODY,
+            )
+        except ValidationError as exc:
+            # the answer was cut off or malformed: no answer, and the caller records it as such
+            log.warning("predictor: unreadable %s answer: %s", output.__name__, str(exc)[:160])
+            return None
         usage = response.usage
         self.last_usage = {"input": usage.input_tokens, "output": usage.output_tokens}
         for k, v in self.last_usage.items():
@@ -270,9 +282,12 @@ class Predictor(BaseAgent):
             )
         return response.parsed_output
 
-    def _budget_ok(self, now: datetime) -> bool:
+    def _budget_ok(self, now: datetime, reason: str = "") -> bool:
         self.calls_at = [t for t in self.calls_at if now - t < timedelta(hours=1)]
-        return len(self.calls_at) < self.max_calls_per_hour
+        cap = self.max_calls_per_hour
+        if reason in ROUTINE_TRIGGERS:
+            cap = int(cap * ROUTINE_SHARE)
+        return len(self.calls_at) < cap
 
     # ---- the decision ----
 
@@ -301,7 +316,7 @@ class Predictor(BaseAgent):
             close_at = calendar.session_bounds(calendar.session_of(now))[1]
             if now >= close_at - timedelta(minutes=self.no_entry_minutes):
                 return None
-        if not self._budget_ok(now):
+        if not self._budget_ok(now, t.reason):
             return await self._record(
                 t, None, 0.0, False, "budget: the hourly call budget is spent", "", {}, caused_by
             )
@@ -311,13 +326,15 @@ class Predictor(BaseAgent):
         started = time.monotonic()
         seen = {"inputs": extra["inputs"]}
         call = await self._parse(
-            prompts.load("predictor_call"), text + "\n\nMake the call.", Call, 1600
+            prompts.load("predictor_call"), text + "\n\nMake the call.", Call, 4000
         )
         if call is None:
             return await self._record(
                 t, None, 0.0, False, "the model declined", "", extra["record"], caused_by, **seen
             )
         assert isinstance(call, Call)
+        if call.direction != "none":
+            call.lean = call.direction  # a call that names a side leans that way by definition
         skip = ""
         if call.direction == "none":
             skip = "the predictor sees no edge"
@@ -329,6 +346,11 @@ class Predictor(BaseAgent):
             skip = f"first profit line {call.first_profit_pct:.2f}% cannot pay the costs"
         elif call.max_loss_pct < self.min_loss_pct:
             skip = f"maximum loss {call.max_loss_pct:.2f}% is inside the noise"
+        elif call.first_profit_pct < call.max_loss_pct:
+            skip = (
+                f"first profit line {call.first_profit_pct:.2f}% is nearer than the maximum loss "
+                f"{call.max_loss_pct:.2f}%: the trade risks more than it aims for"
+            )
         objection = ""
         if not skip:
             self.calls_at.append(now)
@@ -336,14 +358,28 @@ class Predictor(BaseAgent):
                 prompts.load("predictor_skeptic"),
                 f"{text}\n\nTHE CALL: {call.model_dump_json()}\n\nFind what is wrong with it.",
                 Objection,
-                600,
+                2500,
             )
+            if ob is None:
+                # no answer from the skeptic is not a clean bill: hold the call to the higher bar
+                objection = "concern: the skeptic gave no readable answer"
+                if call.confidence < self.min_confidence + self.concern_margin:
+                    skip = (
+                        f"the skeptic did not answer and confidence {call.confidence:.2f} is below "
+                        f"{self.min_confidence + self.concern_margin:.2f}"
+                    )
             if isinstance(ob, Objection):
                 objection = f"{ob.severity}: {ob.argument}"
                 if ob.severity == "blocking":
                     skip = "blocked by the skeptic"
-                elif ob.severity == "concern" and call.confidence < self.min_confidence + 0.1:
-                    skip = f"skeptic concern and confidence {call.confidence:.2f} below {self.min_confidence + 0.1:.2f}"
+                elif (
+                    ob.severity == "concern"
+                    and call.confidence < self.min_confidence + self.concern_margin
+                ):
+                    skip = (
+                        f"skeptic concern and confidence {call.confidence:.2f} below "
+                        f"{self.min_confidence + self.concern_margin:.2f}"
+                    )
         if not skip and self._size(t.market, t.last) <= 0:
             skip = f"one position's budget buys less than one unit at {t.last}"
         seen["seconds"] = round(time.monotonic() - started, 1)

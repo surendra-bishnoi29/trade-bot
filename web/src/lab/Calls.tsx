@@ -145,7 +145,7 @@ export function CallDetail({ s, bar }: { s: Story; bar: number }) {
         {hasReasoning ? (
           <div className="weigh">
             <div className="for">
-              <h4>{directional ? `For the ${c.direction}` : "For the side it came closest to"}</h4>
+              <h4>{directional ? `For the ${c.direction}` : c.lean ? `For the ${c.lean} it leaned to` : "For the side it came closest to"}</h4>
               <ul>{(c.supports ?? []).map((x, k) => <li key={k}>{x}</li>)}</ul>
             </div>
             <div className="against">
@@ -180,6 +180,15 @@ export function CallDetail({ s, bar }: { s: Story; bar: number }) {
             <Direction call={c} /> at confidence <b>{c.confidence.toFixed(2)}</b>, to work within {c.horizon_minutes} minutes. Lines from the price it saw, {price(s.price)}:
           </p>
           <LineLadder call={c} entry={s.fill?.price ?? s.price} />
+        </Step>
+      )}
+
+      {!directional && c.lean && s.outcome === "passed" && (
+        <Step n={++n} who="Predictor" title={`No trade, but it leaned ${c.lean}`}>
+          <p>
+            It put the odds of a {c.lean} reaching its first profit line before its maximum loss at <b>{c.confidence.toFixed(2)}</b>; the desk trades at {bar.toFixed(2)} or more. These are the lines it would have used, and the lines its lean is graded on:
+          </p>
+          <LineLadder call={{ ...c, direction: c.lean }} entry={s.price} />
         </Step>
       )}
 
@@ -234,7 +243,7 @@ export function CallDetail({ s, bar }: { s: Story; bar: number }) {
         )}
         {s.paper && s.paper.result !== "pending" && (
           <p>
-            <b>Checked on paper:</b> the same lines run over the real prices that followed would have ended <b className={s.paper.result === "right" ? "bull" : "bear"}>{s.paper.result}, {pct(s.paper.realized_pct)}</b> after costs ({s.paper.reason}). {s.paper.result === "right" ? "Holding back cost the desk a winner here." : "Holding back saved the desk a loss here."}
+            <b>Checked on paper:</b> {s.outcome === "passed" && c.lean ? `a ${c.lean}, the side it leaned to, with ` : ""}the same lines run over the real prices that followed would have ended <b className={s.paper.result === "right" ? "bull" : "bear"}>{s.paper.result}, {pct(s.paper.realized_pct)}</b> after costs ({s.paper.reason}). {s.paper.result === "right" ? "Holding back cost the desk a winner here." : "Holding back saved the desk a loss here."}
           </p>
         )}
         {s.paper && s.paper.result === "pending" && <p><b>Checked on paper:</b> still running, {pct(s.paper.mark_pct)} so far against the real prices.</p>}

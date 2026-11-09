@@ -6,8 +6,11 @@ Every call is graded:
 - a call that named a direction but was not traded (below the confidence bar, blocked, refused) is
   graded on paper: the same lines are run over the real minute bars that followed, so the desk
   knows whether its caution cost it a winner or saved it a loser;
-- a call of "none" has no direction to grade; the report says how far the price then moved, and
-  flags the passes that were followed by a move the desk could have traded.
+- a pass ("none") still names the side the predictor leaned to (prompt version 3 onward), and
+  that lean is graded on paper the same way; the report also says how far the price then moved
+  and flags the passes that were followed by a move the desk could have traded;
+- a trigger the predictor never looked at (the hourly budget was spent, or the model declined)
+  is counted apart as unanswered: it is not a pass.
 
 No model calls: this is arithmetic over stored events and bars."""
 
@@ -30,7 +33,7 @@ TILES = (
     ("gold", "Gold and metals"),
     ("crypto", "Crypto"),
 )
-BUCKETS = ((0.0, 0.4), (0.4, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 1.01))
+BUCKETS = ((0.0, 0.4), (0.4, 0.5), (0.5, 0.55), (0.55, 0.65), (0.65, 0.8), (0.8, 1.01))
 EXIT_WORDS = {
     "line": "came back to the profit line",
     "base": "came back to the entry after the first profit line",
@@ -281,7 +284,9 @@ async def stories(
                 "closed_at": _iso(s.occurred_at),
             }
         # where the call stands
-        if direction == "none":
+        if direction == "none" and not p.get("model"):
+            outcome = "unanswered"  # the budget was spent or the model declined: nobody looked
+        elif direction == "none":
             outcome = "passed"
         elif not story["acted"]:
             outcome = "held_back"
@@ -308,7 +313,8 @@ async def stories(
 async def _grade_on_paper(
     db: Database, markets: dict[str, Market], rows: list[dict[str, Any]], now: datetime
 ) -> None:
-    """Fill `paper` for untraded directional calls and `after` for passes, from the minute bars."""
+    """Fill `paper` for untraded calls (a pass is graded on the side it leaned to) and `after` for
+    passes, from the minute bars."""
     need = [r for r in rows if r["outcome"] in ("held_back", "not_opened", "passed") and r["price"]]
     by_symbol: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for r in need:
@@ -324,9 +330,12 @@ async def _grade_on_paper(
         )
         for r, at in zip(group, starts, strict=True):
             following = [b for b in bars if b["ts"] >= at]
+            call = r["call"] or {}
             if r["outcome"] == "passed":
                 r["after"] = moved_after(r["price"], at, following)
-                continue
+                if call.get("lean") not in ("long", "short"):
+                    continue  # calls before prompt version 3 named no lean: nothing to grade
+                call = {**call, "direction": call["lean"]}
             flat_at = None
             market = markets.get(r["market"])
             if market is not None and market.session == "nyse":
@@ -334,9 +343,7 @@ async def _grade_on_paper(
                 flat_at = close_at - timedelta(minutes=10)
                 if not calendar.is_open(at):
                     continue  # a call outside the session has no bars to be graded on
-            r["paper"] = simulate(
-                r["call"], r["market"], r["price"], at, following, flat_at=flat_at
-            )
+            r["paper"] = simulate(call, r["market"], r["price"], at, following, flat_at=flat_at)
 
 
 # ---- the totals ----
@@ -358,17 +365,32 @@ def _blank() -> dict[str, Any]:
         "paper_pending": 0,
         "paper_sum_pct": 0.0,
         "missed_moves": 0,
+        "unanswered": 0,
+        "lean_right": 0,
+        "lean_wrong": 0,
+        "lean_pending": 0,
+        "lean_sum_pct": 0.0,
     }
 
 
 def _add(t: dict[str, Any], r: dict[str, Any], missed_at: float) -> None:
     t["calls"] += 1
     o = r["outcome"]
+    if o == "unanswered":
+        t["unanswered"] += 1
+        return
     if o == "passed":
         t["passed"] += 1
         a = r.get("after")
         if a and max(a["up_pct"], -a["down_pct"]) >= missed_at:
             t["missed_moves"] += 1
+        p = r.get("paper")
+        if p:
+            if p["result"] == "pending":
+                t["lean_pending"] += 1
+            else:
+                t["lean_" + p["result"]] += 1
+                t["lean_sum_pct"] += float(p.get("realized_pct") or 0)
         return
     t["directional"] += 1
     if o in ("right", "wrong"):
@@ -399,6 +421,10 @@ def _finish(t: dict[str, Any]) -> dict[str, Any]:
     t["paper_hit_rate"] = round(t["paper_right"] / paper, 3) if paper else None
     t["paper_avg_pct"] = round(t["paper_sum_pct"] / paper, 3) if paper else None
     t["paper_sum_pct"] = round(t["paper_sum_pct"], 3)
+    leans = t["lean_right"] + t["lean_wrong"]
+    t["lean_hit_rate"] = round(t["lean_right"] / leans, 3) if leans else None
+    t["lean_avg_pct"] = round(t["lean_sum_pct"] / leans, 3) if leans else None
+    t["lean_sum_pct"] = round(t["lean_sum_pct"], 3)
     every = done + paper
     t["all_right"] = t["right"] + t["paper_right"]
     t["all_wrong"] = t["wrong"] + t["paper_wrong"]
@@ -431,7 +457,7 @@ def tally(rows: list[dict[str, Any]]) -> dict[str, Any]:
             x["n"] += 1
             x["right"] += int(r["outcome"] == "right")
             x["sum_pct"] += float((r["score"] or {}).get("realized_pct") or 0)
-        # calibration: every graded directional call, traded or on paper
+        # calibration: every graded call, traded or on paper, a pass by the side it leaned to
         grade = (
             r["outcome"]
             if r["outcome"] in ("right", "wrong")
@@ -471,10 +497,17 @@ def findings(t: dict[str, Any], final: bool) -> list[str]:
     out: list[str] = []
     if not x["calls"]:
         return ["The predictor made no calls in this period."]
+    answered = x["calls"] - x["unanswered"]
     out.append(
-        f"The predictor answered {x['calls']} triggers: it passed on {x['passed']} and named a "
-        f"direction on {x['directional']}."
+        f"The predictor answered {answered} triggers: it named a direction on {x['directional']} "
+        f"and passed on {x['passed']}."
     )
+    if x["unanswered"]:
+        n = x["unanswered"]
+        out.append(
+            f"{n} more {'trigger was' if n == 1 else 'triggers were'} never looked at: the hourly "
+            f"call budget was spent."
+        )
     done = x["right"] + x["wrong"]
     if done:
         out.append(
@@ -502,6 +535,12 @@ def findings(t: dict[str, Any], final: bool) -> list[str]:
         out.append(
             f"Of the {x['passed']} passes, {x['missed_moves']} were followed within the hour by a "
             f"move large enough to trade."
+        )
+    leans = x["lean_right"] + x["lean_wrong"]
+    if leans:
+        out.append(
+            f"The side it leaned to on its passes, graded on paper: right {x['lean_right']}, wrong "
+            f"{x['lean_wrong']} ({x['lean_hit_rate'] * 100:.0f}% right), {x['lean_avg_pct']:+.2f}% each."
         )
     every = x["all_right"] + x["all_wrong"]
     if every < 60:

@@ -503,6 +503,9 @@ class Call(BaseModel):
     """The predictor's structured answer for one instrument."""
 
     direction: Literal["long", "short", "none"]
+    # the side it would take if it had to, named on every call so that a pass can be graded too
+    # (prompt version 3 onward)
+    lean: Literal["long", "short"] | None = None
     confidence: float = Field(ge=0, le=1)
     horizon_minutes: int = Field(ge=15, le=2400)
     max_loss_pct: float = Field(ge=0.2, le=5)

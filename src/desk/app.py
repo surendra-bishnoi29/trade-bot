@@ -351,6 +351,7 @@ class Desk:
                     back_office,
                     risk,
                     min_confidence=settings.predictor_min_confidence,
+                    concern_margin=settings.predictor_concern_margin,
                     max_calls_per_hour=settings.predictor_max_calls_per_hour,
                     position_pct=settings.lab_position_pct,
                     min_first_profit_pct=settings.lab_min_first_profit_pct,

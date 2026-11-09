@@ -44,7 +44,19 @@ def bars(symbol: str, start: datetime, closes: list[float], spread: float = 0.05
     return out
 
 
-def call(cid, symbol, market, when, direction, confidence, acted, why="", price=100.0, **lines):
+def call(
+    cid,
+    symbol,
+    market,
+    when,
+    direction,
+    confidence,
+    acted,
+    why="",
+    price=100.0,
+    model="claude-opus-5-5",
+    **lines,
+):
     c = {
         "direction": direction,
         "confidence": confidence,
@@ -74,6 +86,7 @@ def call(cid, symbol, market, when, direction, confidence, acted, why="", price=
             "objection": "minor: one headline" if acted else "",
             "inputs": {"market": {"label": "x", "verdict": "MIXED", "score": 3}},
             "seconds": 4.2,
+            "model": model,
         },
         symbol,
     )
@@ -321,8 +334,9 @@ async def test_stories_grades_every_call_and_the_report_counts_right_and_wrong()
     assert tiles["oil"]["open"] == 1 and tiles["crypto"]["paper_wrong"] == 1
     assert t["directions"]["short"]["wrong"] == 1 and t["directions"]["long"]["right"] == 1
     assert {e["reason"]: e["n"] for e in t["exits"]} == {"line": 1, "stop": 1}
-    low = next(b for b in t["confidence"] if b["lo"] == 0.4)
-    assert (low["right"], low["wrong"], low["traded"]) == (1, 1, 0)
+    band = {b["lo"]: b for b in t["confidence"]}
+    assert (band[0.4]["right"], band[0.4]["wrong"], band[0.4]["traded"]) == (0, 1, 0)
+    assert (band[0.5]["right"], band[0.5]["wrong"], band[0.5]["traded"]) == (1, 0, 0)
 
     words = " ".join(findings(t, final=True))
     assert "Right 1, wrong 1 (50% right)" in words and "graded on paper" in words
@@ -396,3 +410,52 @@ async def test_live_keeps_the_counts_and_the_flags_apart():
     assert agents["lines"]["state"] == "quiet"  # five minutes since its last move
     assert out["lines"][0]["symbol"] == "USO" and out["stories"][0]["outcome"] == "open"
     assert out["nyse_open"] is True and out["next_open"] is None
+
+
+async def test_a_pass_is_graded_by_its_lean_and_an_unanswered_trigger_is_not_a_pass():
+    m = timedelta(minutes=1)
+    events = [
+        # a pass that leaned long, and the price then rose through its first profit line and back
+        call("p1", "KO", "stocks", T0 + 3 * m, "none", 0.52, False, "no edge", lean="long"),
+        # a pass that leaned short on crypto (the book cannot short it): graded all the same
+        call("p2", "ETH/USD", "crypto", T0 + 5 * m, "none", 0.5, False, "no edge", lean="short"),
+        # a pass from before the lean existed: nothing to grade
+        call("p3", "AAPL", "stocks", T0 + 30 * m, "none", 0.2, False, "no edge"),
+        # the budget was spent: nobody looked, so it is neither a pass nor a call to grade
+        call(
+            "p4",
+            "KO",
+            "stocks",
+            T0 + 8 * m,
+            "none",
+            0.0,
+            False,
+            "budget: the hourly call budget is spent",
+            model="",
+        ),
+    ]
+    db = FakeDB(
+        events,
+        {
+            "KO": bars("KO", T0, [100.0] * 4 + [100.4, 101.2, 101.7, 101.2, 100.9]),
+            "ETH/USD": bars("ETH/USD", T0, [100.0] * 6 + [101.0, 102.1, 101.9], spread=0.02),
+            "AAPL": bars("AAPL", T0 + 30 * m, [100.1, 100.0, 100.1, 100.05] * 5),
+        },
+    )
+    now = T0 + timedelta(hours=2)
+    rows = await stories(db, MARKETS, T0 - timedelta(hours=1), now, now=now)  # type: ignore[arg-type]
+    by = {r["call_id"]: r for r in rows}
+    assert by["p1"]["outcome"] == "passed" and by["p1"]["paper"]["result"] == "right"
+    assert by["p1"]["after"] is not None  # a pass still says how far the price then moved
+    assert by["p2"]["outcome"] == "passed" and by["p2"]["paper"]["result"] == "wrong"
+    assert by["p3"]["outcome"] == "passed" and by["p3"]["paper"] is None
+    assert by["p4"]["outcome"] == "unanswered" and by["p4"]["paper"] is None
+
+    x = tally(rows)["total"]
+    assert (x["calls"], x["passed"], x["unanswered"], x["directional"]) == (4, 3, 1, 0)
+    assert (x["lean_right"], x["lean_wrong"], x["lean_hit_rate"]) == (1, 1, 0.5)
+    # leans are counted apart from calls that named a side: the headline stays the named calls
+    assert x["all_right"] == 0 and x["all_wrong"] == 0
+    words = " ".join(findings(tally(rows), final=True))
+    assert "answered 3 triggers" in words and "1 more trigger was never looked at" in words
+    assert "leaned to on its passes, graded on paper: right 1, wrong 1" in words

@@ -9,6 +9,7 @@ export function Scoreboard({ tally, findings, title }: { tally: Tally; findings:
   const t = tally.total;
   const done = t.right + t.wrong;
   const paper = t.paper_right + t.paper_wrong;
+  const leans = t.lean_right + t.lean_wrong;
   return (
     <section className="score" aria-label={title}>
       <h2>{title}</h2>
@@ -68,6 +69,26 @@ export function Scoreboard({ tally, findings, title }: { tally: Tally; findings:
             {t.passed ? ` · ${t.missed_moves} followed by a move worth trading` : ""}
           </dd>
         </div>
+        <div>
+          <dt title="On a pass the predictor still names the side it would take. That side is graded by running its lines over the real prices that followed.">The side it leaned to on passes</dt>
+          <dd>
+            {leans || t.lean_pending ? (
+              <>
+                {t.lean_right} right, {t.lean_wrong} wrong on paper
+                {leans ? ` · ${rate(t.lean_hit_rate)} · ${signed(t.lean_avg_pct)} each` : ""}
+                {t.lean_pending ? ` · ${t.lean_pending} still running` : ""}
+              </>
+            ) : (
+              "none graded yet"
+            )}
+          </dd>
+        </div>
+        {t.unanswered > 0 && (
+          <div>
+            <dt title="Triggers the predictor never looked at because the hourly call budget was spent. They are not passes.">Not looked at</dt>
+            <dd>{t.unanswered} · the hourly call budget was spent</dd>
+          </div>
+        )}
       </dl>
       <ul className="findings">
         {findings.map((f, i) => (
