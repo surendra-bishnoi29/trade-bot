@@ -510,6 +510,11 @@ class Call(BaseModel):
     step_pct: float = Field(ge=0.2, le=5)
     reason: str
     evidence_ids: list[str] = Field(default_factory=list)
+    # the reasoning laid out, so a person can follow it (prompt version 2 onward)
+    supports: list[str] = Field(default_factory=list)  # readings that favour the call
+    against: list[str] = Field(default_factory=list)  # readings that argue against it
+    decisive: str = ""  # the one thing that decided it
+    invalidation: str = ""  # what would prove the call wrong
 
 
 @payload_for(Topics.PREDICTION_CALL)
@@ -526,6 +531,10 @@ class PredictionCall(Payload):
     model: str = ""
     prompt_version: str = ""
     record: dict[str, Any] = Field(default_factory=dict)  # the instrument's hit rate at call time
+    # what the predictor was shown: the readings, the market, the levels and the headlines
+    inputs: dict[str, Any] = Field(default_factory=dict)
+    seconds: float | None = None  # how long the model took, call and skeptic together
+    tokens: dict[str, int] = Field(default_factory=dict)
 
 
 @payload_for(Topics.PREDICTION_SCORE)

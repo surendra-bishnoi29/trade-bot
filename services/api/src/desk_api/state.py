@@ -4,7 +4,7 @@ checked, assembled from the fill, the intent, the thesis, the cycle plan and the
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -680,6 +680,33 @@ class StateReader:
         if symbol not in m.all_symbols:
             raise KeyError(symbol)
         return await symbol_detail(self.db, m, symbol, datetime.now(UTC), at=self._at(at))
+
+    # ---- the lab desk: the predictor's work, live and graded ----
+
+    async def lab_live(self, hours: int = 12) -> dict:
+        if self.traded is None:
+            return {"lab": False}
+        from desk.lab.report import live
+
+        return {"lab": True, **await live(self.db, self._markets(), datetime.now(UTC), hours)}
+
+    async def lab_report(self, day: str | None = None) -> dict:
+        if self.traded is None:
+            return {"lab": False}
+        from desk.lab.report import report
+
+        now = datetime.now(UTC)
+        chosen = date.fromisoformat(day) if day else now.date()
+        return {"lab": True, **await report(self.db, self._markets(), chosen, now)}
+
+    async def lab_days(self) -> list[str]:
+        """The UTC days on which the predictor made at least one call, newest first."""
+        rows = await self._query(
+            "SELECT DISTINCT (occurred_at AT TIME ZONE 'UTC')::date AS d FROM events "
+            "WHERE type = %s AND occurred_at >= now() - interval '60 days' ORDER BY d DESC",
+            (Topics.PREDICTION_CALL,),
+        )
+        return [r["d"].isoformat() for r in rows]
 
     async def funnel_markets(self) -> list[dict]:
         out = []

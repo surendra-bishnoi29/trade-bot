@@ -257,6 +257,25 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="bad time") from exc
 
+    @app.get("/api/lab/live")
+    async def lab_live(
+        request: Request, hours: int = 12, user: User = Depends(current_user)
+    ) -> dict:
+        return await reader(request).lab_live(max(1, min(hours, 72)))
+
+    @app.get("/api/lab/report")
+    async def lab_report(
+        request: Request, day: str | None = None, user: User = Depends(current_user)
+    ) -> dict:
+        try:
+            return await reader(request).lab_report(day)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="bad day") from exc
+
+    @app.get("/api/lab/days")
+    async def lab_days(request: Request, user: User = Depends(current_user)) -> list[str]:
+        return await reader(request).lab_days()
+
     @app.get("/api/funnel/markets")
     async def funnel_markets(request: Request, user: User = Depends(current_user)) -> list[dict]:
         return await reader(request).funnel_markets()

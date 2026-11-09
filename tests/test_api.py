@@ -307,3 +307,47 @@ async def test_users_table_round_trip(database_url):
     assert await users.remove("temp-user")
     await db.close()
     await asyncio.sleep(0)
+
+
+def test_the_lab_endpoints_need_a_session_and_say_so_on_the_main_desk(api):
+    client, _, _ = api
+    assert client.get("/api/lab/live").status_code == 401
+    assert client.get("/api/lab/report").status_code == 401
+    login(client, "client", "viewer-pass!")
+    # this fixture is the main desk: no predictor here, and the screen says so instead of failing
+    assert client.get("/api/lab/live").json() == {"lab": False}
+    assert client.get("/api/lab/report?day=2026-11-06").json() == {"lab": False}
+    assert client.get("/api/health").json()["lab"] is False
+
+
+async def test_the_lab_endpoints_serve_the_live_view_and_a_graded_day(database_url):
+    db = Database(database_url)
+    await db.open()
+    await db.migrate()
+    users = Users(db.pool)
+    await users.migrate()
+    await users.add("labview", "viewer", "viewer-pass!")
+    app = create_app(
+        ApiSettings(
+            _env_file=None, database_url=database_url, web_dist="/nonexistent", lab_enabled=True
+        ),
+        db=db,
+        live=LiveFeed("redis://unused"),
+        commands=Commands(InMemoryBus(SimClock(T0)), SimClock(T0)),
+        run_live=False,
+    )
+    with TestClient(app) as client:
+        login(client, "labview", "viewer-pass!")
+        live = client.get("/api/lab/live").json()
+        assert live["lab"] is True
+        assert [t["key"] for t in live["tiles"]] == ["equities", "oil", "gold", "crypto"]
+        assert {a["key"] for a in live["agents"]} >= {"sentinel", "predictor", "skeptic", "lines"}
+        assert "total" in live["tally"] and isinstance(live["findings"], list)
+        day = client.get("/api/lab/report?day=2020-01-06").json()
+        assert day["lab"] is True and day["final"] is True and day["tally"]["total"]["calls"] == 0
+        assert day["findings"] == ["The predictor made no calls in this period."]
+        assert client.get("/api/lab/report?day=not-a-day").status_code == 400
+        assert isinstance(client.get("/api/lab/days").json(), list)
+        assert client.get("/api/health").json()["lab"] is True
+    await users.remove("labview")
+    await db.close()

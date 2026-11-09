@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 from typing import Any, Literal
@@ -106,6 +107,7 @@ class Predictor(BaseAgent):
         self.sem = asyncio.Semaphore(2)
         self.open_symbols: set[str] = set()
         self.last_usage: dict[str, int] = {}
+        self.spent: dict[str, int] = {}  # tokens of the decision in hand
 
     @property
     def client(self) -> anthropic.AsyncAnthropic:
@@ -178,7 +180,60 @@ class Predictor(BaseAgent):
             f"maximum loss at least {self.min_loss_pct:.2f}%."
         )
         parts.append(f"TRACK RECORD on {t.symbol}: {render_record(record)}.")
-        return "\n\n".join(parts), {"record": record, "shorts": shorts, "row": row}
+        inputs: dict[str, Any] = {
+            "trigger": {"reason": t.reason, "detail": t.detail},
+            "reading": {"side": t.side, "strength": t.strength, "score": t.score, "setup": t.setup},
+            "last": t.last,
+            "evidence": [
+                {k: e.get(k) for k in ("label", "value", "verdict", "source")}
+                for e in (row or {}).get("evidence", [])
+            ],
+            "levels": {
+                k: (row or {}).get("levels", {}).get(k)
+                for k in ("s1", "r1", "s2", "r2", "vwap", "prior_close")
+            }
+            if row
+            else {},
+            "day_pct": (row or {}).get("day_pct"),
+            "market": {
+                "label": market.label,
+                "verdict": s.get("verdict"),
+                "score": s.get("score"),
+                "evidence": [
+                    {k: e.get(k) for k in ("label", "value", "verdict")}
+                    for e in s.get("evidence", [])[:5]
+                ],
+            }
+            if s
+            else {"label": market.label},
+            "news": [
+                {
+                    "id": e.event_id,
+                    "at": e.occurred_at.isoformat(),
+                    "title": str(e.payload.get("title", ""))[:160],
+                }
+                for e in news
+            ],
+            "trail": [
+                {"at": x["at"], "agent": x["agent"], "text": str(x["text"])[:160]}
+                for x in detail["trail"][:8]
+            ],
+            "rules": {
+                "shorts": shorts,
+                "round_trip_pct": ROUND_TRIP_PCT[t.market],
+                "min_first_profit_pct": max(
+                    self.min_first_profit_pct, 3 * ROUND_TRIP_PCT[t.market]
+                ),
+                "min_loss_pct": self.min_loss_pct,
+                "min_confidence": self.min_confidence,
+            },
+        }
+        return "\n\n".join(parts), {
+            "record": record,
+            "shorts": shorts,
+            "row": row,
+            "inputs": inputs,
+        }
 
     # ---- the model ----
 
@@ -202,6 +257,8 @@ class Predictor(BaseAgent):
         )
         usage = response.usage
         self.last_usage = {"input": usage.input_tokens, "output": usage.output_tokens}
+        for k, v in self.last_usage.items():
+            self.spent[k] = self.spent.get(k, 0) + int(v or 0)
         if response.stop_reason == "refusal" or response.parsed_output is None:
             return None
         if self.cache is not None:
@@ -250,12 +307,15 @@ class Predictor(BaseAgent):
             )
         self.calls_at.append(now)
         text, extra = await self.material(t, now)
+        self.spent = {}
+        started = time.monotonic()
+        seen = {"inputs": extra["inputs"]}
         call = await self._parse(
-            prompts.load("predictor_call"), text + "\n\nMake the call.", Call, 1200
+            prompts.load("predictor_call"), text + "\n\nMake the call.", Call, 1600
         )
         if call is None:
             return await self._record(
-                t, None, 0.0, False, "the model declined", "", extra["record"], caused_by
+                t, None, 0.0, False, "the model declined", "", extra["record"], caused_by, **seen
             )
         assert isinstance(call, Call)
         skip = ""
@@ -286,8 +346,10 @@ class Predictor(BaseAgent):
                     skip = f"skeptic concern and confidence {call.confidence:.2f} below {self.min_confidence + 0.1:.2f}"
         if not skip and self._size(t.market, t.last) <= 0:
             skip = f"one position's budget buys less than one unit at {t.last}"
+        seen["seconds"] = round(time.monotonic() - started, 1)
+        seen["tokens"] = dict(self.spent)
         rec = await self._record(
-            t, call, t.last, not skip, skip, objection, extra["record"], caused_by
+            t, call, t.last, not skip, skip, objection, extra["record"], caused_by, **seen
         )
         if rec is not None and rec.acted:
             await self._order(t, call, rec, caused_by)
@@ -303,6 +365,10 @@ class Predictor(BaseAgent):
         objection: str,
         record: dict[str, Any],
         caused_by: Event,
+        *,
+        inputs: dict[str, Any] | None = None,
+        seconds: float | None = None,
+        tokens: dict[str, int] | None = None,
     ) -> PredictionCall:
         payload = PredictionCall(
             call_id=str(ULID()),
@@ -326,6 +392,9 @@ class Predictor(BaseAgent):
             model=self.model if call is not None else "",
             prompt_version=prompts.version("predictor_call") if call is not None else "",
             record=record,
+            inputs=inputs or {},
+            seconds=seconds,
+            tokens=tokens or {},
         )
         await self.emit(
             Topics.PREDICTION_CALL,

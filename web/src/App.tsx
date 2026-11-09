@@ -15,10 +15,11 @@ import { Login } from "./components/Login";
 import { Research } from "./components/Research";
 import { Trades } from "./components/Trades";
 import { FunnelBoard } from "./funnel/FunnelBoard";
+import { LabBoard } from "./lab/LabBoard";
 import { LiveMessage, useLive } from "./live";
 
 type Tab = "research" | "activity" | "cycles" | "reviews";
-type View = "funnel" | "desk";
+type View = "funnel" | "predictor" | "desk";
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -307,6 +308,14 @@ export default function App() {
         </svg>
         <span>Funnel</span>
       </button>
+      {health?.lab && (
+        <button type="button" className={view === "predictor" ? "on" : ""} onClick={() => setView("predictor")} title="Predictor: how it thinks, live, and how often it is right">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4a5 5 0 0 0-3 9v2h6v-2a5 5 0 0 0-3-9zM9.5 18h5M10.5 20.5h3" />
+          </svg>
+          <span>Predictor</span>
+        </button>
+      )}
       <button type="button" className={view === "desk" ? "on" : ""} onClick={() => setView("desk")} title="Desk: agents, book, chat, reviews">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 5h7v6H4zM13 5h7v9h-7zM4 13h7v6H4zM13 16h7v3h-7z" />
@@ -322,6 +331,14 @@ export default function App() {
       <div className="shell">
         {rail}
         <FunnelBoard />
+      </div>
+    );
+
+  if (view === "predictor")
+    return (
+      <div className="shell">
+        {rail}
+        <LabBoard />
       </div>
     );
 
