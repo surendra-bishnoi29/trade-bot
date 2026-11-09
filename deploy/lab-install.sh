@@ -79,5 +79,5 @@ echo "lab interface: port 8090 on this machine. It is not opened to the internet
 echo "  ssh -N -L 8090:localhost:8090 oracle      then open http://localhost:8090"
 if ! sudo -u desk -H bash -c "cd $LAB && .venv/bin/desk-api users list" 2>/dev/null | grep -q -E 'operator|viewer'; then
   echo "no interface login yet for the lab; create one (it asks for a password):"
-  echo "  ssh -t oracle \"cd $LAB && sudo -u desk .venv/bin/desk-api users add <name> --role operator\""
+  echo "  ssh -t oracle \"sudo -u desk -H bash -c 'cd $LAB && .venv/bin/desk-api users add <name> --role operator'\""
 fi
