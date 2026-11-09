@@ -10,6 +10,8 @@ const TRIGGER_WORDS: Record<string, string> = {
   console: "a cycle run by hand",
   "thesis monitor": "the thesis monitor (stop, target or time exit)",
   "head trader": "the head trader on request",
+  predictor: "the predictor, answering a sentinel trigger",
+  lines: "the lines engine (profit line, stop, horizon or the bell)",
 };
 
 function Card({ t }: { t: Trade }) {
@@ -38,7 +40,7 @@ function Card({ t }: { t: Trade }) {
               {dateTimeUTC(t.time)}, decided by {trigger}.
             </dd>
             <dt>Why</dt>
-            <dd>{t.why || "No written thesis (an order placed outside a cycle)."}</dd>
+            <dd>{t.why || "No written reason (an order placed outside a cycle or a call)."}</dd>
             {t.evidence.length > 0 && (
               <>
                 <dt>Evidence</dt>

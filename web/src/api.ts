@@ -45,6 +45,8 @@ export interface Book {
 
 export interface Health {
   now: string;
+  /** The lab desk: sentinel, predictor and lines; no cycle to run. */
+  lab?: boolean;
   market_open: boolean;
   next_open: string;
   bot: {
@@ -53,6 +55,7 @@ export interface Health {
     status: string | null;
     next_cycle: string | null;
     open_theses: number | null;
+    open_lines?: number | null;
     started_at: string | null;
     gap_seconds: number | null;
     drawdown?: number | null;

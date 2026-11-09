@@ -65,6 +65,11 @@ def render(event: Event) -> str | None:
     if t == Topics.SYSTEM_HEARTBEAT:
         if not p.get("morning"):
             return None
+        if p.get("lab"):
+            return (
+                f"☀️ Lab desk is up. Kill switch {'ON' if p.get('kill_switch') else 'off'}, "
+                f"{p.get('open_lines', 0)} positions on lines; the sentinel looks every minute."
+            )
         return (
             f"☀️ Desk is up. Kill switch {'ON' if p.get('kill_switch') else 'off'}, "
             f"{p.get('open_theses', 0)} open theses, next cycle {p.get('next_cycle', '')}."
@@ -210,6 +215,8 @@ def summarize(event: Event) -> str:
     if t == Topics.CONSOLE_ANSWER:
         return f"Head trader: {first_sentence(p.get('text', ''), 200)}"
     if t == Topics.SYSTEM_HEARTBEAT:
+        if p.get("lab"):
+            return f"Heartbeat: {p.get('status', '')}, {p.get('open_lines', 0)} positions on lines"
         return f"Heartbeat: {p.get('status', '')}, next cycle {p.get('next_cycle', '')}"
     if t == Topics.WATCHER_ALERT:
         return f"{p.get('kind', 'alert')} on {sym}"

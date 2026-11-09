@@ -35,8 +35,8 @@ from desk_api.users import User, Users
 
 log = logging.getLogger(__name__)
 
-OPERATOR_COMMANDS = {"cycle", "plan", "kill", "resume", "brief"}
-VIEWER_COMMANDS = {"status", "theses"}
+OPERATOR_COMMANDS = {"cycle", "plan", "kill", "resume", "brief"}  # "lines" is for every viewer
+VIEWER_COMMANDS = {"status", "theses", "lines"}
 
 
 class LoginBody(BaseModel):

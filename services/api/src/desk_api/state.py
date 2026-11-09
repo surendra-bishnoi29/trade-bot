@@ -225,8 +225,53 @@ class StateReader:
         side = p.get("side") or ip.get("side") or ""
         qty = num(p.get("filled_quantity")) or num(ip.get("quantity"))
         price = num(p.get("avg_price"))
+        call = score = None
+        if ip.get("call_id"):  # a lab trade: the predictor's call opened it, the lines closed it
+            call = await self._latest(
+                Topics.PREDICTION_CALL,
+                days=90,
+                where="AND payload->>'call_id' = %s",
+                params=(ip["call_id"],),
+            )
+            score = await self._latest(
+                Topics.PREDICTION_SCORE,
+                days=90,
+                where="AND payload->>'call_id' = %s",
+                params=(ip["call_id"],),
+            )
+        lab_why = ""
+        if call:
+            cp = call["payload"]
+            c = cp.get("call") or {}
+            is_entry = bool(ip.get("stop_price"))
+            if is_entry:
+                lab_why = (
+                    f"Predictor call, {c.get('direction')} at confidence {float(c.get('confidence') or 0):.2f}, "
+                    f"on {cp.get('trigger')}: {c.get('reason', '')} Lines: maximum loss {c.get('max_loss_pct')}%, "
+                    f"first profit {c.get('first_profit_pct')}%, step {c.get('step_pct')}%."
+                )
+            else:
+                sp = (score or {}).get("payload") or {}
+                how = {
+                    "line": "the price came back to the profit line",
+                    "base": "the price came back to the entry after the first profit line",
+                    "stop": "the maximum loss line was reached",
+                    "horizon": "the call's time ran out",
+                    "close": "stocks and funds are closed before the bell",
+                    "broker": "the broker's resting stop fired",
+                }.get(str(sp.get("reason")), "the lines engine closed it")
+                result = (
+                    f" Result after costs: {float(sp['realized_pct']):+.2f}%."
+                    if sp.get("realized_pct") is not None
+                    else ""
+                )
+                lab_why = f"Closed by the lines engine: {how}.{result} The call was: {c.get('reason', '')}"
+            if cp.get("objection") and is_entry:
+                objection = {"severity": "lab", "argument": cp["objection"]}
         if plan:
             trigger = plan["trigger"]
+        elif call:
+            trigger = "predictor" if ip.get("stop_price") else "lines"
         elif ip.get("urgency") == "now":
             trigger = "thesis monitor"
         else:
@@ -242,7 +287,10 @@ class StateReader:
             "book": ip.get("book"),
             "what": f"{side.upper()} {qty:g} {symbol}" + (f" at {price:,.2f}" if price else ""),
             "when": {"time": fill["occurred_at"], "trigger": trigger, "cycle_id": corr},
-            "why": (thesis or {}).get("narrative") or (decision or {}).get("thesis") or "",
+            "why": (thesis or {}).get("narrative")
+            or (decision or {}).get("thesis")
+            or lab_why
+            or "",
             "evidence": await self._evidence(list(evidence_ids)[:12]),
             "exit_plan": (
                 {
@@ -414,6 +462,7 @@ class StateReader:
         bp = beat["payload"] if beat else {}
         return {
             "now": now,
+            "lab": self.traded is not None,  # the lab desk: predictor and lines, no cycle
             "market_open": calendar.is_open(now),
             "next_open": calendar.next_open(now),
             "bot": {
@@ -422,6 +471,7 @@ class StateReader:
                 "status": bp.get("status"),
                 "next_cycle": bp.get("next_cycle"),
                 "open_theses": bp.get("open_theses"),
+                "open_lines": bp.get("open_lines"),
                 "started_at": restarted["payload"].get("started_at") if restarted else None,
                 "gap_seconds": restarted["payload"].get("gap_seconds") if restarted else None,
                 "drawdown": bp.get("drawdown"),

@@ -1,6 +1,7 @@
 """The markets the funnel can draw. A market is a list of instruments, a benchmark and a session
-shape; everything else in the funnel is the same code. Stocks are traded by the desk; oil and gold
-(through their ETFs) and crypto are watched until the desk's trading agents are wired to them."""
+shape; everything else in the funnel is the same code. The main desk trades stocks and only watches
+oil and gold (through their funds) and crypto; the lab desk trades all three, and its funnel speaks
+of the predictor and the lines instead of the head trader and the swing book."""
 
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ class Market:
     session: Literal["nyse", "utc_day"]
     traded: bool
     note: str = ""
+    lab: bool = False  # the lab desk's market: the predictor decides, the lines hold
 
     @property
     def all_symbols(self) -> tuple[str, ...]:
@@ -68,10 +70,11 @@ GROUPS: dict[str, str] = {
 
 def markets(universe: list[str], traded: set[str] | None = None) -> dict[str, Market]:
     """The markets; `traded` names the ones the desk trades (the lab desk trades all three)."""
+    lab = traded is not None
     traded = {"stocks"} if traded is None else set(traded)
     stocks = tuple(s for s in universe if s not in REFERENCES)
     return {
-        "stocks": Market("stocks", "US stocks", stocks, "SPY", "nyse", "stocks" in traded),
+        "stocks": Market("stocks", "US stocks", stocks, "SPY", "nyse", "stocks" in traded, lab=lab),
         "commodities": Market(
             "commodities",
             "Oil and gold",
@@ -82,6 +85,7 @@ def markets(universe: list[str], traded: set[str] | None = None) -> dict[str, Ma
             "Traded through their exchange-traded funds."
             if "commodities" in traded
             else "Watched through their exchange-traded funds. The desk does not trade this market yet.",
+            lab=lab,
         ),
         "crypto": Market(
             "crypto",
@@ -91,7 +95,12 @@ def markets(universe: list[str], traded: set[str] | None = None) -> dict[str, Ma
             "utc_day",
             "crypto" in traded,
             "Trades around the clock; the day runs midnight to midnight UTC."
-            + ("" if "crypto" in traded else " The desk does not trade this market yet."),
+            + (
+                " Long only: the desk buys and sells, it does not short."
+                if "crypto" in traded
+                else " The desk does not trade this market yet."
+            ),
+            lab=lab,
         ),
     }
 

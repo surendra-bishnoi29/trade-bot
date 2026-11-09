@@ -326,6 +326,8 @@ class Heartbeat(Payload):
     kill_switch: bool = False
     open_theses: int = 0
     next_cycle: str = ""
+    lab: bool = False  # the lab desk: no cycle, positions on lines
+    open_lines: int = 0
     morning: bool = False  # the first heartbeat of a trading day, worth a message
     drawdown: float | None = None  # from the equity peak
     day_pnl: float | None = None  # against the previous close's equity

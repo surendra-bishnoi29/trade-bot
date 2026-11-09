@@ -12,6 +12,22 @@ export const CHECKS: { key: CheckKey; label: string; what: string }[] = [
   { key: "risk", label: "Risk officer", what: "approved, or already held" },
 ];
 
+/** On the lab desk the predictor stands where the head trader stands on the main desk. */
+export const LAB_CHECKS: typeof CHECKS = CHECKS.map((c) =>
+  c.key === "head"
+    ? {
+        key: "head",
+        label: "Predictor",
+        what: "called it today, or it is on lines",
+      }
+    : c.key === "risk"
+      ? { ...c, what: "approved the order, or it is on lines" }
+      : c,
+);
+
+export const checksFor = (lab: boolean | undefined) =>
+  lab ? LAB_CHECKS : CHECKS;
+
 export interface Evidence {
   label: string;
   value: string;
@@ -35,10 +51,37 @@ export interface Levels {
 }
 
 export interface DeskState {
-  thesis?: { narrative: string; conviction: number; horizon_days: number; quantity: number; entry: number | null; stop: number | null; target: number | null; status: string; created_at: string };
-  position?: { qty: number; avg_entry: number | null; unrealized_pl: number | null };
-  decision?: { action: string; conviction: number; thesis: string; at: string; trigger: string; objection: { severity: string; argument: string } | null };
-  risk?: { decision: string; reason: string; passed: number; rules: number; at: string };
+  thesis?: {
+    narrative: string;
+    conviction: number;
+    horizon_days: number;
+    quantity: number;
+    entry: number | null;
+    stop: number | null;
+    target: number | null;
+    status: string;
+    created_at: string;
+  };
+  position?: {
+    qty: number;
+    avg_entry: number | null;
+    unrealized_pl: number | null;
+  };
+  decision?: {
+    action: string;
+    conviction: number;
+    thesis: string;
+    at: string;
+    trigger: string;
+    objection: { severity: string; argument: string } | null;
+  };
+  risk?: {
+    decision: string;
+    reason: string;
+    passed: number;
+    rules: number;
+    at: string;
+  };
   fill?: { side: string; qty: number; price: number; at: string };
 }
 
@@ -99,7 +142,15 @@ export interface LabLines {
 export interface LabCall {
   call_id: string;
   trigger: string;
-  call: { direction: string; confidence: number; horizon_minutes: number; max_loss_pct: number; first_profit_pct: number; step_pct: number; reason: string };
+  call: {
+    direction: string;
+    confidence: number;
+    horizon_minutes: number;
+    max_loss_pct: number;
+    first_profit_pct: number;
+    step_pct: number;
+    reason: string;
+  };
   price: number;
   acted: boolean;
   skipped_because: string;
@@ -112,13 +163,37 @@ export interface Funnel {
   label: string;
   traded: boolean;
   note: string;
-  session: { day: string; open: string; close: string; as_of: string; is_live: boolean; step_minutes: number };
+  session: {
+    day: string;
+    open: string;
+    close: string;
+    as_of: string;
+    is_live: boolean;
+    step_minutes: number;
+  };
   times: string[];
-  benchmark: { symbol: string; name: string; day_pct: number | null; last: number | null; path: (number | null)[] };
-  sentiment: { score: number; verdict: "BULLISH" | "BEARISH" | "MIXED"; evidence: Evidence[] };
-  breadth: { bull: number; bear: number; flat: number; bins: { lo: number; hi: number; n: number }[] };
+  benchmark: {
+    symbol: string;
+    name: string;
+    day_pct: number | null;
+    last: number | null;
+    path: (number | null)[];
+  };
+  sentiment: {
+    score: number;
+    verdict: "BULLISH" | "BEARISH" | "MIXED";
+    evidence: Evidence[];
+  };
+  breadth: {
+    bull: number;
+    bear: number;
+    flat: number;
+    bins: { lo: number; hi: number; n: number }[];
+  };
   wire: { at: string; agent: string; symbol: string | null; text: string }[];
   symbols: FunnelSymbol[];
+  /** True when this is the lab desk's market: the predictor decides and the lines hold. */
+  lab?: boolean;
 }
 
 export interface MarketInfo {

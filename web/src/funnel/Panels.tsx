@@ -1,6 +1,6 @@
 import { verdictWord } from "./Cards";
 import { hhmm, pct, price } from "./format";
-import { Candle, CHECKS, Detail, Funnel, FunnelSymbol } from "./types";
+import { Candle, checksFor, Detail, Funnel, FunnelSymbol } from "./types";
 
 /** The day's distribution: one dot per instrument on a percent axis, a bar per bucket above it. */
 export function BreadthStrip({ funnel, focus, onFocus }: { funnel: Funnel; focus: string | null; onFocus: (s: string | null) => void }) {
@@ -119,7 +119,7 @@ const AGENT: Record<string, string> = {
 };
 
 /** Everything the desk knows about one instrument: chart, book and why, evidence, decision, trail. */
-export function FocusPanel({ s, detail, pinned, onClose }: { s: FunnelSymbol; detail: Detail | null; pinned: boolean; onClose: () => void }) {
+export function FocusPanel({ s, detail, pinned, onClose, lab }: { s: FunnelSymbol; detail: Detail | null; pinned: boolean; onClose: () => void; lab?: boolean }) {
   const d = s.desk;
   const L = s.levels;
   return (
@@ -150,13 +150,13 @@ export function FocusPanel({ s, detail, pinned, onClose }: { s: FunnelSymbol; de
       {detail && detail.candles.length > 1 ? <CandleChart candles={detail.candles} s={s} /> : <div className="candles wait">loading the session…</div>}
       <div className="focus-grid">
         <section>
-          <h3>Why this book</h3>
+          <h3>{lab ? "Where it stands" : "Why this book"}</h3>
           {s.book.reasons.map((r, i) => (
             <p key={i}>{r}</p>
           ))}
           <h3>Agent checks</h3>
           <ul className="checks">
-            {CHECKS.map((c) => (
+            {checksFor(lab).map((c) => (
               <li key={c.key} className={s.checks[c.key] ? "on" : ""}>
                 <i /> <b>{c.label}</b> <span>{c.what}</span>
               </li>

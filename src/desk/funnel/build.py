@@ -360,6 +360,8 @@ def route_book(
     multi_day = abs(vs_avg) >= 2 and same_way
     burst = n_alerts >= 3 or abs(day) >= 2
     catalyst = count > 0 and abs(tone) >= 0.15
+    if market.lab:
+        return _route_lab(desk, day, vs_avg, n_alerts, count, tone, multi_day, burst, catalyst)
     if desk.get("proposed") or desk.get("blocked"):
         return {
             "tag": "SWING",
@@ -387,6 +389,71 @@ def route_book(
                     else "without a strong multi-day trend."
                 ),
                 "The intraday book is off until a strategy beats costs in testing, so the desk only watches.",
+            ],
+        }
+    return {
+        "tag": "WATCH",
+        "reasons": [
+            "No multi-day trend, no unusual activity and no fresh news: nothing to act on."
+        ],
+    }
+
+
+def _route_lab(
+    desk: dict[str, Any],
+    day: float,
+    vs_avg: float,
+    n_alerts: int,
+    count: int,
+    tone: float,
+    multi_day: bool,
+    burst: bool,
+    catalyst: bool,
+) -> dict[str, Any]:
+    """The lab desk has no swing or intraday book: an instrument is on lines, was called, was looked
+    at and passed, is a candidate for the predictor's next look, or is quiet."""
+    call = desk.get("call") or {}
+    c = call.get("call") or {}
+    when = str(call.get("at") or "")[11:16]
+    if call and call.get("acted"):
+        return {
+            "tag": "CALLED",
+            "reasons": [
+                (
+                    f"The predictor called it {c.get('direction')} at {when} UTC, confidence "
+                    f"{float(c.get('confidence') or 0):.2f}: {first_sentence(str(c.get('reason', '')))}"
+                ),
+                "The position has since closed, or its order is still on the way.",
+            ],
+        }
+    readings = []
+    if multi_day:
+        readings.append(
+            f"a multi-day trend behind today's move ({vs_avg:+.1f}% against its 20-day average)"
+        )
+    if burst:
+        readings.append(f"an unusual day ({day:+.2f}% with {n_alerts} unusual-activity flags)")
+    if catalyst:
+        readings.append(f"fresh news ({count} articles, tone {tone:+.2f})")
+    if call:
+        return {
+            "tag": "PASSED",
+            "reasons": [
+                (
+                    f"The predictor looked at {when} UTC and passed: "
+                    f"{call.get('skipped_because') or 'no edge'}."
+                ),
+                ("Since then: " + "; ".join(readings) + ".")
+                if readings
+                else "Nothing has changed enough for another look.",
+            ],
+        }
+    if readings:
+        return {
+            "tag": "CANDIDATE",
+            "reasons": [
+                "Worth the predictor's look: " + "; ".join(readings) + ".",
+                "The sentinel raises a trigger when one of these changes; the predictor then decides.",
             ],
         }
     return {
@@ -721,6 +788,14 @@ async def build_funnel(
                     "created_at": ln.get("opened_at") or ln.get("at"),
                 },
             )
+        if market.lab:
+            latest = calls.get(s)
+            today = bool(latest) and str(latest.get("at", "")) >= open_at.isoformat()
+            if today:
+                d["call"] = latest
+                skipped = str(latest.get("skipped_because") or "")
+                d["proposed"] = bool(latest.get("acted")) or skipped.startswith("blocked")
+                d["blocked"] = skipped.startswith("blocked")
         sc, ev = score(sh, a, news.get(s), bench["day_pct"] if bench else None, bench_label)
         # the side is what the day shows (the fan draws it); the score ranks names within a side
         side = "bull" if (sh["day_pct"] or 0) >= 0 else "bear"
@@ -805,6 +880,7 @@ async def build_funnel(
         ],
         "breadth": breadth([r["day_pct"] for r in rows if r["day_pct"] is not None]),
         "symbols": rows,
+        "lab": market.lab and market.traded,
     }
 
 
@@ -868,8 +944,10 @@ def digest(funnel: dict[str, Any], top: int = 6) -> str:
         )[:top]
         for r in ranked:
             checks = "".join("x" if r["checks"][c] else "-" for c in CHECKS)
+            decider = "predictor" if funnel.get("lab") else "head"
             lines.append(
                 f"{title} {r['rank']}: {r['symbol']} score {r['score']:+.0f}, day {r['day_pct']:+.2f}%, "
-                f"{r['setup']}, book {r['book']['tag']}, checks watcher/quant/news/head/risk {checks}"
+                f"{r['setup']}, {'state' if funnel.get('lab') else 'book'} {r['book']['tag']}, "
+                f"checks watcher/quant/news/{decider}/risk {checks}"
             )
     return "\n".join(lines)

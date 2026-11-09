@@ -1,5 +1,9 @@
 import { pct, polyline, price, squash } from "./format";
-import { CHECKS, FunnelSymbol } from "./types";
+import { createContext, useContext } from "react";
+import { checksFor, FunnelSymbol } from "./types";
+
+/** True on the lab desk, where the predictor stands in the head trader's place. */
+export const LabContext = createContext(false);
 
 interface CardProps {
   s: FunnelSymbol;
@@ -24,10 +28,19 @@ export function Profile({ rows, side }: { rows: number[]; side: string }) {
 
 /** One dot per agent check, lit when that agent's test passed. */
 export function CheckDots({ s }: { s: FunnelSymbol }) {
+  const lab = useContext(LabContext);
   return (
-    <span className="dots" role="img" aria-label={`${s.checks_passed} of 5 agent checks passed`}>
-      {CHECKS.map((c) => (
-        <i key={c.key} className={s.checks[c.key] ? "on" : ""} title={`${c.label}: ${c.what} · ${s.checks[c.key] ? "passed" : "not passed"}`} />
+    <span
+      className="dots"
+      role="img"
+      aria-label={`${s.checks_passed} of 5 agent checks passed`}
+    >
+      {checksFor(lab).map((c) => (
+        <i
+          key={c.key}
+          className={s.checks[c.key] ? "on" : ""}
+          title={`${c.label}: ${c.what} · ${s.checks[c.key] ? "passed" : "not passed"}`}
+        />
       ))}
     </span>
   );
@@ -40,13 +53,25 @@ export function verdictWord(s: FunnelSymbol): string {
   return s.strength >= 60 ? "BEAR" : "BEARISH";
 }
 
-function state(s: FunnelSymbol, focus: string | null, pinned: string | null): string {
+function state(
+  s: FunnelSymbol,
+  focus: string | null,
+  pinned: string | null,
+): string {
   const on = focus === s.symbol || pinned === s.symbol;
   return `${s.side}${on ? " on" : ""}${focus !== null && !on ? " dim" : ""}${s.held ? " held" : ""}`;
 }
 
 /** A funnel card. The tier sets how much it says: the columns grow more detailed left to right. */
-export function StageCard({ s, tier, focus, pinned, onFocus, onPin, register }: CardProps) {
+export function StageCard({
+  s,
+  tier,
+  focus,
+  pinned,
+  onFocus,
+  onPin,
+  register,
+}: CardProps) {
   return (
     <button
       type="button"
@@ -75,7 +100,9 @@ export function StageCard({ s, tier, focus, pinned, onFocus, onPin, register }: 
         )}
         {tier === 1 && (
           <span className="meter" aria-hidden="true">
-            <i style={{ width: `${Math.max(6, Math.min(100, s.strength))}%` }} />
+            <i
+              style={{ width: `${Math.max(6, Math.min(100, s.strength))}%` }}
+            />
           </span>
         )}
       </span>
@@ -93,7 +120,8 @@ export function MiniChart({ s }: { s: FunnelSymbol }) {
   const H = 74;
   const vals = s.path.filter((v): v is number => v !== null);
   const L = s.levels;
-  const asPct = (p: number | null | undefined) => (p ? (p / L.prior_close - 1) * 100 : null);
+  const asPct = (p: number | null | undefined) =>
+    p ? (p / L.prior_close - 1) * 100 : null;
   const marks = [
     { k: "R2", v: asPct(L.target ?? L.r2), cls: "res" },
     { k: "R1", v: asPct(L.r1), cls: "res" },
@@ -101,7 +129,9 @@ export function MiniChart({ s }: { s: FunnelSymbol }) {
   ].filter((m): m is { k: string; v: number; cls: string } => m.v !== null);
   let lo = Math.min(0, ...vals);
   let hi = Math.max(0, ...vals);
-  for (const m of marks) if (Math.abs(m.v) < 12) (lo = Math.min(lo, m.v)), (hi = Math.max(hi, m.v));
+  for (const m of marks)
+    if (Math.abs(m.v) < 12)
+      ((lo = Math.min(lo, m.v)), (hi = Math.max(hi, m.v)));
   const top = squash(hi) + 0.15;
   const bottom = squash(lo) - 0.15;
   const y = (v: number) => 4 + ((top - squash(v)) / (top - bottom)) * (H - 8);
@@ -111,7 +141,13 @@ export function MiniChart({ s }: { s: FunnelSymbol }) {
     if (v !== null) pts.push([4 + (i / Math.max(1, n - 1)) * (W - 40), y(v)]);
   });
   return (
-    <svg className={`mini ${s.side}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={`${s.symbol} today with support and resistance`}>
+    <svg
+      className={`mini ${s.side}`}
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      role="img"
+      aria-label={`${s.symbol} today with support and resistance`}
+    >
       <line x1={0} x2={W - 34} y1={y(0)} y2={y(0)} className="mini-zero" />
       {marks
         .filter((m) => Math.abs(m.v) < 12)
@@ -124,7 +160,13 @@ export function MiniChart({ s }: { s: FunnelSymbol }) {
           </g>
         ))}
       <polyline points={polyline(pts)} />
-      {pts.length > 0 && <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r={2.6} />}
+      {pts.length > 0 && (
+        <circle
+          cx={pts[pts.length - 1][0]}
+          cy={pts[pts.length - 1][1]}
+          r={2.6}
+        />
+      )}
     </svg>
   );
 }
@@ -135,10 +177,17 @@ export function LevelBar({ s }: { s: FunnelSymbol }) {
   const lo = L.stop ?? L.s1 ?? L.last;
   const hi = L.target ?? L.r2 ?? L.r1 ?? L.last;
   const span = hi - lo || 1;
-  const at = (v: number) => `${Math.max(0, Math.min(100, ((v - lo) / span) * 100))}%`;
+  const at = (v: number) =>
+    `${Math.max(0, Math.min(100, ((v - lo) / span) * 100))}%`;
   return (
     <span className="levelbar" aria-hidden="true">
-      <i className="zone" style={{ left: at(L.zone[0]), width: `calc(${at(L.zone[1])} - ${at(L.zone[0])})` }} />
+      <i
+        className="zone"
+        style={{
+          left: at(L.zone[0]),
+          width: `calc(${at(L.zone[1])} - ${at(L.zone[0])})`,
+        }}
+      />
       {L.entry ? <i className="entry" style={{ left: at(L.entry) }} /> : null}
       <i className="now" style={{ left: at(L.last) }} />
     </span>
@@ -146,7 +195,14 @@ export function LevelBar({ s }: { s: FunnelSymbol }) {
 }
 
 /** A final pick: the verdict, the day's chart, the levels and which book it belongs to. */
-export function PickCard({ s, focus, pinned, onFocus, onPin, register }: Omit<CardProps, "tier">) {
+export function PickCard({
+  s,
+  focus,
+  pinned,
+  onFocus,
+  onPin,
+  register,
+}: Omit<CardProps, "tier">) {
   const L = s.levels;
   const held = !!L.stop;
   const word = verdictWord(s);
@@ -170,8 +226,13 @@ export function PickCard({ s, focus, pinned, onFocus, onPin, register }: Omit<Ca
               <span className="name">{s.name}</span>
             </span>
             <span className="pick-verdict">
-              <span className={`badge${s.strength < 25 ? " weak" : ""}`}>{word}</span>
-              <span className="ring" title={`sentiment score ${s.score > 0 ? "+" : "−"}${Math.abs(s.score).toFixed(0)} of 100`}>
+              <span className={`badge${s.strength < 25 ? " weak" : ""}`}>
+                {word}
+              </span>
+              <span
+                className="ring"
+                title={`sentiment score ${s.score > 0 ? "+" : "−"}${Math.abs(s.score).toFixed(0)} of 100`}
+              >
                 {s.strength.toFixed(0)}
               </span>
               <CheckDots s={s} />
@@ -184,7 +245,10 @@ export function PickCard({ s, focus, pinned, onFocus, onPin, register }: Omit<Ca
               <span className="book">{s.book.tag}</span>
               <span className="setup">{s.setup}</span>
               {s.record && s.record.n > 0 && (
-                <span className={`record ${s.record.hit >= 0.55 ? "good" : s.record.hit < 0.45 ? "bad" : ""}`} title={`${s.record.hits} of ${s.record.n} calls hit, ${pct(s.record.avg_pct)} per call after costs`}>
+                <span
+                  className={`record ${s.record.hit >= 0.55 ? "good" : s.record.hit < 0.45 ? "bad" : ""}`}
+                  title={`${s.record.hits} of ${s.record.n} calls hit, ${pct(s.record.avg_pct)} per call after costs`}
+                >
                   {s.record.hits}/{s.record.n}
                 </span>
               )}
@@ -200,7 +264,9 @@ export function PickCard({ s, focus, pinned, onFocus, onPin, register }: Omit<Ca
               </b>
             </span>
             <span>
-              <small>{s.lines.stop === s.lines.base ? "STOP=BASE" : "MAX LOSS"}</small>
+              <small>
+                {s.lines.stop === s.lines.base ? "STOP=BASE" : "MAX LOSS"}
+              </small>
               <b className="sup">{price(s.lines.stop)}</b>
             </span>
             <span>
@@ -213,7 +279,13 @@ export function PickCard({ s, focus, pinned, onFocus, onPin, register }: Omit<Ca
             </span>
             <span>
               <small>{s.lines.direction.toUpperCase()}</small>
-              <b>{!s.lines.armed ? "waiting" : s.lines.steps > 0 ? `+${s.lines.steps} step${s.lines.steps > 1 ? "s" : ""}` : "no loss"}</b>
+              <b>
+                {!s.lines.armed
+                  ? "waiting"
+                  : s.lines.steps > 0
+                    ? `+${s.lines.steps} step${s.lines.steps > 1 ? "s" : ""}`
+                    : "no loss"}
+              </b>
             </span>
           </span>
         ) : (

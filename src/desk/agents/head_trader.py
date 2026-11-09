@@ -158,7 +158,9 @@ class HeadTrader(BaseAgent):
                 "Your part: answer the people running the desk, truthfully and from the tools. Use "
                 "get_lab for what the predictor called, what is held on which lines, and the hit record; "
                 "use get_funnel with market stocks, commodities or crypto for the live picture of a "
-                "market. The lab is an experiment: say plainly when the record is too short to judge "
+                "market. You cannot place orders on this desk: propose_order is switched off here, "
+                "because every position must come from a predictor call and carry its lines. "
+                "The lab is an experiment: say plainly when the record is too short to judge "
                 "(fewer than 60 scored calls) and never present its results as proven."
             ),
         ]

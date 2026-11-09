@@ -401,3 +401,84 @@ def test_markets_and_describe():
         {"trigger": "pre_market", "plan": {"decisions": [{"symbol": "V", "action": "hold"}]}},
     )
     assert describe(plan) == "Review (pre_market): no action"
+
+
+async def test_on_the_lab_desk_the_funnel_speaks_of_the_predictor_and_the_lines():
+    lab = Market("stocks", "US stocks", ("UP", "DOWN", "HELD"), "SPY", "nyse", True, lab=True)
+    db = FakeDB()
+    db.events = [e for e in db.events if e.type == Topics.WATCHER_ALERT]  # no cycles on the lab
+    db.open = []  # no theses either: the lab holds positions on lines
+    at = OPEN + timedelta(minutes=119)
+
+    def call(symbol: str, minutes: int, acted: bool, why: str = "") -> Event:
+        return ev(
+            Topics.PREDICTION_CALL,
+            OPEN + timedelta(minutes=minutes),
+            {
+                "call_id": f"c-{symbol}",
+                "symbol": symbol,
+                "market": "stocks",
+                "trigger": "surge: 40 to 60",
+                "call": {
+                    "direction": "long" if acted else "none",
+                    "confidence": 0.71 if acted else 0.2,
+                    "horizon_minutes": 120,
+                    "max_loss_pct": 0.6,
+                    "first_profit_pct": 0.9,
+                    "step_pct": 0.4,
+                    "reason": "Volume confirmed the break. More detail follows.",
+                },
+                "price": 102.0,
+                "acted": acted,
+                "skipped_because": why,
+            },
+            symbol,
+            "predictor@0.1",
+        )
+
+    db.events += [
+        call("UP", 40, True),
+        call("DOWN", 50, False, "the predictor sees no edge"),
+        ev(
+            Topics.LINES_UPDATED,
+            OPEN + timedelta(minutes=60),
+            {
+                "symbol": "HELD",
+                "market": "stocks",
+                "call_id": "c-HELD",
+                "direction": "short",
+                "base": 49.8,
+                "stop": 50.1,
+                "profit_line": 49.3,
+                "step_pct": 0.4,
+                "armed": False,
+                "steps": 0,
+                "event": "opened",
+                "last": 49.8,
+                "quantity": 20.0,
+            },
+            "HELD",
+            "lines@0.1",
+        ),
+    ]
+    f = await build_funnel(db, lab, CLOSE + timedelta(hours=3), at=at)  # type: ignore[arg-type]
+    rows = {r["symbol"]: r for r in f["symbols"]}
+    assert f["lab"] is True
+    up, down, held = rows["UP"], rows["DOWN"], rows["HELD"]
+    assert (
+        up["book"]["tag"] == "CALLED"
+        and "predictor called it long at 15:10" in up["book"]["reasons"][0]
+    )
+    assert "Volume confirmed the break." in up["book"]["reasons"][0]
+    assert up["checks"]["head"] is True  # the predictor stands in the head trader's place
+    assert down["book"]["tag"] == "PASSED" and "no edge" in down["book"]["reasons"][0]
+    assert down["checks"]["head"] is False
+    assert held["book"]["tag"] == "LINES" and held["held"] and held["checks"]["head"]
+    assert "waiting for the first profit line" in held["book"]["reasons"][0]
+    words = " ".join(" ".join(r["book"]["reasons"]) + r["book"]["tag"] for r in f["symbols"])
+    assert "swing" not in words.lower() and "intraday" not in words.lower()
+    text = digest(f)
+    assert "watcher/quant/news/predictor/risk" in text and "state CALLED" in text
+    # the main desk's funnel on the same journal still speaks of books
+    main = await build_funnel(db, MARKET, CLOSE + timedelta(hours=3), at=at)  # type: ignore[arg-type]
+    assert main["lab"] is False and "watcher/quant/news/head/risk" in digest(main)

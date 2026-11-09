@@ -605,6 +605,8 @@ class Ops(BaseAgent):
             kill_switch=desk.risk.state.kill_switch,
             open_theses=len(desk.strategy.theses),
             next_cycle=next_cycle,
+            lab=desk.lines is not None,
+            open_lines=len(desk.lines.lines) if desk.lines is not None else 0,
             morning=morning,
             drawdown=posture.get("drawdown"),
             day_pnl=posture.get("day_pnl"),
