@@ -123,6 +123,9 @@ class RiskLimits:
             max_open_positions=settings.max_open_positions,
             new_position_pct=settings.lab_position_pct if lab else settings.position_pct,
             allow_short=lab,  # the lab desk may short stocks; the swing cycle stays long-only
+            # the lab trades stocks inside the session only (flat before the bell) and more often
+            allow_when_closed=not lab,
+            max_orders_per_day=60 if lab else 20,
             books=books,
             intraday=BookLimits(
                 max_orders_per_day=40,

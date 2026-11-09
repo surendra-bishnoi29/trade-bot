@@ -119,6 +119,10 @@ class Settings(BaseSettings):
     predictor_max_calls_per_hour: int = 40
     lab_position_pct: Decimal = Decimal("0.01")  # of equity per position
     lab_min_first_profit_pct: float = 0.5
+    # stocks and funds: no new position this close to the bell, and every one closed before it
+    # (a line cannot protect through an overnight gap). 0 for the second holds them overnight.
+    lab_no_entry_minutes_before_close: int = 30
+    lab_flat_minutes_before_close: int = 10
     lab_min_loss_pct: float = 0.5
     commodities_max_gross_pct: Decimal = Decimal("0.10")
     commodities_allow_short: bool = True

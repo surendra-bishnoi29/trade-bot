@@ -55,6 +55,10 @@ class BackOffice(BaseAgent):
         if fetch_open is not None:
             try:
                 for o in await fetch_open():
+                    # a resting protective stop is not an order in flight: counting it would make
+                    # the risk officer refuse the very exit that replaces it as a duplicate
+                    if "stop" in str(getattr(o, "order_type", "") or ""):
+                        continue
                     if o.symbol and o.side in ("buy", "sell"):
                         working.setdefault(o.symbol, set()).add(o.side)
             except Exception as exc:  # noqa: BLE001 - a missing list means no protection, not a crash

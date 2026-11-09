@@ -271,7 +271,16 @@ class Desk:
                 )
             else:
                 log.info("fundamental and events analysts off: set DESK_FINNHUB_API_KEY (free)")
-            desk.screen = QuantScreen(bus, clock, db, universe, back_office, head=head, cycle=cycle)
+            desk.screen = QuantScreen(
+                bus,
+                clock,
+                db,
+                universe,
+                back_office,
+                # the morning note is the swing book's plan for the day: the lab has no such book
+                head=None if lab else head,
+                cycle=None if lab else cycle,
+            )
             desk.forecaster = ForecastAnalyst(
                 bus, clock, db, universe, horizon=settings.forecast_horizon
             )
@@ -314,7 +323,14 @@ class Desk:
                 from desk.lab.sentinel import Sentinel
 
                 lab_markets = [m for m in all_markets.values() if m.traded]
-                desk.lines = LinesAgent(bus, clock, db, trading, back_office)
+                desk.lines = LinesAgent(
+                    bus,
+                    clock,
+                    db,
+                    trading,
+                    back_office,
+                    flat_minutes=settings.lab_flat_minutes_before_close,
+                )
                 desk.lines.start()
                 desk.sentinel = Sentinel(
                     bus,
@@ -339,6 +355,7 @@ class Desk:
                     position_pct=settings.lab_position_pct,
                     min_first_profit_pct=settings.lab_min_first_profit_pct,
                     min_loss_pct=settings.lab_min_loss_pct,
+                    no_entry_minutes=settings.lab_no_entry_minutes_before_close,
                 )
                 desk.predictor.start()
                 log.warning(
@@ -375,9 +392,23 @@ class Desk:
         return desk
 
     def console_commands(self) -> dict:
+        lab = self.settings.lab_enabled
+        no_cycle = (
+            "The lab desk has no cycle to run: the sentinel looks at every instrument each minute "
+            "and the predictor answers its triggers. Running the swing cycle here would open "
+            "positions no line protects, so the command is switched off. Try `status` or `lines`."
+        )
+
         async def cycle_cmd(arg: str) -> str:
+            if lab:
+                return no_cycle
             result = await self.cycle.run("console", dry_run=arg.strip() in ("dry", "plan"))
             return result.render()
+
+        async def lines_cmd(arg: str) -> str:
+            if not lab:
+                return "lines belong to the lab desk; this desk holds theses (try `theses`)"
+            return await self.head.q_lab(24)
 
         async def plan_cmd(arg: str) -> str:
             return await cycle_cmd("dry")
@@ -397,6 +428,8 @@ class Desk:
             return "kill switch released"
 
         async def theses_cmd(arg: str) -> str:
+            if lab:
+                return await lines_cmd(arg)  # the lab holds positions on lines, not theses
             rows = await self.db.recent_theses(limit=20)
             if not rows:
                 return "no theses yet"
@@ -409,6 +442,17 @@ class Desk:
         async def status_cmd(arg: str) -> str:
             s = self.back_office.snapshot
             k = self.risk.state
+            if lab:
+                held = ", ".join(sorted(self.lines.lines)) or "none"
+                loose = ", ".join(sorted(self.lines.unmanaged))
+                return (
+                    f"LAB DESK | equity {s.equity} cash {s.cash} positions {len(s.positions)} | "
+                    f"on lines: {held} | entries waiting: {len(self.lines.pending)} | "
+                    f"predictor calls in the last hour: {len(self.predictor.calls_at)} of "
+                    f"{self.predictor.max_calls_per_hour} | kill switch "
+                    f"{'ENGAGED: ' + k.kill_reason if k.kill_switch else 'off'} | orders today {k.orders_today}"
+                    + (f" | AT THE BROKER WITH NO LINE: {loose}" if loose else "")
+                )
             return (
                 f"equity {s.equity} cash {s.cash} positions {len(s.positions)} | open theses {len(self.strategy.theses)} | "
                 f"kill switch {'ENGAGED: ' + k.kill_reason if k.kill_switch else 'off'} | orders today {k.orders_today}"
@@ -420,12 +464,15 @@ class Desk:
             )
 
         async def brief_cmd(arg: str) -> str:
+            if lab:  # the daily brief is written from cycles and theses; the lab has neither
+                return await lines_cmd(arg)
             assert self.brief is not None
             return DailyBriefAgent.render(await self.brief.write())
 
         return {
             "brief": brief_cmd,
             "cycle": cycle_cmd,
+            "lines": lines_cmd,
             "plan": plan_cmd,
             "kill": kill_cmd,
             "resume": resume_cmd,
@@ -454,8 +501,10 @@ class Desk:
             self.tasks.append(asyncio.create_task(self.feeds.run_forever(), name="market_feeds"))
         if self.lines is not None:
             await self.lines.restore()
+            self.tasks.append(asyncio.create_task(self.lines.run_forever(), name="lines"))
         if self.sentinel is not None:
             self.tasks.append(asyncio.create_task(self.sentinel.run_forever(), name="sentinel"))
+        if self.watcher is not None:
             self.tasks.append(asyncio.create_task(self.watcher.stale_loop(), name="watcher_stale"))
         if self.data is not None:
             self.tasks.append(asyncio.create_task(self.news.run_forever(), name="news"))

@@ -171,6 +171,7 @@ class BrokerOrder:
     client_order_id: str = ""
     symbol: str = ""
     side: str = ""
+    order_type: str = ""  # market, stop, stop_limit, ...
 
 
 class AlpacaTrading:
@@ -213,6 +214,11 @@ class AlpacaTrading:
             client_order_id=str(getattr(o, "client_order_id", "") or ""),
             symbol=str(getattr(o, "symbol", "") or ""),
             side=str(getattr(getattr(o, "side", None), "value", getattr(o, "side", "")) or ""),
+            order_type=str(
+                getattr(getattr(o, "order_type", None), "value", None)
+                or getattr(getattr(o, "type", None), "value", "")
+                or ""
+            ),
         )
 
     async def submit_market_order(

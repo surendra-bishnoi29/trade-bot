@@ -3,10 +3,12 @@ line and a minimum-profit line. Once price clears the first profit line the stop
 each time price clears the next step the profit line ratchets up; when price comes back to the
 latest profit line, or touches the stop, or the horizon passes, the position is closed and the
 prediction behind it is scored. The desk watches every minute; for stocks and funds the stop also
-rests at the broker as a safety net. No model calls."""
+rests at the broker as a safety net. Stocks and funds are closed before the bell: a line cannot
+protect a position through an overnight gap. No model calls."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
@@ -17,6 +19,7 @@ from ulid import ULID
 
 from desk.agents.base import BaseAgent
 from desk.bus.base import Bus
+from desk.core import calendar
 from desk.core.clock import Clock
 from desk.core.events import Event, Topics, parse_payload
 from desk.core.payloads import LinesUpdated, OrderIntent, OrderUpdate, PredictionScore
@@ -51,6 +54,9 @@ class Line:
     stop_order_id: str = ""
     exit_intent: str = ""
     exit_reason: str = ""
+    exit_at: datetime | None = None  # when the exit order was sent
+    exit_tries: int = 0  # exits refused so far; each one waits longer before the next
+    exit_retry_at: datetime | None = None
     filled: bool = False
 
     @property
@@ -116,17 +122,29 @@ class LinesAgent(BaseAgent):
         Topics.ORDER_FILLED,
         Topics.ORDER_REJECTED,
         Topics.ORDER_CANCELED,
+        Topics.RISK_REJECTED,
         Topics.MARKET_BAR_1M,
         Topics.PORTFOLIO_RECONCILED,
     )
 
     def __init__(
-        self, bus: Bus, clock: Clock, db: Database, trading: Any, back_office: Any = None
+        self,
+        bus: Bus,
+        clock: Clock,
+        db: Database,
+        trading: Any,
+        back_office: Any = None,
+        *,
+        flat_minutes: int = 10,
     ) -> None:
         super().__init__(bus, clock)
         self.db = db
         self.trading = trading
         self.back_office = back_office
+        # stocks and funds are closed this many minutes before the bell; 0 holds them overnight
+        self.flat_minutes = flat_minutes
+        self.cancel_wait_s = 0.25  # between looks at a stop being cancelled
+        self.unmanaged: set[str] = set()  # broker positions no line holds, for the status line
         self.lines: dict[str, Line] = {}  # by symbol: one position per instrument
         self.pending: dict[str, Line] = {}  # by call id, until the entry fills
         self.by_intent: dict[str, str] = {}  # intent id -> call id
@@ -220,6 +238,8 @@ class LinesAgent(BaseAgent):
                 self.pending[cid].quantity = Decimal(str(p["quantity"]))
         elif event.type in (Topics.ORDER_FILLED, Topics.ORDER_REJECTED, Topics.ORDER_CANCELED):
             await self._on_order(event)
+        elif event.type == Topics.RISK_REJECTED:
+            await self._on_risk_rejected(event)
         elif event.type == Topics.MARKET_BAR_1M:
             if event.symbol in self.lines:
                 await self._on_bar(event)
@@ -255,25 +275,64 @@ class LinesAgent(BaseAgent):
             return
         if event.type in (Topics.ORDER_REJECTED, Topics.ORDER_CANCELED):
             if update.intent_id == line.entry_intent:
-                self.pending.pop(cid, None)
-                await self.emit(
-                    Topics.PREDICTION_SCORE,
-                    PredictionScore(
-                        call_id=cid,
-                        symbol=line.symbol,
-                        market=line.market,
-                        direction=line.direction,
-                        confidence=line.confidence,
-                        reason="unfilled",
-                        closed_at=self.clock.now(),
-                    ),
-                    symbol=line.symbol,
-                    book=BOOK_OF_MARKET.get(line.market),  # type: ignore[arg-type]
-                    caused_by=event,
-                )
+                await self._unfilled(cid, line, "unfilled", event)
             elif update.intent_id == line.exit_intent:
-                line.exit_intent, line.exit_reason = "", ""
-                log.error("lines: exit for %s %s, will try again", line.symbol, update.status)
+                self._exit_refused(line, f"{update.status} by the broker")
+
+    def _exit_refused(self, line: Line, why: str) -> None:
+        """A decided exit stays decided: it is sent again, each time after a longer wait (20 seconds
+        doubling to five minutes) so a broker that keeps saying no is not flooded."""
+        line.exit_intent, line.exit_at = "", None
+        line.exit_tries += 1
+        wait = min(20 * 2 ** (line.exit_tries - 1), 300)
+        line.exit_retry_at = self.clock.now() + timedelta(seconds=wait)
+        log.error(
+            "lines: exit for %s %s (try %d), again in %ds",
+            line.symbol,
+            why,
+            line.exit_tries,
+            wait,
+        )
+
+    def _retry_due(self, line: Line, now: datetime) -> bool:
+        return bool(line.exit_reason) and (line.exit_retry_at is None or now >= line.exit_retry_at)
+
+    async def _unfilled(self, cid: str, line: Line, reason: str, caused_by: Event) -> None:
+        """The entry never became a position: forget it and say so, so the instrument is free again."""
+        self.pending.pop(cid, None)
+        await self.emit(
+            Topics.PREDICTION_SCORE,
+            PredictionScore(
+                call_id=cid,
+                symbol=line.symbol,
+                market=line.market,
+                direction=line.direction,
+                confidence=line.confidence,
+                reason=reason,
+                closed_at=self.clock.now(),
+            ),
+            symbol=line.symbol,
+            book=BOOK_OF_MARKET.get(line.market),  # type: ignore[arg-type]
+            caused_by=caused_by,
+        )
+
+    async def _on_risk_rejected(self, event: Event) -> None:
+        """The risk officer said no. An entry is dropped and scored as never opened; an exit is
+        tried again at the next look, because a position must not be left without its way out."""
+        intent_id = str(event.payload.get("intent_id") or "")
+        cid = self.by_intent.get(intent_id)
+        if cid is None:
+            return
+        line = self.pending.get(cid) or self.lines.get(self._symbol_of(cid) or "")
+        if line is None:
+            return
+        if intent_id == line.entry_intent and not line.filled:
+            log.warning(
+                "lines: entry for %s refused by risk: %s", line.symbol, event.payload.get("reason")
+            )
+            await self._unfilled(cid, line, "risk", event)
+        elif intent_id == line.exit_intent:
+            self._exit_refused(line, f"refused by risk ({event.payload.get('reason')})")
 
     def _symbol_of(self, call_id: str) -> str | None:
         for s, line in self.lines.items():
@@ -285,6 +344,10 @@ class LinesAgent(BaseAgent):
         line = self.lines[event.symbol]  # type: ignore[index]
         if not line.filled or line.exit_intent:
             return
+        if line.exit_reason:  # an exit already decided and refused: only the retry clock matters
+            if self._retry_due(line, self.clock.now()):
+                await self._exit(line, event)
+            return
         p = event.payload
         high, low, close = float(p["high"]), float(p["low"]), float(p["close"])
         happened = line.watch(high, low)
@@ -293,25 +356,88 @@ class LinesAgent(BaseAgent):
                 await self._exit(line, event)
                 return
             await self._announce(line, what, close, event)
-        if what := self._expired(line):
+        if what := self._due(line, self.clock.now()):
             line.exit_reason = what
             await self._exit(line, event)
         elif happened:
             await self._broker_stop(line)
 
-    def _expired(self, line: Line) -> str | None:
-        if line.opened_at and self.clock.now() - line.opened_at >= timedelta(
-            minutes=line.horizon_minutes
-        ):
+    def _tradable(self, line: Line, now: datetime) -> bool:
+        return line.market == "crypto" or calendar.is_open(now)
+
+    def _due(self, line: Line, now: datetime) -> str | None:
+        """A reason to close that no price bar brings: the horizon passed, or the bell is near."""
+        if not self._tradable(line, now):
+            return None  # nothing can be sold now; the first look after the open decides
+        if line.opened_at and now - line.opened_at >= timedelta(minutes=line.horizon_minutes):
             return "horizon"
+        if line.market != "crypto" and self.flat_minutes > 0:
+            close_at = calendar.session_bounds(calendar.session_of(now))[1]
+            if now >= close_at - timedelta(minutes=self.flat_minutes):
+                return "close"
         return None
+
+    async def tick(self) -> int:
+        """The look that needs no bar: a quiet instrument still reaches its horizon and the bell,
+        and an exit that never got an answer is sent again. Returns the exits sent."""
+        now = self.clock.now()
+        sent = 0
+        for line in list(self.lines.values()):
+            if not line.filled:
+                continue
+            if line.exit_intent:
+                # an exit unanswered for three minutes: if the broker still shows the position and
+                # no order working on it, the order was lost; clear it so the next look sends another
+                snap = getattr(self.back_office, "snapshot", None)
+                waited = line.exit_at is not None and now - line.exit_at > timedelta(minutes=3)
+                if waited and snap is not None and self._tradable(line, now):
+                    side = "sell" if line.direction == "long" else "buy"
+                    held = line.symbol in getattr(snap, "positions", {})
+                    working = side in getattr(snap, "open_orders", {}).get(line.symbol, set())
+                    if held and not working and getattr(snap, "as_of", now) > line.exit_at:
+                        self._exit_refused(line, "got no answer")
+                continue
+            if not self._tradable(line, now):
+                continue
+            if line.exit_reason:
+                if not self._retry_due(line, now):
+                    continue
+            elif reason := self._due(line, now):
+                line.exit_reason = reason
+            else:
+                continue
+            await self._exit(line, None)
+            sent += 1
+        return sent
+
+    async def run_forever(self, every_s: float = 20.0) -> None:
+        while True:
+            try:
+                await self.tick()
+            except Exception as exc:  # noqa: BLE001 - the watch must outlive one bad look
+                log.error("lines tick failed: %s", exc)
+            await self.clock.sleep(every_s)
 
     async def _reconcile(self, event: Event) -> None:
         """The broker's stop may have fired while we watched: the position is gone, close the call."""
         positions = {
             p.get("symbol"): float(p.get("qty") or 0) for p in event.payload.get("positions") or []
         }
+        as_of = event.payload.get("as_of")
+        taken = datetime.fromisoformat(as_of) if isinstance(as_of, str) else event.occurred_at
+        waiting = self.pending_symbols()
+        unmanaged = {
+            s for s, q in positions.items() if q and s not in self.lines and s not in waiting
+        }
+        if unmanaged - self.unmanaged:
+            log.error(
+                "lines: the broker holds %s with no line on it; nothing here will close it",
+                ", ".join(sorted(unmanaged - self.unmanaged)),
+            )
+        self.unmanaged = unmanaged
         for symbol, line in list(self.lines.items()):
+            if line.opened_at and line.opened_at > taken - timedelta(minutes=2):
+                continue  # the snapshot may be older than the fill: wait for the next one
             if line.filled and not line.exit_intent and not positions.get(symbol):
                 exit_px = line.exit_level() or line.base or 0.0
                 if line.stop_order_id:
@@ -328,8 +454,10 @@ class LinesAgent(BaseAgent):
     async def _broker_stop(self, line: Line) -> None:
         """Keep the broker's resting stop at our exit level, where the broker offers one."""
         level = line.exit_level()
-        if level is None or line.market == "crypto" or not line.entry_order_id:
+        if level is None or line.market == "crypto":
             return
+        if not (line.entry_order_id or line.stop_order_id):
+            return  # after a restart the stop's own id is enough to keep moving it
         try:
             if not line.stop_order_id:
                 leg = await self.trading.stop_leg(line.entry_order_id)
@@ -340,13 +468,34 @@ class LinesAgent(BaseAgent):
         except Exception as exc:  # noqa: BLE001 - the desk's own watch still protects the position
             log.warning("lines: broker stop for %s not updated: %s", line.symbol, exc)
 
-    async def _exit(self, line: Line, caused_by: Event) -> None:
-        if line.stop_order_id:
+    async def _release_stop(self, line: Line) -> float | None:
+        """Cancel the broker's resting stop and wait until it is gone, because the shares it holds
+        cannot be sold by another order. Returns the fill price if the stop fired first."""
+        order_id, line.stop_order_id = line.stop_order_id, ""
+        try:
+            await self.trading.cancel_order(order_id)
+        except Exception as exc:  # noqa: BLE001 - already filled or gone: the look below tells
+            log.warning("lines: could not cancel the broker stop for %s: %s", line.symbol, exc)
+        for _ in range(8):
             try:
-                await self.trading.cancel_order(line.stop_order_id)
+                o = await self.trading.get_order(order_id)
             except Exception as exc:  # noqa: BLE001
-                log.warning("lines: could not cancel the broker stop for %s: %s", line.symbol, exc)
-            line.stop_order_id = ""
+                log.warning("lines: stop order lookup failed for %s: %s", line.symbol, exc)
+                return None
+            status = str(getattr(o, "status", "") or "")
+            if status == "filled" and getattr(o, "filled_avg_price", None):
+                return float(o.filled_avg_price)
+            if status in ("canceled", "expired", "rejected", "replaced", "done_for_day", ""):
+                return None
+            await asyncio.sleep(self.cancel_wait_s)
+        return None
+
+    async def _exit(self, line: Line, caused_by: Event | None) -> None:
+        if line.stop_order_id:
+            stopped_at = await self._release_stop(line)
+            if stopped_at is not None:  # the broker's stop got there first: the position is gone
+                await self._close(line, stopped_at, "broker", caused_by)
+                return
         intent = OrderIntent(
             intent_id=str(ULID()),
             symbol=line.symbol,
@@ -354,18 +503,21 @@ class LinesAgent(BaseAgent):
             side="sell" if line.direction == "long" else "buy",
             quantity=line.quantity,
             urgency="now",
-            rationale_event_ids=[caused_by.event_id],
+            rationale_event_ids=[caused_by.event_id] if caused_by is not None else [],
             call_id=line.call_id,
             allow_fractional=line.market == "crypto",
         )
         line.exit_intent = intent.intent_id
+        line.exit_at = self.clock.now()
         self.by_intent[intent.intent_id] = line.call_id
         await self.emit(
             Topics.ORDER_INTENT, intent, symbol=line.symbol, book=intent.book, caused_by=caused_by
         )
         log.info("lines: exit %s (%s)", line.symbol, line.exit_reason)
 
-    async def _close(self, line: Line, exit_px: float, reason: str, caused_by: Event) -> None:
+    async def _close(
+        self, line: Line, exit_px: float, reason: str, caused_by: Event | None
+    ) -> None:
         realized = None
         if line.base and exit_px:
             realized = (exit_px / line.base - 1) * 100 * line.sign - ROUND_TRIP[line.market] * 100
@@ -400,7 +552,7 @@ class LinesAgent(BaseAgent):
             f"{realized:+.2f}%" if realized is not None else "",
         )
 
-    async def _announce(self, line: Line, what: str, last: float, caused_by: Event) -> None:
+    async def _announce(self, line: Line, what: str, last: float, caused_by: Event | None) -> None:
         await self.emit(
             Topics.LINES_UPDATED,
             LinesUpdated(

@@ -19,7 +19,7 @@ from ulid import ULID
 
 from desk.agents.base import BaseAgent
 from desk.bus.base import Bus
-from desk.core import prompts
+from desk.core import calendar, prompts
 from desk.core.clock import Clock
 from desk.core.events import Event, Topics, parse_payload
 from desk.core.payloads import Call, OrderIntent, PredictionCall, SentinelTrigger
@@ -83,6 +83,7 @@ class Predictor(BaseAgent):
         position_pct: Decimal = Decimal("0.01"),
         min_first_profit_pct: float = 0.5,
         min_loss_pct: float = 0.5,
+        no_entry_minutes: int = 30,
         client: anthropic.AsyncAnthropic | None = None,
         cache: Any = None,
     ) -> None:
@@ -98,6 +99,7 @@ class Predictor(BaseAgent):
         self.position_pct = Decimal(position_pct)
         self.min_first_profit_pct = min_first_profit_pct
         self.min_loss_pct = min_loss_pct
+        self.no_entry_minutes = no_entry_minutes
         self._client = client
         self.cache = cache
         self.calls_at: list[datetime] = []
@@ -235,6 +237,13 @@ class Predictor(BaseAgent):
             self.risk is not None and t.symbol in getattr(self.back_office, "book_of", {})
         ):
             return None
+        if t.market != "crypto" and self.no_entry_minutes > 0:
+            # stocks and funds are flat before the bell: a call this late has no room to work
+            if not calendar.is_open(now):
+                return None
+            close_at = calendar.session_bounds(calendar.session_of(now))[1]
+            if now >= close_at - timedelta(minutes=self.no_entry_minutes):
+                return None
         if not self._budget_ok(now):
             return await self._record(
                 t, None, 0.0, False, "budget: the hourly call budget is spent", "", {}, caused_by
@@ -275,6 +284,8 @@ class Predictor(BaseAgent):
                     skip = "blocked by the skeptic"
                 elif ob.severity == "concern" and call.confidence < self.min_confidence + 0.1:
                     skip = f"skeptic concern and confidence {call.confidence:.2f} below {self.min_confidence + 0.1:.2f}"
+        if not skip and self._size(t.market, t.last) <= 0:
+            skip = f"one position's budget buys less than one unit at {t.last}"
         rec = await self._record(
             t, call, t.last, not skip, skip, objection, extra["record"], caused_by
         )
@@ -350,7 +361,9 @@ class Predictor(BaseAgent):
             log.warning("predictor: no size for %s at %s", t.symbol, rec.price)
             return
         sign = 1 if call.direction == "long" else -1
-        stop = Decimal(str(round(rec.price * (1 - sign * call.max_loss_pct / 100), 4)))
+        # the broker takes stock and fund prices to the cent only; crypto prices are finer
+        places = 4 if t.market == "crypto" else 2
+        stop = Decimal(str(round(rec.price * (1 - sign * call.max_loss_pct / 100), places)))
         intent = OrderIntent(
             intent_id=str(ULID()),
             symbol=t.symbol,

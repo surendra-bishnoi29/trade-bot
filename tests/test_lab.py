@@ -715,3 +715,266 @@ async def test_polled_bars_deliver_each_completed_bar_once_in_order():
     clock.advance_to(T0 + timedelta(minutes=5))
     assert await feed.poll(["AAPL", "MSFT"]) == []  # closed: no calls, no bars
     assert len(data.starts) == 3
+
+
+# ---- the fixes of 2026-11-09: refusals, the bell, the broker's stop, reconciliation ----
+
+
+async def _open_line(agent, bus, when=T0, price="100.00"):
+    await bus.publish(call_event(when))
+    await bus.publish(intent_event(when))
+    await bus.wait_idle()
+    await bus.publish(fill_event(when + timedelta(seconds=5), "i1", price))
+    await bus.wait_idle()
+    return agent.lines["AAPL"]
+
+
+def risk_rejected(when: datetime, intent_id: str, reason="duplicate_order: working") -> Event:
+    return ev(
+        Topics.RISK_REJECTED,
+        when,
+        {"intent_id": intent_id, "decision": "rejected", "reason": reason, "rules": []},
+        "AAPL",
+        "swing",
+    )
+
+
+async def test_an_entry_the_risk_officer_refuses_frees_the_instrument():
+    clock = SimClock(T0)
+    bus = InMemoryBus(clock)
+    agent = LinesAgent(bus, clock, FakeDB(), FakeTrading(), SimpleNamespace(book_of={}))
+    agent.start()
+    task = asyncio.create_task(bus.run())
+    await bus.publish(call_event(T0))
+    await bus.publish(intent_event(T0))
+    await bus.wait_idle()
+    assert agent.pending_symbols() == {"AAPL"}
+    await bus.publish(risk_rejected(T0, "i1", "price_fresh: 20 min old"))
+    await bus.wait_idle()
+    assert agent.pending_symbols() == set() and not agent.lines
+    scores = [e for e in bus.log if e.type == Topics.PREDICTION_SCORE]
+    assert len(scores) == 1 and scores[0].payload["reason"] == "risk"
+    assert scores[0].payload["hit"] is None  # never opened: it does not count for or against
+    task.cancel()
+
+
+async def test_a_refused_exit_stays_decided_and_is_sent_again_after_a_wait():
+    clock = SimClock(T0)
+    bus = InMemoryBus(clock)
+    agent = LinesAgent(bus, clock, FakeDB(), FakeTrading(), SimpleNamespace(book_of={}))
+    agent.start()
+    task = asyncio.create_task(bus.run())
+    line = await _open_line(agent, bus)
+    clock.advance_to(T0 + timedelta(minutes=1))
+    await bus.publish(bar("AAPL", clock.now(), 99.5, 98.9))  # through the stop at 99
+    await bus.wait_idle()
+    exits = [e for e in bus.log if e.type == Topics.ORDER_INTENT and e.payload["side"] == "sell"]
+    assert len(exits) == 1 and line.exit_reason == "stop"
+    await bus.publish(risk_rejected(clock.now(), exits[0].payload["intent_id"]))
+    await bus.wait_idle()
+    assert line.exit_intent == "" and line.exit_tries == 1 and "AAPL" in agent.lines
+    # a bar back above the stop does not cancel the decision, and nothing is sent inside the wait
+    clock.advance_to(T0 + timedelta(minutes=1, seconds=10))
+    await bus.publish(bar("AAPL", clock.now(), 100.4, 100.1))
+    await bus.wait_idle()
+    assert await agent.tick() == 0
+    clock.advance_to(T0 + timedelta(minutes=1, seconds=25))
+    assert await agent.tick() == 1
+    await bus.wait_idle()
+    exits = [e for e in bus.log if e.type == Topics.ORDER_INTENT and e.payload["side"] == "sell"]
+    assert len(exits) == 2 and line.exit_intent == exits[1].payload["intent_id"]
+    await bus.publish(fill_event(clock.now(), exits[1].payload["intent_id"], "99.80"))
+    await bus.wait_idle()
+    score = next(e for e in bus.log if e.type == Topics.PREDICTION_SCORE)
+    assert score.payload["reason"] == "stop" and "AAPL" not in agent.lines
+    task.cancel()
+
+
+async def test_stocks_are_closed_before_the_bell_and_crypto_is_not():
+    # Friday 2026-11-06: New York closes at 21:00 UTC
+    start = datetime(2026, 11, 6, 20, 0, tzinfo=UTC)
+    clock = SimClock(start)
+    bus = InMemoryBus(clock)
+    agent = LinesAgent(
+        bus, clock, FakeDB(), FakeTrading(), SimpleNamespace(book_of={}), flat_minutes=10
+    )
+    agent.start()
+    task = asyncio.create_task(bus.run())
+    line = await _open_line(agent, bus, when=start)
+    coin = Line("c2", "BTC/USD", "crypto", "long", 0.7, Decimal("0.01"), 1.0, 1.0, 0.5, 600)
+    coin.open(100000.0, start)
+    agent.lines["BTC/USD"] = coin
+    clock.advance_to(start + timedelta(minutes=49))
+    assert await agent.tick() == 0  # 20:49: eleven minutes left
+    clock.advance_to(start + timedelta(minutes=50, seconds=5))
+    assert await agent.tick() == 1  # 20:50: the stock goes, the coin stays
+    await bus.wait_idle()
+    assert line.exit_reason == "close" and coin.exit_intent == ""
+    # after the bell nothing can be sold: a stock still held waits for the open, without orders
+    held = Line("c3", "KO", "stocks", "long", 0.7, Decimal(10), 1.0, 1.0, 0.5, 30)
+    held.open(70.0, start)
+    agent.lines["KO"] = held
+    clock.advance_to(start + timedelta(hours=3))
+    before = len([e for e in bus.log if e.type == Topics.ORDER_INTENT])
+    await agent.tick()
+    await bus.wait_idle()
+    assert len([e for e in bus.log if e.type == Topics.ORDER_INTENT]) == before
+    task.cancel()
+
+
+async def test_when_the_brokers_stop_fired_first_the_exit_is_not_sent_twice():
+    class StopFilled(FakeTrading):
+        async def get_order(self, order_id):
+            return SimpleNamespace(status="filled", filled_avg_price=Decimal("99.02"))
+
+    clock = SimClock(T0)
+    bus = InMemoryBus(clock)
+    agent = LinesAgent(bus, clock, FakeDB(), StopFilled(), SimpleNamespace(book_of={}))
+    agent.start()
+    task = asyncio.create_task(bus.run())
+    await _open_line(agent, bus)
+    clock.advance_to(T0 + timedelta(minutes=1))
+    await bus.publish(bar("AAPL", clock.now(), 99.5, 98.9))
+    await bus.wait_idle()
+    sells = [e for e in bus.log if e.type == Topics.ORDER_INTENT and e.payload["side"] == "sell"]
+    assert sells == []  # the position is already gone: a second sell would open a short
+    score = next(e for e in bus.log if e.type == Topics.PREDICTION_SCORE)
+    assert score.payload["reason"] == "broker" and score.payload["exit"] == 99.02
+    assert "AAPL" not in agent.lines
+    task.cancel()
+
+
+async def test_a_snapshot_older_than_the_fill_does_not_close_a_fresh_line():
+    clock = SimClock(T0)
+    bus = InMemoryBus(clock)
+    agent = LinesAgent(bus, clock, FakeDB(), FakeTrading(), SimpleNamespace(book_of={}))
+    agent.start()
+    task = asyncio.create_task(bus.run())
+    await _open_line(agent, bus)
+    stale = {"equity": "100000", "positions": [], "as_of": (T0 + timedelta(seconds=3)).isoformat()}
+    await bus.publish(ev(Topics.PORTFOLIO_RECONCILED, T0 + timedelta(seconds=6), stale))
+    await bus.wait_idle()
+    assert "AAPL" in agent.lines  # taken before the fill reached the broker's list
+    later = {
+        "equity": "100000",
+        "positions": [{"symbol": "MSFT", "qty": "5"}],
+        "as_of": (T0 + timedelta(minutes=5)).isoformat(),
+    }
+    clock.advance_to(T0 + timedelta(minutes=5))
+    await bus.publish(ev(Topics.PORTFOLIO_RECONCILED, clock.now(), later))
+    await bus.wait_idle()
+    assert "AAPL" not in agent.lines and agent.unmanaged == {"MSFT"}
+    task.cancel()
+
+
+async def test_a_resting_stop_is_not_a_working_order():
+    from desk.agents.back_office import BackOffice
+    from desk.data.alpaca import AccountInfo, BrokerOrder
+
+    class Trading:
+        paper = True
+
+        async def account(self):
+            return AccountInfo("ACTIVE", Decimal(100000), Decimal(90000), Decimal(200000), False, 0)
+
+        async def positions(self):
+            return []
+
+        async def open_orders(self, limit=100):
+            zero = Decimal(0)
+            return [
+                BrokerOrder(
+                    "s1", "held", zero, None, symbol="AAPL", side="sell", order_type="stop"
+                ),
+                BrokerOrder("m1", "new", zero, None, symbol="KO", side="buy", order_type="market"),
+            ]
+
+        async def recent_orders(self, limit=50):
+            return []
+
+    clock = SimClock(T0)
+    office = BackOffice(InMemoryBus(clock), clock, Trading(), Decimal(100000))
+    await office.refresh()
+    assert office.view().open_orders == {"KO": {"buy"}}
+
+
+async def test_predictor_prices_the_stop_to_the_cent_sizes_first_and_stays_out_near_the_bell():
+    import desk.lab.predictor as mod
+
+    async def no_detail(db, market, symbol, now, **kw):
+        return {"symbol": symbol, "candles": [], "trail": []}
+
+    mod.symbol_detail = no_detail  # type: ignore[assignment]
+    markets = {
+        "stocks": Market("stocks", "US stocks", ("AAPL", "BIG"), "SPY", "nyse", True),
+        "crypto": Market("crypto", "Crypto", ("BTC/USD",), "BTC/USD", "utc_day", True),
+    }
+    office = SimpleNamespace(snapshot=SimpleNamespace(equity=Decimal(100000)), book_of={})
+    limits = RiskLimits(
+        universe=frozenset({"AAPL", "BIG", "BTC/USD"}),
+        allow_short=True,
+        books={"crypto": BookLimits(allow_short=False, always_open=True)},
+    )
+
+    def call(max_loss=0.7):
+        return Call(
+            direction="long",
+            confidence=0.8,
+            horizon_minutes=120,
+            max_loss_pct=max_loss,
+            first_profit_pct=1.6,
+            step_pct=0.5,
+            reason="test",
+            evidence_ids=[],
+        )
+
+    def trigger(symbol, market, last):
+        return SentinelTrigger(
+            symbol=symbol,
+            market=market,
+            reason="surge",
+            detail="40 to 60",
+            score=60,
+            side="bull",
+            strength=60,
+            setup="MOMENTUM",
+            last=last,
+        )
+
+    async def run(at, t, *answers):
+        clock = SimClock(at)
+        bus = InMemoryBus(clock)
+        client = ScriptedClient(*answers)
+        p = Predictor(
+            bus,
+            clock,
+            FakeDB(),
+            markets,
+            SimpleNamespace(funnels={}),
+            office,
+            SimpleNamespace(limits=limits),
+            client=client,
+        )  # type: ignore[arg-type]
+        rec = await p.decide(
+            t, ev(Topics.SENTINEL_TRIGGER, at, t.model_dump(mode="json"), t.symbol)
+        )
+        return rec, [e for e in bus.log if e.type == Topics.ORDER_INTENT], client
+
+    fine = Objection(severity="none", argument="nothing")
+    # 268.37 less 0.7% is 266.49141: the broker takes 266.49, not four decimals
+    rec, intents, _ = await run(T0, trigger("AAPL", "stocks", 268.37), call(), fine)
+    assert rec.acted and intents[0].payload["stop_price"] == "266.49"
+    assert intents[0].payload["quantity"] == "3"  # 1% of 100,000 buys three whole shares
+    # crypto keeps its finer prices and fractional size
+    rec, intents, _ = await run(T0, trigger("BTC/USD", "crypto", 0.512345), call(), fine)
+    assert rec.acted and intents[0].payload["stop_price"] == "0.5088"
+    # one share costs more than the position's budget: recorded as not acted, no order, no pending
+    rec, intents, _ = await run(T0, trigger("BIG", "stocks", 1500.0), call(), fine)
+    assert not rec.acted and "less than one unit" in rec.skipped_because and intents == []
+    # 20:40 UTC on a day that closes at 21:00: no stock call at all, and no model call spent
+    late = datetime(2026, 11, 6, 20, 40, tzinfo=UTC)
+    rec, intents, client = await run(late, trigger("AAPL", "stocks", 268.37), call(), fine)
+    assert rec is None and intents == [] and client.prompts == []
+    # crypto has no bell
+    rec, intents, _ = await run(late, trigger("BTC/USD", "crypto", 100000.0), call(), fine)
+    assert rec.acted and len(intents) == 1

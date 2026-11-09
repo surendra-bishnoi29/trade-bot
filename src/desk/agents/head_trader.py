@@ -459,6 +459,12 @@ class HeadTrader(BaseAgent):
     async def a_propose_order(self, symbol: str, side: str, quantity: int, rationale: str) -> str:
         if self.settings.autonomy_level < 1:
             return "autonomy level 0: the desk only researches; no orders"
+        if self.settings.lab_enabled:
+            return (
+                "not placed: on the lab desk every order comes from the predictor, so that every "
+                "position has its lines and its score. An order from here would sit at the broker "
+                "with nothing watching it."
+            )
         if side not in ("buy", "sell"):
             return "side must be buy or sell"
         intent = OrderIntent(
