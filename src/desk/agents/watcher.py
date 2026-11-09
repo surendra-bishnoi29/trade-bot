@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal
 from statistics import median
+from typing import Any
 
 from desk.agents.base import BaseAgent
 from desk.bus.base import Bus
@@ -151,7 +152,7 @@ class WatcherAgent(BaseAgent):
         bus: Bus,
         clock: Clock,
         db: Database,
-        live: AlpacaLiveBars,
+        live: AlpacaLiveBars | Any,  # anything with run(symbols, on_bar) and stop(): stream or poll
         symbols: list[str],
         config: WatcherConfig | None = None,
     ) -> None:
@@ -182,5 +183,5 @@ class WatcherAgent(BaseAgent):
                 await self.emit(Topics.WATCHER_ALERT, alert, symbol=alert.symbol, book="intraday")
 
     async def run_forever(self) -> None:
-        log.info("watcher streaming %d symbols", len(self.symbols))
+        log.info("watcher on %d symbols (%s)", len(self.symbols), type(self.live).__name__)
         await self.live.run(self.symbols, self.on_bar)

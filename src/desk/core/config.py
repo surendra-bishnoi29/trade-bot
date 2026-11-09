@@ -109,6 +109,10 @@ class Settings(BaseSettings):
     # them at the next live minute bar (data still comes from Alpaca); for a local run without a
     # second paper account. The journal, the funnel and the scores look the same either way.
     broker: Literal["alpaca", "sim"] = "alpaca"
+    # Live stock bars: the websocket (true) or a REST poll every 20 seconds (false). Alpaca's free
+    # plan allows one stream per login, so the default is the stream for the main desk and the
+    # poll for the lab desk, which runs beside it on the same login. Set it to say otherwise.
+    live_stream: bool | None = None
     sim_crypto_fee_pct: Decimal = Decimal("0.25")  # Alpaca's taker fee on crypto, each side
     lab_markets: list[str] = Field(default_factory=lambda: ["stocks", "commodities", "crypto"])
     predictor_min_confidence: float = 0.6

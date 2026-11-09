@@ -666,3 +666,52 @@ async def test_sim_filler_fills_at_the_next_bar_and_charges_crypto_only():
     assert by_symbol["AAPL"].cost == Decimal("0.00")
     assert by_symbol["BTC/USD"].cost == Decimal("2.50")  # 0.25% of 1,000
     task.cancel()
+
+
+async def test_polled_bars_deliver_each_completed_bar_once_in_order():
+    from desk.core.payloads import MarketBar
+    from desk.data.watch import PolledBars
+
+    def mb(symbol: str, minute: int, close: float) -> MarketBar:
+        return MarketBar(
+            symbol=symbol,
+            interval="1m",
+            ts=T0 + timedelta(minutes=minute),
+            open=Decimal(str(close)),
+            high=Decimal(str(close)),
+            low=Decimal(str(close)),
+            close=Decimal(str(close)),
+            volume=100,
+            source="test",
+        )
+
+    class FakeData:
+        def __init__(self) -> None:
+            self.rows: list[MarketBar] = []
+            self.starts: list[datetime] = []
+
+        async def bars(self, symbols, interval, start, end=None):
+            self.starts.append(start)
+            return [b for b in self.rows if b.ts >= start and b.symbol in symbols]
+
+    clock = SimClock(T0 + timedelta(minutes=2, seconds=5))
+    data = FakeData()
+    open_now = {"v": True}
+    feed = PolledBars(data, clock, is_open=lambda at: open_now["v"])
+    # minutes 0 and 1 are complete, minute 2 is still forming
+    data.rows = [mb("MSFT", 1, 2), mb("AAPL", 0, 1), mb("AAPL", 1, 1.1), mb("AAPL", 2, 1.2)]
+    first = await feed.poll(["AAPL", "MSFT"])
+    assert [(b.symbol, b.ts.minute) for b in first] == [("AAPL", 0), ("AAPL", 1), ("MSFT", 1)]
+    assert await feed.poll(["AAPL", "MSFT"]) == []  # nothing new: nothing twice
+    clock.advance_to(T0 + timedelta(minutes=3, seconds=5))
+    data.rows.append(mb("MSFT", 2, 2.1))
+    second = await feed.poll(["AAPL", "MSFT"])
+    assert [(b.symbol, b.ts.minute) for b in second] == [("AAPL", 2), ("MSFT", 2)]
+    assert data.starts[-1] == T0 + timedelta(minutes=1) - timedelta(
+        minutes=2
+    )  # a small overlap only
+    open_now["v"] = False
+    data.rows.append(mb("AAPL", 3, 1.3))
+    clock.advance_to(T0 + timedelta(minutes=5))
+    assert await feed.poll(["AAPL", "MSFT"]) == []  # closed: no calls, no bars
+    assert len(data.starts) == 3

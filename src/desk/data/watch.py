@@ -5,8 +5,9 @@ the free real-time IEX feed, crypto bars from Alpaca's crypto data, which needs 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable
-from datetime import datetime
+import logging
+from collections.abc import Awaitable, Callable, Iterable
+from datetime import datetime, timedelta
 
 from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
@@ -18,6 +19,8 @@ from desk.core.payloads import MarketBar
 from desk.data.alpaca import bar_to_model
 
 MINUTE = TimeFrame(1, TimeFrameUnit.Minute)
+
+log = logging.getLogger(__name__)
 
 
 class WatchData:
@@ -54,3 +57,60 @@ class WatchData:
             for s, rows in result.data.items():
                 out += [bar_to_model(b, interval, s) for b in rows]
         return out
+
+
+class PolledBars:
+    """Live minute bars without the websocket: the same interface as AlpacaLiveBars, fed by a REST
+    poll. Alpaca's free plan allows one live stream per login, so a second desk on the same login
+    (the lab beside the main desk) must not open one: its retries could take the stream from the
+    desk that owns it. Each completed bar is delivered once, in time order, at most `every_s` late."""
+
+    def __init__(
+        self,
+        data: WatchData,
+        clock: object,
+        *,
+        every_s: float = 20.0,
+        is_open: Callable[[datetime], bool] | None = None,
+    ) -> None:
+        self.data = data
+        self.clock = clock
+        self.every_s = every_s
+        self.is_open = is_open or (lambda at: True)
+        self.seen: dict[str, datetime] = {}
+        self.running = True
+
+    async def poll(self, symbols: list[str]) -> list[MarketBar]:
+        """The completed minute bars not yet delivered."""
+        now = self.clock.now()  # type: ignore[attr-defined]
+        if not self.is_open(now):
+            return []
+        oldest = min((self.seen[s] for s in symbols if s in self.seen), default=None)
+        start = (oldest or now - timedelta(minutes=30)) - timedelta(minutes=2)
+        start = max(start, now - timedelta(minutes=90))  # never replay hours after a long outage
+        fresh: list[MarketBar] = []
+        for b in await self.data.bars(symbols, "1m", start):
+            if b.closes_at > now:
+                continue  # still forming
+            if b.symbol in self.seen and b.ts <= self.seen[b.symbol]:
+                continue
+            fresh.append(b)
+        fresh.sort(key=lambda b: (b.ts, b.symbol))
+        for b in fresh:
+            self.seen[b.symbol] = b.ts
+        return fresh
+
+    async def run(
+        self, symbols: Iterable[str], on_bar: Callable[[MarketBar], Awaitable[None]]
+    ) -> None:
+        symbols = list(symbols)
+        while self.running:
+            try:
+                for b in await self.poll(symbols):
+                    await on_bar(b)
+            except Exception as exc:  # noqa: BLE001 - a failed poll must not end the feed
+                log.warning("polled bars failed: %s", exc)
+            await self.clock.sleep(self.every_s)  # type: ignore[attr-defined]
+
+    async def stop(self) -> None:
+        self.running = False

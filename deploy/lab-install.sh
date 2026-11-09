@@ -38,7 +38,10 @@ chmod 750 "$LAB"
 mkdir -p /opt/desk/lab-web && chmod 755 /opt/desk/lab-web
 
 echo "== secrets"
-if [ -f /tmp/desk-lab.env ] && [ ! -f "$LAB/.env" ]; then
+if [ -f /tmp/desk-lab.env ]; then
+  # a freshly staged file always wins: this is how the lab's keys are changed later
+  # (edit .env.lab on the laptop, run deploy/lab-env.sh, run this installer again)
+  [ -f "$LAB/.env" ] && echo "replacing the lab's .env with the staged one"
   install -o desk -g desk -m 600 /tmp/desk-lab.env "$LAB/.env" && rm -f /tmp/desk-lab.env
 fi
 [ -f "$LAB/.env" ] || { echo "missing $LAB/.env: run deploy/lab-env.sh from the laptop first"; exit 1; }

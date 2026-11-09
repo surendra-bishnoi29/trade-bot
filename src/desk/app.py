@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import redis.asyncio as aioredis
@@ -346,9 +346,25 @@ class Desk:
                     ", ".join(m.key for m in lab_markets),
                 )
             feed = DataFeed.SIP if settings.alpaca_feed == "sip" else DataFeed.IEX
-            desk.watcher = WatcherAgent(
-                bus, clock, db, AlpacaLiveBars(key, secret, feed=feed), universe
-            )
+            stream = settings.live_stream if settings.live_stream is not None else not lab
+            if stream:
+                live_bars: Any = AlpacaLiveBars(key, secret, feed=feed)
+            else:
+                from desk.data.watch import PolledBars, WatchData
+
+                live_bars = PolledBars(
+                    WatchData(key, secret),
+                    clock,
+                    # two minutes of grace so the session's last bar, which closes at the bell, arrives
+                    is_open=lambda at: (
+                        calendar.is_open(at) or calendar.is_open(at - timedelta(minutes=2))
+                    ),
+                )
+                log.warning(
+                    "live stock bars by REST poll every 20s: the one stream this login allows "
+                    "is left to the main desk (DESK_LIVE_STREAM=true to use the stream here)"
+                )
+            desk.watcher = WatcherAgent(bus, clock, db, live_bars, universe)
             if not lab:
                 desk.scheduler = CycleScheduler(bus, clock, cycle, strategy, settings)
                 desk.scheduler.start()
