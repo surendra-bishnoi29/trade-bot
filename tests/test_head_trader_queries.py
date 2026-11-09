@@ -90,3 +90,80 @@ async def test_queries_read_the_database_and_format_for_the_model(database_url, 
         await conn.execute("DELETE FROM bars WHERE symbol = 'ZZQ'")
         await conn.execute("DELETE FROM events WHERE symbol = 'ZZQ'")
     await db.close()
+
+
+async def test_on_the_lab_desk_the_head_trader_knows_the_mandate_and_reads_the_lab(
+    database_url, clock
+):
+    db = Database(database_url)
+    await db.open()
+    await db.migrate()
+    settings = Settings(lab_enabled=True)
+    head = HeadTrader(InMemoryBus(clock), clock, db, settings, back_office=None, client=object())  # type: ignore[arg-type]
+    layer = head.daily_layer()
+    assert "THIS IS THE LAB DESK" in layer
+    assert "GLD" in layer and "USO" in layer and "BTC/USD" in layer
+    assert "Long only" in layer and "never short" in layer  # crypto
+    assert "no hourly cycle" in layer and "get_lab" in layer
+    assert len(head.tools()) == 12  # the lab adds get_lab
+    assert set(head.traded_markets()) == {"stocks", "commodities", "crypto"}
+    now = clock.now()
+    for i, (acted, why) in enumerate([(True, ""), (False, "confidence 0.20 below 0.60")]):
+        await db.insert_event(
+            make_event(
+                clock,
+                type=Topics.PREDICTION_CALL,
+                symbol="BTC/USD",
+                payload={
+                    "call_id": f"labq{i}",
+                    "symbol": "BTC/USD",
+                    "market": "crypto",
+                    "trigger": "surge",
+                    "call": {
+                        "direction": "long" if acted else "none",
+                        "confidence": 0.7 if acted else 0.2,
+                        "horizon_minutes": 120,
+                        "max_loss_pct": 0.6,
+                        "first_profit_pct": 0.9,
+                        "step_pct": 0.4,
+                        "reason": "volume confirmed the move",
+                    },
+                    "price": 100000.0,
+                    "acted": acted,
+                    "skipped_because": why,
+                },
+            )
+        )
+    await db.insert_event(
+        make_event(
+            clock,
+            type=Topics.PREDICTION_SCORE,
+            symbol="GLD",
+            payload={
+                "call_id": "labq-s",
+                "symbol": "GLD",
+                "market": "commodities",
+                "direction": "short",
+                "confidence": 0.65,
+                "realized_pct": 0.8,
+                "hit": True,
+                "reason": "line",
+                "closed_at": now.isoformat(),
+            },
+        )
+    )
+    text = await head.q_lab(24)
+    assert "Markets traded: stocks, commodities, crypto." in text
+    assert "1 of 1 scored calls hit (100%), +0.80% a call. Too few to judge" in text
+    assert "commodities: 1 of 1" in text
+    assert "Open positions on lines: none." in text
+    assert "2, of which 1 became orders" in text and "by market: crypto 2" in text
+    assert "ORDER, loss line 0.6%" in text and "no trade (confidence 0.20 below 0.60)" in text
+    assert "no such market" in await head.q_funnel("bonds")
+    # the main desk is unchanged: no lab section, no lab tool
+    main = HeadTrader(InMemoryBus(clock), clock, db, Settings(), back_office=None, client=object())  # type: ignore[arg-type]
+    assert "LAB DESK" not in main.daily_layer() and len(main.tools()) == 11
+    assert "not switched on" in await main.q_lab()
+    async with db.pool.connection() as conn:
+        await conn.execute("DELETE FROM events WHERE payload->>'call_id' LIKE 'labq%'")
+    await db.close()

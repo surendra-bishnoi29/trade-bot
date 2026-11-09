@@ -96,14 +96,73 @@ class HeadTrader(BaseAgent):
 
     # ---- prompt layers ----
 
+    def traded_markets(self) -> dict[str, Any]:
+        """The markets this desk trades: stocks on the main desk, all the lab's markets on the lab."""
+        from desk.funnel.markets import markets
+
+        s = self.settings
+        every = markets(list(s.core_universe), set(s.lab_markets) if s.lab_enabled else None)
+        return {k: m for k, m in every.items() if m.traded}
+
     def daily_layer(self) -> str:
         s = self.settings
-        return (
+        base = (
             f"Desk configuration for {self.clock.now().date().isoformat()}: autonomy level {s.autonomy_level} "
             f"(0 research only, 1 autonomous paper, 2 live with approval, 3 live within limits); "
             f"broker account {'paper' if s.alpaca_paper else 'LIVE'}; "
             f"core universe {', '.join(s.core_universe)}."
         )
+        if not s.lab_enabled:
+            return base
+        traded = self.traded_markets()
+        lines = [
+            base,
+            "",
+            (
+                "THIS IS THE LAB DESK. Where this section differs from your standing description, this "
+                "section is right: the mandate here is wider than US equities and the decisions are made "
+                "differently."
+            ),
+            "Markets traded on this desk (paper account):",
+        ]
+        if "stocks" in traded:
+            lines.append(
+                "- US stocks: the core universe above. Long and short. New York session only."
+            )
+        if "commodities" in traded:
+            lines.append(
+                f"- Oil and gold, through exchange-traded funds (no futures): {', '.join(traded['commodities'].symbols)}. "
+                f"Long{' and short' if s.commodities_allow_short else ' only'}. New York session only. "
+                f"At most {float(s.commodities_max_gross_pct) * 100:.0f}% of equity in total."
+            )
+        if "crypto" in traded:
+            lines.append(
+                f"- Crypto, spot pairs at the same broker: {', '.join(traded['crypto'].symbols)}. Long only "
+                f"(buy, then sell; never short). Around the clock, weekends included. Fractional sizes. "
+                f"At most {float(s.crypto_max_gross_pct) * 100:.0f}% of equity in total. Fees about 0.25% a side."
+            )
+        lines += [
+            (
+                "Who decides here: there is no hourly cycle and you do not plan the book. A sentinel looks "
+                "at every instrument every minute and raises a trigger when something changes; the "
+                "predictor answers each trigger with a call (long, short or none; a confidence; a maximum "
+                "loss line, a first profit line and a step), checked by a skeptic; it acts only at "
+                f"confidence {s.predictor_min_confidence:.2f} or more, sized at "
+                f"{float(s.lab_position_pct) * 100:.1f}% of equity a position. A lines engine then holds "
+                "the position: when the first profit line is reached the stop moves to the entry, the "
+                "profit line ratchets up by the step, and the position closes when the price comes back "
+                "to a line or the horizon passes. Every call is scored after costs when it closes. The "
+                "risk officer still approves or rejects every order."
+            ),
+            (
+                "Your part: answer the people running the desk, truthfully and from the tools. Use "
+                "get_lab for what the predictor called, what is held on which lines, and the hit record; "
+                "use get_funnel with market stocks, commodities or crypto for the live picture of a "
+                "market. The lab is an experiment: say plainly when the record is too short to judge "
+                "(fewer than 60 scored calls) and never present its results as proven."
+            ),
+        ]
+        return "\n".join(lines)
 
     def context_line(self) -> str:
         now = self.clock.now()
@@ -262,13 +321,91 @@ class HeadTrader(BaseAgent):
             )
         return "\n".join(out)
 
-    async def q_funnel(self) -> str:
+    async def q_funnel(self, market: str = "stocks") -> str:
         """The funnel the interface draws, as text: market sentiment and the ranked names per side."""
         from desk.funnel.build import build_funnel, digest
         from desk.funnel.markets import markets
 
-        market = markets(list(self.settings.core_universe))["stocks"]
-        return digest(await build_funnel(self.db, market, self.clock.now()))
+        s = self.settings
+        every = markets(list(s.core_universe), set(s.lab_markets) if s.lab_enabled else None)
+        chosen = every.get(market.strip().lower() or "stocks")
+        if chosen is None:
+            return f"no such market: {market}. Choose from {', '.join(every)}."
+        return digest(await build_funnel(self.db, chosen, self.clock.now()))
+
+    async def q_lab(self, hours: int = 24) -> str:
+        """The lab desk as text: the predictor's record, the open lines, and the recent calls."""
+        if not self.settings.lab_enabled:
+            return "the lab desk is not switched on in this process"
+        from desk.funnel.build import lab_state
+
+        now = self.clock.now()
+        traded = self.traded_markets()
+        market_of = {sym: k for k, m in traded.items() for sym in m.all_symbols}
+        record, lines, _ = await lab_state(self.db, now, set(market_of))
+        out = [f"Markets traded: {', '.join(traded)}."]
+        total = {"n": 0, "hits": 0, "sum": 0.0}
+        by_market: dict[str, dict[str, float]] = {}
+        for sym, r in record.items():
+            for bucket in (
+                total,
+                by_market.setdefault(market_of[sym], {"n": 0, "hits": 0, "sum": 0.0}),
+            ):
+                bucket["n"] += r["n"]
+                bucket["hits"] += r["hits"]
+                bucket["sum"] += r["sum"]
+        if total["n"]:
+            out.append(
+                f"Record, last 60 days, after costs: {int(total['hits'])} of {int(total['n'])} scored calls hit "
+                f"({total['hits'] / total['n'] * 100:.0f}%), {total['sum'] / total['n']:+.2f}% a call."
+                + (" Too few to judge (the bar is 60 scored calls)." if total["n"] < 60 else "")
+            )
+            for k, b in by_market.items():
+                out.append(
+                    f"  {k}: {int(b['hits'])} of {int(b['n'])} ({b['hits'] / b['n'] * 100:.0f}%), {b['sum'] / b['n']:+.2f}% a call"
+                )
+        else:
+            out.append("Record: no scored calls yet, so nothing can be said about the hit rate.")
+        if lines:
+            out.append(f"Open positions on lines ({len(lines)}):")
+            for sym, ln in lines.items():
+                out.append(
+                    f"  {sym} {ln.get('direction')} {ln.get('quantity')} from {ln.get('base')}: stop {ln.get('stop')}, "
+                    f"profit line {ln.get('profit_line')}, steps {ln.get('steps')}, "
+                    f"{'stop on the base' if ln.get('armed') else 'waiting for the first line'}, last {ln.get('last')}"
+                )
+        else:
+            out.append("Open positions on lines: none.")
+        since = now - timedelta(hours=min(max(hours, 1), 168))
+        calls = [
+            e
+            for e in await self.db.recent_events(
+                [Topics.PREDICTION_CALL], since, limit=400, until=now
+            )
+            if e.symbol in market_of
+        ]
+        acted = [e for e in calls if e.payload.get("acted")]
+        out.append(
+            f"Predictor calls in the last {hours} hours: {len(calls)}, of which {len(acted)} became orders."
+        )
+        per_market: dict[str, int] = {}
+        for e in calls:
+            per_market[market_of[e.symbol]] = per_market.get(market_of[e.symbol], 0) + 1
+        if per_market:
+            out.append("  by market: " + ", ".join(f"{k} {v}" for k, v in per_market.items()))
+        for e in (acted + [c for c in calls if not c.payload.get("acted")])[:14]:
+            c = e.payload.get("call") or {}
+            when = e.occurred_at.astimezone(UTC).strftime("%m-%d %H:%M")
+            verdict = (
+                f"ORDER, loss line {c.get('max_loss_pct')}%, first profit {c.get('first_profit_pct')}%"
+                if e.payload.get("acted")
+                else f"no trade ({e.payload.get('skipped_because', '')})"
+            )
+            out.append(
+                f"  {when} {e.symbol} on {e.payload.get('trigger')}: {c.get('direction')} at "
+                f"{float(c.get('confidence') or 0):.2f}, {verdict}. {str(c.get('reason', ''))[:180]}"
+            )
+        return "\n".join(out)
 
     async def q_research(self, symbol: str = "", hours: int = 24) -> str:
         from desk.agents.research import research_digest
@@ -420,11 +557,25 @@ class HeadTrader(BaseAgent):
             return await head.q_research(symbol, hours)
 
         @beta_async_tool
-        async def get_funnel() -> str:
+        async def get_funnel(market: str = "stocks") -> str:
             """The live funnel the client sees: market sentiment with its evidence, then the strongest
             and weakest names today with their score, setup, book (swing, intraday candidate, watch)
-            and which agent checks each has passed."""
-            return await head.q_funnel()
+            and which agent checks each has passed.
+
+            Args:
+                market: stocks (default), commodities (oil and gold funds) or crypto.
+            """
+            return await head.q_funnel(market)
+
+        @beta_async_tool
+        async def get_lab(hours: int = 24) -> str:
+            """The lab desk: which markets it trades, the predictor's hit record after costs, the
+            positions held on lines right now, and the predictor's recent calls with their reasons.
+
+            Args:
+                hours: How far back to list calls, 1 to 168.
+            """
+            return await head.q_lab(hours)
 
         @beta_async_tool
         async def get_risk_state() -> str:
@@ -464,6 +615,7 @@ class HeadTrader(BaseAgent):
             get_risk_state,
             scan_news,
             propose_order,
+            *([get_lab] if head.settings.lab_enabled else []),
         ]
 
     # ---- the conversation ----
