@@ -211,7 +211,8 @@ class LinesAgent(BaseAgent):
                 quantity=Decimal(str(p.get("quantity") or call.get("quantity") or 0)),
                 max_loss_pct=float(call.get("max_loss_pct") or 1.0),
                 first_profit_pct=float(call.get("first_profit_pct") or 1.0),
-                step_pct=float(p.get("step_pct") or 0.5),
+                # the step the book uses now, so a position from before a rule change follows it
+                step_pct=self.step_for(p["market"], float(p.get("step_pct") or 0.5)),
                 horizon_minutes=int(call.get("horizon_minutes") or 240),
                 base=float(p["base"]),
                 stop=float(p["stop"]),
@@ -369,11 +370,12 @@ class LinesAgent(BaseAgent):
             if self._retry_due(line, self.clock.now()):
                 await self._exit(line, event)
             return
-        if line.opened_at and event.occurred_at <= line.opened_at:
-            # a bar that closed before the fill: after a restart the bus hands back the day's
-            # earlier bars, and a low from the morning must not fire a line drawn at noon
-            return
         p = event.payload
+        if line.opened_at and self._closed_by(event) <= line.opened_at:
+            # a bar that closed before the fill: after a restart the desk re-reads the day's
+            # earlier bars (stamped with the time they were read, not the minute they cover),
+            # and a low from the morning must not fire a line drawn at noon
+            return
         high, low, close = float(p["high"]), float(p["low"]), float(p["close"])
         happened = line.watch(high, low)
         for what in happened:
@@ -386,6 +388,20 @@ class LinesAgent(BaseAgent):
             await self._exit(line, event)
         elif happened:
             await self._broker_stop(line)
+
+    @staticmethod
+    def _closed_by(event: Event) -> datetime:
+        """When the bar's minute ended: from the bar's own timestamp, not the event's, because a
+        bar read back after a restart carries the time it was read."""
+        ts = event.payload.get("ts")
+        if ts:
+            try:
+                return min(
+                    datetime.fromisoformat(str(ts)) + timedelta(minutes=1), event.occurred_at
+                )
+            except ValueError:
+                pass
+        return event.occurred_at
 
     def _tradable(self, line: Line, now: datetime) -> bool:
         return line.market == "crypto" or calendar.is_open(now)
@@ -489,7 +505,13 @@ class LinesAgent(BaseAgent):
                 if leg is None:
                     return
                 line.stop_order_id = leg.broker_order_id
-            await self.trading.replace_stop(line.stop_order_id, Decimal(str(round(level, 2))))
+            moved = await self.trading.replace_stop(
+                line.stop_order_id, Decimal(str(round(level, 2)))
+            )
+            # the broker answers a replacement with a new order: that is the stop from now on
+            new_id = str(getattr(moved, "broker_order_id", "") or "")
+            if new_id:
+                line.stop_order_id = new_id
         except Exception as exc:  # noqa: BLE001 - the desk's own watch still protects the position
             log.warning("lines: broker stop for %s not updated: %s", line.symbol, exc)
 

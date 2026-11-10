@@ -66,7 +66,9 @@ class MarketFeeds(BaseAgent):
                     seen = self.last_minute.get(market.key)
                     for b in sorted(minute, key=lambda b: b.ts):
                         if seen is None or b.ts > seen:
-                            await self.emit(Topics.MARKET_BAR_1M, b, symbol=b.symbol)
+                            await self.emit(
+                                Topics.MARKET_BAR_1M, b, symbol=b.symbol, occurred_at=b.closes_at
+                            )
                 self.last_minute[market.key] = newest
         self.counts[market.key] = self.counts.get(market.key, 0) + written
         return written

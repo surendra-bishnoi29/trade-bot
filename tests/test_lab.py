@@ -1114,6 +1114,11 @@ async def test_bars_from_before_the_fill_do_not_move_a_line():
     for k in range(30, 0, -5):
         await bus.publish(bar("AAPL", T0 - timedelta(minutes=k), 97.5, 96.0))
     await bus.publish(bar("AAPL", T0 - timedelta(minutes=1), 103.0, 102.0))
+    # a bar read back after a restart: the event says now, the bar itself says this morning
+    replayed = bar("AAPL", T0 - timedelta(minutes=40), 97.0, 96.0).model_copy(
+        update={"occurred_at": T0 + timedelta(minutes=1), "ingested_at": T0 + timedelta(minutes=1)}
+    )
+    await bus.publish(replayed)
     await bus.wait_idle()
     assert "AAPL" in agent.lines and not line.exit_reason and not line.armed
     assert not [
@@ -1123,4 +1128,30 @@ async def test_bars_from_before_the_fill_do_not_move_a_line():
     await bus.publish(bar("AAPL", T0 + timedelta(minutes=2), 99.5, 98.8))
     await bus.wait_idle()
     assert line.exit_reason == "stop"
+    task.cancel()
+
+
+async def test_the_broker_stop_keeps_the_id_of_its_latest_replacement():
+    """Alpaca answers a replacement with a new order; replacing the old id again fails with
+    'order already replaced' (seen live on AMZN, 10 Nov)."""
+    clock = SimClock(T0)
+    bus = InMemoryBus(clock)
+    trading = FakeTrading()
+
+    async def replace_stop(order_id, stop_price):
+        trading.stops[order_id] = stop_price
+        return SimpleNamespace(broker_order_id=f"{order_id}+")
+
+    trading.replace_stop = replace_stop
+    agent = LinesAgent(
+        bus, clock, FakeDB(), trading, SimpleNamespace(book_of={}), step_bounds=(0.5, 0.5)
+    )
+    agent.start()
+    task = asyncio.create_task(bus.run())
+    line = await _open_line(agent, bus)
+    assert line.stop_order_id == "stop-b-i1+"  # the first placement already answered with a new id
+    clock.advance_to(T0 + timedelta(minutes=1))
+    await bus.publish(bar("AAPL", clock.now(), 101.2, 100.4))  # two steps: the line at 100.50
+    await bus.wait_idle()
+    assert line.stop_order_id == "stop-b-i1++" and trading.stops["stop-b-i1+"] == Decimal("100.5")
     task.cancel()
