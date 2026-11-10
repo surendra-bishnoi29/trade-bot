@@ -4,11 +4,10 @@ import "./lab.css";
 import { AgentFlow, MarketTiles, OpenLines } from "./Overview";
 import { hms } from "./Pieces";
 import { ReportView, Scoreboard } from "./Scoreboard";
-import { TradesPane } from "./Trades";
 import { Story, TileKey } from "./types";
 import { useDays, useLive, useReport } from "./useLab";
 
-type Tab = "live" | "charts" | "report";
+type Tab = "live" | "report";
 type Show = "all" | "sided" | "traded";
 
 /** The predictor at work: what it is shown, how it reasons, what the other agents do with its
@@ -26,7 +25,6 @@ export function LabBoard() {
   const [day, setDay] = useState<string>(today);
   const { report, loading } = useReport(tab === "report" ? day : null);
   const [opened, setOpened] = useState<Story | null>(null);
-  const [trade, setTrade] = useState<string | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
@@ -64,9 +62,6 @@ export function LabBoard() {
         <div className="pl-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={tab === "live"} className={tab === "live" ? "on" : ""} onClick={() => setTab("live")}>
             Live
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "charts"} className={tab === "charts" ? "on" : ""} onClick={() => setTab("charts")}>
-            Lines, minute by minute
           </button>
           <button type="button" role="tab" aria-selected={tab === "report"} className={tab === "report" ? "on" : ""} onClick={() => setTab("report")}>
             Right / wrong report
@@ -127,23 +122,10 @@ export function LabBoard() {
               <Scoreboard tally={live.tally} findings={live.findings} title="Today so far (UTC)" />
               <section className="held-box">
                 <h2>On lines now</h2>
-                <OpenLines
-                  lines={live.lines}
-                  onOpen={(id) => {
-                    setTrade(id);
-                    setTab("charts");
-                  }}
-                />
+                <OpenLines lines={live.lines} onOpen={(id) => window.location.assign(`/lines?call=${encodeURIComponent(id)}`)} />
               </section>
             </aside>
           </div>
-        </>
-      )}
-
-      {tab === "charts" && (
-        <>
-          {live && <MarketTiles live={live} filter={filter} onFilter={setFilter} />}
-          <TradesPane picked={trade} onPick={setTrade} filter={filter} />
         </>
       )}
 

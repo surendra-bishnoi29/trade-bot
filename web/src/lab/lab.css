@@ -1713,3 +1713,51 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* the part of the lines the time runner has not reached, and the crosshair under the mouse */
+.pl .tc-svg .ahead,
+.pl .tc-svg .mark.ahead {
+  opacity: 0.22;
+}
+.pl .tc-svg .xhair line {
+  stroke: var(--pl-soft);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.pl .tc-svg .xhair .tag {
+  fill: var(--pl-ink);
+}
+.pl .tc-svg .xhair .tag-text {
+  fill: var(--pl-bg);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+.pl .tc-svg .xhair .tag-text.left {
+  text-anchor: start;
+}
+.pl .tc-svg .tip rect {
+  fill: var(--pl-panel-2);
+  stroke: var(--pl-line);
+  opacity: 0.96;
+}
+.pl .tc-svg .tip text {
+  font-size: 11px;
+  text-anchor: start;
+}
+.pl .tc-svg .tip .t1 {
+  fill: var(--pl-ink);
+  font-weight: 700;
+}
+.pl .tc-svg .tip .t2 {
+  fill: var(--pl-soft);
+}
+.pl .tc-svg .tip .t2.bear {
+  fill: var(--bear);
+}
+.pl .tc-svg .tip .t2.bull {
+  fill: var(--bull);
+}
+.pl .tc-svg .tip .t2.base {
+  fill: var(--pl-ink);
+}

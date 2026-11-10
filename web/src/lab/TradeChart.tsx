@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { pct, price } from "../funnel/format";
 import { hms } from "./Pieces";
 import { LineMove, TradeChartData } from "./types";
@@ -68,7 +68,7 @@ export function TradeChart({ chart }: { chart: TradeChartData }) {
   const rows = useMemo(() => standings(chart), [chart]);
   const [at, setAt] = useState<number | null>(null); // null: follow the newest bar
   const [playing, setPlaying] = useState(false);
-  const hover = useRef<number | null>(null);
+  const [hover, setHover] = useState<{ i: number; px: number; py: number } | null>(null);
   const idx = at === null ? bars.length - 1 : Math.min(at, bars.length - 1);
 
   useEffect(() => {
@@ -111,12 +111,14 @@ export function TradeChart({ chart }: { chart: TradeChartData }) {
   const vy = (v: number) => H - 26 - (v / maxVol) * (volH - 6);
   const candleW = Math.max(1.5, Math.min(9, slot * 0.66));
 
-  // a stepped path for one line: horizontal across each bar it stood at that value
-  const stepPath = (pick: (s: Standing) => number | null): string => {
+  // a stepped path for one line: horizontal across each bar it stood at that value. The part up
+  // to the time runner is drawn solid, so the lines take their new values as time moves; the
+  // part beyond it is drawn faint.
+  const stepPath = (pick: (s: Standing) => number | null, from: number, to: number): string => {
     let d = "";
     let prev: number | null = null;
     rows.forEach((s, i) => {
-      const v = s.phase === "held" ? pick(s) : null;
+      const v = s.phase === "held" && i >= from && i <= to ? pick(s) : null;
       if (v === null) {
         prev = null;
         return;
@@ -155,18 +157,26 @@ export function TradeChart({ chart }: { chart: TradeChartData }) {
   ];
   const label = (iso: string) => iso.slice(11, 16);
 
-  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+  const locate = (e: React.MouseEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * W;
+    const py = ((e.clientY - r.top) / r.height) * H;
     const i = Math.max(0, Math.min(bars.length - 1, Math.floor((px - padL) / slot)));
-    hover.current = i;
-    setAt(i);
+    return { i, px, py };
+  };
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => setHover(locate(e));
+  const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    setAt(locate(e).i);
     setPlaying(false);
   };
+  const priceAt = (py: number) => hi - ((py - padT) / (H - padT - padB)) * (hi - lo);
+  const hb = hover ? bars[hover.i] : null;
+  const hs = hover ? rows[hover.i] : null;
+  const tipLeft = hover ? hover.px > W * 0.62 : false;
 
   return (
     <div className="tc">
-      <svg viewBox={`0 0 ${W} ${H}`} className="tc-svg" onMouseMove={onMove} role="img" aria-label={`${chart.symbol} ${chart.direction}: price and lines, minute by minute`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="tc-svg" onMouseMove={onMove} onMouseLeave={() => setHover(null)} onClick={onClick} role="img" aria-label={`${chart.symbol} ${chart.direction}: price and lines, minute by minute`}>
         {zones.map((z, k) => (
           <rect key={k} x={z.x0} y={Math.min(y(z.a), y(z.b))} width={z.x1 - z.x0} height={Math.abs(y(z.a) - y(z.b))} className={z.cls} />
         ))}
@@ -190,16 +200,21 @@ export function TradeChart({ chart }: { chart: TradeChartData }) {
             </g>
           );
         })}
-        <path d={stepPath((s) => s.next_step)} className="ln next" />
-        <path d={stepPath((s) => s.base)} className="ln base" />
-        <path d={stepPath((s) => s.stop)} className="ln stop" />
-        <path d={stepPath((s) => s.profit_line)} className="ln line" />
+        <g className="ahead">
+          <path d={stepPath((s) => s.base, idx + 1, bars.length)} className="ln base" />
+          <path d={stepPath((s) => s.stop, idx + 1, bars.length)} className="ln stop" />
+          <path d={stepPath((s) => s.profit_line, idx + 1, bars.length)} className="ln line" />
+        </g>
+        <path d={stepPath((s) => s.next_step, 0, idx)} className="ln next" />
+        <path d={stepPath((s) => s.base, 0, idx)} className="ln base" />
+        <path d={stepPath((s) => s.stop, 0, idx)} className="ln stop" />
+        <path d={stepPath((s) => s.profit_line, 0, idx)} className="ln line" />
         {moves.map(({ s, i }) => {
           const m = s.move!;
           const v = m.event === "exit" ? (m.last ?? m.stop) : m.event === "opened" ? m.base : m.event === "base" ? m.stop : m.profit_line;
           if (v === null) return null;
           return (
-            <g key={m.at} className={`mark ${m.event}`}>
+            <g key={m.at} className={`mark ${m.event}${i > idx ? " ahead" : ""}`}>
               <circle cx={x(i)} cy={y(v)} r={5} />
               <text x={x(i)} y={y(v) - 9}>
                 {{ opened: "fill", base: "stop → base", ratchet: `line +${m.steps}`, exit: "exit" }[m.event] ?? m.event}
@@ -220,6 +235,44 @@ export function TradeChart({ chart }: { chart: TradeChartData }) {
             {hms(bar.ts)}
           </text>
         </g>
+        {hover && hb && hs && hover.py >= padT && hover.py <= H - padB && (
+          <g className="xhair" pointerEvents="none">
+            <line x1={x(hover.i)} x2={x(hover.i)} y1={padT} y2={H - padB} />
+            <line x1={padL} x2={W - padR} y1={hover.py} y2={hover.py} />
+            <rect x={x(hover.i) - 24} y={H - padB + 2} width={48} height={15} rx={3} className="tag" />
+            <text x={x(hover.i)} y={H - padB + 13} className="tag-text">
+              {hb.ts.slice(11, 16)}
+            </text>
+            <rect x={W - padR + 2} y={hover.py - 8} width={padR - 4} height={16} rx={3} className="tag" />
+            <text x={W - padR + 6} y={hover.py + 4} className="tag-text left">
+              {price(priceAt(hover.py))}
+            </text>
+            <g transform={`translate(${tipLeft ? hover.px - 214 : hover.px + 14}, ${Math.min(Math.max(padT, hover.py - 40), H - padB - 96)})`} className="tip">
+              <rect width={200} height={hs.phase === "held" ? 92 : 48} rx={6} />
+              <text x={8} y={16} className="t1">
+                {hb.ts.slice(0, 10)} {hb.ts.slice(11, 16)} UTC
+              </text>
+              <text x={8} y={32} className="t2">
+                O {price(hb.open)} H {price(hb.high)} L {price(hb.low)} C {price(hb.close)}
+              </text>
+              {hs.phase === "held" && (
+                <>
+                  <text x={8} y={50} className="t2 bear">
+                    max loss {price(hs.stop)}
+                    {hs.armed ? " (on the base)" : ""}
+                  </text>
+                  <text x={8} y={66} className="t2 base">
+                    base {price(hs.base)}
+                  </text>
+                  <text x={8} y={82} className="t2 bull">
+                    min profit {price(hs.profit_line)}
+                    {hs.steps ? ` (raised ${hs.steps}×)` : ""}
+                  </text>
+                </>
+              )}
+            </g>
+          </g>
+        )}
       </svg>
 
       <div className="tc-runner">

@@ -22,6 +22,7 @@ from fastapi import (
 )
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from desk.bus.redis_streams import RedisStreamsBus
 from desk.core.clock import LiveClock
@@ -51,6 +52,19 @@ class AskBody(BaseModel):
 class CommandBody(BaseModel):
     command: str = Field(min_length=1, max_length=32)
     args: str = Field(default="", max_length=500)
+
+
+class SpaFiles(StaticFiles):
+    """The web build with the single-page fallback Caddy gives it in production: a path the
+    build has no file for (/predictor, /lines, /desk) gets index.html and the app routes it."""
+
+    async def get_response(self, path: str, scope):  # type: ignore[override]
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404 or path.startswith("api"):
+                raise
+            return await super().get_response("index.html", scope)
 
 
 def create_app(
@@ -392,6 +406,6 @@ def create_app(
 
     dist = Path(settings.web_dist)
     if dist.is_dir():
-        app.mount("/", StaticFiles(directory=str(dist), html=True), name="web")
+        app.mount("/", SpaFiles(directory=str(dist), html=True), name="web")
 
     return app

@@ -16,10 +16,17 @@ import { Research } from "./components/Research";
 import { Trades } from "./components/Trades";
 import { FunnelBoard } from "./funnel/FunnelBoard";
 import { LabBoard } from "./lab/LabBoard";
+import { LinesPage } from "./lab/LinesPage";
 import { LiveMessage, useLive } from "./live";
 
 type Tab = "research" | "activity" | "cycles" | "reviews";
-type View = "funnel" | "predictor" | "desk";
+type View = "funnel" | "predictor" | "lines" | "desk";
+const PATHS: Record<View, string> = { funnel: "/", predictor: "/predictor", lines: "/lines", desk: "/desk" };
+
+function viewOf(pathname: string): View {
+  const hit = (Object.entries(PATHS) as [View, string][]).find(([, p]) => p !== "/" && pathname.startsWith(p));
+  return hit ? hit[0] : "funnel";
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -34,7 +41,16 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [results, setResults] = useState<CommandResult[]>([]);
   const [tab, setTab] = useState<Tab>("research");
-  const [view, setView] = useState<View>("funnel");
+  const [view, setViewState] = useState<View>(() => viewOf(window.location.pathname));
+  const setView = useCallback((v: View) => {
+    if (window.location.pathname !== PATHS[v]) window.history.pushState(null, "", PATHS[v]);
+    setViewState(v);
+  }, []);
+  useEffect(() => {
+    const back = () => setViewState(viewOf(window.location.pathname));
+    window.addEventListener("popstate", back);
+    return () => window.removeEventListener("popstate", back);
+  }, []);
   const [reports, setReports] = useState<Report[] | null>(null);
   const [postmortems, setPostmortems] = useState<Postmortem[]>([]);
   const [scores, setScores] = useState<AnalystScores | null>(null);
@@ -316,6 +332,14 @@ export default function App() {
           <span>Predictor</span>
         </button>
       )}
+      {health?.lab && (
+        <button type="button" className={view === "lines" ? "on" : ""} onClick={() => setView("lines")} title="Lines: every position charted minute by minute, with its three lines as they moved">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 17l5-6 4 4 4-7 5 5M3 21h18" />
+          </svg>
+          <span>Lines</span>
+        </button>
+      )}
       <button type="button" className={view === "desk" ? "on" : ""} onClick={() => setView("desk")} title="Desk: agents, book, chat, reviews">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 5h7v6H4zM13 5h7v9h-7zM4 13h7v6H4zM13 16h7v3h-7z" />
@@ -339,6 +363,14 @@ export default function App() {
       <div className="shell">
         {rail}
         <LabBoard />
+      </div>
+    );
+
+  if (view === "lines")
+    return (
+      <div className="shell">
+        {rail}
+        <LinesPage />
       </div>
     );
 
