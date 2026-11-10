@@ -510,15 +510,16 @@
   letter-spacing: 0.06em;
   white-space: nowrap;
 }
+/* long and short are a direction, not a result: their own colours, apart from green and red */
 .pl .dir.long {
-  background: var(--bull-bg);
-  color: var(--bull);
-  box-shadow: inset 0 0 0 1px var(--bull-edge);
+  background: rgba(91, 180, 255, 0.12);
+  color: #6fc0ff;
+  box-shadow: inset 0 0 0 1px rgba(91, 180, 255, 0.4);
 }
 .pl .dir.short {
-  background: var(--bear-bg);
-  color: var(--bear);
-  box-shadow: inset 0 0 0 1px var(--bear-edge);
+  background: rgba(196, 140, 255, 0.12);
+  color: #c89bff;
+  box-shadow: inset 0 0 0 1px rgba(196, 140, 255, 0.4);
 }
 .pl .dir.none {
   background: #121925;
@@ -1760,4 +1761,9 @@
 }
 .pl .tc-svg .tip .t2.base {
   fill: var(--pl-ink);
+}
+
+.pl .tc-result {
+  flex-basis: 100%;
+  font-weight: 700;
 }

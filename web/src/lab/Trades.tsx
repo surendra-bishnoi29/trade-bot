@@ -1,4 +1,7 @@
 import { pct } from "../funnel/format";
+
+export const money = (v: number | null | undefined): string =>
+  v === null || v === undefined || Number.isNaN(v) ? "n/a" : `${v < 0 ? "−" : v > 0 ? "+" : ""}$${Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 import { hms } from "./Pieces";
 import { TradeChart } from "./TradeChart";
 import { TileKey, TradeRow } from "./types";
@@ -12,6 +15,7 @@ function Result({ t }: { t: TradeRow }) {
   return (
     <span className={`pill ${t.hit ? "bull" : "bear"}`} title={t.how}>
       {t.hit ? "RIGHT" : "WRONG"} {pct(t.realized_pct)}
+      {t.pnl !== null ? ` · ${money(t.pnl)}` : ""}
     </span>
   );
 }
@@ -61,7 +65,7 @@ export function TradesPane({ picked, onPick, filter }: { picked: string | null; 
               <b className="sym">{row.symbol}</b> <span className="name">{row.name}</span> <span className={`dir ${row.direction}`}>{row.direction.toUpperCase()}</span>
             </h2>
             <span className="mute">
-              {TILE_WORD[row.tile]} · {row.quantity ?? "?"} at {row.base ?? "?"} · opened {hms(row.opened_at)} UTC{row.closed_at ? ` · closed ${hms(row.closed_at)}` : " · still open, refreshes every 10s"}
+              {TILE_WORD[row.tile]} · {row.quantity ?? "?"} at {row.base ?? "?"} (${row.notional.toLocaleString("en-US", { maximumFractionDigits: 0 })}) · opened {hms(row.opened_at)} UTC{row.closed_at ? ` · closed ${hms(row.closed_at)}` : " · still open, refreshes every 10s"}
               {row.how ? ` · ${row.how}` : ""}
             </span>
             <Result t={row} />

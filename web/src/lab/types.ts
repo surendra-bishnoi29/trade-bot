@@ -223,6 +223,8 @@ export interface TradeRow {
   how: string;
   realized_pct: number | null;
   hit: boolean | null;
+  notional: number;
+  pnl: number | null;
 }
 
 export interface ChartBar {
@@ -257,6 +259,7 @@ export interface TradeChartData {
   market: string;
   direction: "long" | "short";
   quantity: number | null;
+  notional: number;
   opened_at: string;
   closed_at: string | null;
   open: boolean;
@@ -265,6 +268,6 @@ export interface TradeChartData {
   trigger: string;
   confidence: number | null;
   lines: LineMove[];
-  score: { hit: boolean | null; reason: string; how: string; realized_pct: number | null; entry: number | null; exit: number | null } | null;
+  score: { hit: boolean | null; reason: string; how: string; realized_pct: number | null; pnl: number | null; entry: number | null; exit: number | null } | null;
   bars: ChartBar[];
 }

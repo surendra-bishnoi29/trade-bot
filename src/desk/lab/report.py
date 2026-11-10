@@ -869,6 +869,9 @@ async def trades(db: Database, now: datetime, days: int = 7) -> list[dict[str, A
         symbol = str(first.symbol or first.payload.get("symbol"))
         s = score_of.get(cid)
         closed = last.payload.get("event") == "exit"
+        qty = _f(first.payload.get("quantity")) or 0.0
+        base = _f(first.payload.get("base")) or 0.0
+        realized = _f(s.payload.get("realized_pct")) if s else None
         out.append(
             {
                 "call_id": cid,
@@ -887,8 +890,11 @@ async def trades(db: Database, now: datetime, days: int = 7) -> list[dict[str, A
                 "open": not closed,
                 "reason": (s.payload.get("reason") if s else None) or ("" if closed else "open"),
                 "how": EXIT_WORDS.get(str(s.payload.get("reason")), "") if s else "",
-                "realized_pct": _f(s.payload.get("realized_pct")) if s else None,
+                "realized_pct": realized,
                 "hit": s.payload.get("hit") if s else None,
+                # the money: what the position was worth at the fill, and what it made after costs
+                "notional": round(base * qty, 2),
+                "pnl": round(realized / 100 * base * qty, 2) if realized is not None else None,
             }
         )
     out.sort(key=lambda r: r["opened_at"], reverse=True)
@@ -937,6 +943,9 @@ async def trade_chart(db: Database, call_id: str, now: datetime) -> dict[str, An
     bars = await db.bars_between([symbol], "1m", start, end)
     call = calls[0].payload if calls else {}
     score = scores[0].payload if scores else None
+    qty = _f(first.payload.get("quantity")) or 0.0
+    base = _f(first.payload.get("base")) or 0.0
+    realized = _f(score.get("realized_pct")) if score else None
     return {
         "call_id": call_id,
         "symbol": symbol,
@@ -945,6 +954,7 @@ async def trade_chart(db: Database, call_id: str, now: datetime) -> dict[str, An
         "market": market,
         "direction": first.payload.get("direction"),
         "quantity": _f(first.payload.get("quantity")),
+        "notional": round(base * qty, 2),
         "opened_at": _iso(first.occurred_at),
         "closed_at": _iso(last.occurred_at) if closed else None,
         "open": not closed,
@@ -957,7 +967,8 @@ async def trade_chart(db: Database, call_id: str, now: datetime) -> dict[str, An
             "hit": score.get("hit"),
             "reason": score.get("reason", ""),
             "how": EXIT_WORDS.get(str(score.get("reason")), str(score.get("reason") or "")),
-            "realized_pct": _f(score.get("realized_pct")),
+            "realized_pct": realized,
+            "pnl": round(realized / 100 * base * qty, 2) if realized is not None else None,
             "entry": _f(score.get("entry")),
             "exit": _f(score.get("exit")),
         }

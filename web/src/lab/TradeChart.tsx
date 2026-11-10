@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { pct, price } from "../funnel/format";
 import { hms } from "./Pieces";
+import { money } from "./Trades";
 import { LineMove, TradeChartData } from "./types";
 
 /** Where the three lines stood during one bar, read from the line moves up to that minute. */
@@ -291,7 +292,17 @@ export function TradeChart({ chart }: { chart: TradeChartData }) {
           <span className="mono">
             O {price(bar.open)} H {price(bar.high)} L {price(bar.low)} C {price(bar.close)}
           </span>
-          {gain !== null && cur.phase === "held" && <span className={gain >= 0 ? "bull" : "bear"}>{pct(gain)} from the base</span>}
+          {gain !== null && cur.phase === "held" && (
+            <span className={gain >= 0 ? "bull" : "bear"}>
+              {pct(gain)} from the base{chart.notional ? ` (${money((gain / 100) * chart.notional)} before costs)` : ""}
+            </span>
+          )}
+          {chart.score && chart.score.realized_pct !== null && (
+            <span className={`tc-result ${chart.score.hit ? "bull" : "bear"}`}>
+              Result: {pct(chart.score.realized_pct)}
+              {chart.score.pnl !== null ? `, ${money(chart.score.pnl)}` : ""} after costs on ${chart.notional.toLocaleString("en-US", { maximumFractionDigits: 0 })} · {chart.score.how}
+            </span>
+          )}
         </div>
         <dl className="tc-lines">
           {lineVals

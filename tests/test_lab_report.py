@@ -531,6 +531,7 @@ async def test_a_position_can_be_replayed_bar_by_bar_with_every_move_of_its_line
     rows = await trades(db, now, 7)  # type: ignore[arg-type]
     assert [r["call_id"] for r in rows] == ["c2", "c1"]  # newest first
     assert rows[1]["moves"] == 4 and rows[1]["hit"] is True and rows[1]["realized_pct"] == 1.4
+    assert rows[1]["notional"] == 1000.0 and rows[1]["pnl"] == 14.0  # 10 at 100, +1.4% after costs
     assert rows[1]["how"] == "came back to the min-profit line" and rows[1]["closed_at"].endswith(
         "+00:00"
     )
@@ -546,6 +547,7 @@ async def test_a_position_can_be_replayed_bar_by_bar_with_every_move_of_its_line
         and c["bars"][-1]["ts"] == (T0 + 28 * m).isoformat()
     )
     assert c["score"]["how"] == "came back to the min-profit line" and c["confidence"] == 0.6
+    assert c["score"]["pnl"] == 14.0 and c["notional"] == 1000.0
     assert await trade_chart(db, "nope", now) is None  # type: ignore[arg-type]
     still = await trade_chart(db, "c2", now)  # type: ignore[arg-type]
     assert still is not None and still["open"] and still["bars"][-1]["ts"] <= now.isoformat()
