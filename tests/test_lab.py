@@ -1083,3 +1083,30 @@ async def test_the_bar_the_skeptic_the_budget_and_a_cut_off_answer(monkeypatch):
     p.calls_at = [clock.now()] * 6
     rec = await p.decide(trig("surge"), cause)
     assert rec.skipped_because.startswith("budget")
+
+
+async def test_bars_from_before_the_fill_do_not_move_a_line():
+    """At a restart the desk re-reads the day's bars; a low from the morning must not fire a
+    line drawn at noon. Seen live on 10 Nov: UNG, GLD and IAU closed as 'stop' at prices that
+    never touched their lines."""
+    clock = SimClock(T0)
+    bus = InMemoryBus(clock)
+    agent = LinesAgent(bus, clock, FakeDB(), FakeTrading(), SimpleNamespace(book_of={}))
+    agent.start()
+    task = asyncio.create_task(bus.run())
+    line = await _open_line(agent, bus)  # long from 100, stop 99
+    assert line.stop < 100 < line.profit_line
+    # the morning's bars, replayed after the fill: well below the stop, and then above the line
+    for k in range(30, 0, -5):
+        await bus.publish(bar("AAPL", T0 - timedelta(minutes=k), 97.5, 96.0))
+    await bus.publish(bar("AAPL", T0 - timedelta(minutes=1), 103.0, 102.0))
+    await bus.wait_idle()
+    assert "AAPL" in agent.lines and not line.exit_reason and not line.armed
+    assert not [
+        e for e in bus.log if e.type == Topics.ORDER_INTENT and e.payload.get("side") == "sell"
+    ]
+    # a bar after the fill counts as before
+    await bus.publish(bar("AAPL", T0 + timedelta(minutes=2), 99.5, 98.8))
+    await bus.wait_idle()
+    assert line.exit_reason == "stop"
+    task.cancel()

@@ -348,6 +348,10 @@ class LinesAgent(BaseAgent):
             if self._retry_due(line, self.clock.now()):
                 await self._exit(line, event)
             return
+        if line.opened_at and event.occurred_at <= line.opened_at:
+            # a bar that closed before the fill: after a restart the bus hands back the day's
+            # earlier bars, and a low from the morning must not fire a line drawn at noon
+            return
         p = event.payload
         high, low, close = float(p["high"]), float(p["low"]), float(p["close"])
         happened = line.watch(high, low)
