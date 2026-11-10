@@ -7,7 +7,17 @@ from datetime import UTC, date, datetime, timedelta
 
 from desk.core.events import Event, Topics
 from desk.funnel.markets import markets
-from desk.lab.report import findings, moved_after, report, simulate, stories, tally, tile_of
+from desk.lab.report import (
+    findings,
+    moved_after,
+    report,
+    simulate,
+    stories,
+    tally,
+    tile_of,
+    trade_chart,
+    trades,
+)
 
 DAY = date(2026, 11, 6)  # a Friday: New York trades 14:30 to 21:00 UTC
 T0 = datetime(2026, 11, 6, 15, 0, tzinfo=UTC)
@@ -459,3 +469,82 @@ async def test_a_pass_is_graded_by_its_lean_and_an_unanswered_trigger_is_not_a_p
     words = " ".join(findings(tally(rows), final=True))
     assert "answered 3 triggers" in words and "1 more trigger was never looked at" in words
     assert "leaned to on its passes, graded on paper: right 1, wrong 1" in words
+
+
+async def test_a_position_can_be_replayed_bar_by_bar_with_every_move_of_its_lines():
+    m = timedelta(minutes=1)
+
+    def move(at, event, stop, line, last, armed, steps):
+        return ev(
+            Topics.LINES_UPDATED,
+            at,
+            {
+                "call_id": "c1",
+                "symbol": "KO",
+                "market": "stocks",
+                "direction": "long",
+                "base": 100.0,
+                "stop": stop,
+                "profit_line": line,
+                "last": last,
+                "armed": armed,
+                "steps": steps,
+                "event": event,
+                "quantity": 10,
+                "step_pct": 0.5,
+            },
+            "KO",
+        )
+
+    events = [
+        call("c1", "KO", "stocks", T0 + 2 * m, "long", 0.6, True),
+        move(T0 + 3 * m, "opened", 99.0, 101.0, 100.0, False, 0),
+        move(T0 + 6 * m, "base", 100.0, 101.0, 101.2, True, 0),
+        move(T0 + 7 * m, "ratchet", 100.0, 101.5, 101.7, True, 1),
+        move(T0 + 9 * m, "exit", 100.0, 101.5, 101.4, True, 1),
+        ev(
+            Topics.PREDICTION_SCORE,
+            T0 + 9 * m,
+            {
+                "call_id": "c1",
+                "hit": True,
+                "reason": "line",
+                "realized_pct": 1.4,
+                "entry": 100.0,
+                "exit": 101.5,
+            },
+            "KO",
+        ),
+        move(T0 + 20 * m, "opened", 99.0, 101.0, 100.0, False, 0),  # a second, still open position
+    ]
+    events[-1].payload["call_id"] = "c2"
+    db = FakeDB(
+        events,
+        {
+            "KO": bars(
+                "KO", T0 - 30 * m, [100.0] * 34 + [100.4, 101.2, 101.7, 101.2, 100.9] + [100.5] * 20
+            )
+        },
+    )
+    now = T0 + timedelta(hours=1)
+    rows = await trades(db, now, 7)  # type: ignore[arg-type]
+    assert [r["call_id"] for r in rows] == ["c2", "c1"]  # newest first
+    assert rows[1]["moves"] == 4 and rows[1]["hit"] is True and rows[1]["realized_pct"] == 1.4
+    assert rows[1]["how"] == "came back to the profit line" and rows[1]["closed_at"].endswith(
+        "+00:00"
+    )
+    assert rows[0]["open"] and rows[0]["reason"] == "open" and rows[0]["steps"] == 0
+
+    c = await trade_chart(db, "c1", now)  # type: ignore[arg-type]
+    assert c is not None and c["symbol"] == "KO" and c["open"] is False
+    assert [x["event"] for x in c["lines"]] == ["opened", "base", "ratchet", "exit"]
+    assert c["lines"][1]["stop"] == 100.0 and c["lines"][2]["profit_line"] == 101.5
+    # bars run from twenty minutes before the fill to twenty after the exit
+    assert (
+        c["bars"][0]["ts"] == (T0 - 17 * m).isoformat()
+        and c["bars"][-1]["ts"] == (T0 + 28 * m).isoformat()
+    )
+    assert c["score"]["how"] == "came back to the profit line" and c["confidence"] == 0.6
+    assert await trade_chart(db, "nope", now) is None  # type: ignore[arg-type]
+    still = await trade_chart(db, "c2", now)  # type: ignore[arg-type]
+    assert still is not None and still["open"] and still["bars"][-1]["ts"] <= now.isoformat()

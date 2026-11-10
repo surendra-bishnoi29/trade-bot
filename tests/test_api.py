@@ -348,6 +348,8 @@ async def test_the_lab_endpoints_serve_the_live_view_and_a_graded_day(database_u
         assert day["findings"] == ["The predictor made no calls in this period."]
         assert client.get("/api/lab/report?day=not-a-day").status_code == 400
         assert isinstance(client.get("/api/lab/days").json(), list)
+        assert client.get("/api/lab/trades").json() == {"lab": True, "trades": []}
+        assert client.get("/api/lab/trade/no-such-call").status_code == 404
         assert client.get("/api/health").json()["lab"] is True
     await users.remove("labview")
     await db.close()

@@ -699,6 +699,21 @@ class StateReader:
         chosen = date.fromisoformat(day) if day else now.date()
         return {"lab": True, **await report(self.db, self._markets(), chosen, now)}
 
+    async def lab_trades(self, days: int = 7) -> dict:
+        if self.traded is None:
+            return {"lab": False, "trades": []}
+        from desk.lab.report import trades
+
+        return {"lab": True, "trades": await trades(self.db, datetime.now(UTC), days)}
+
+    async def lab_trade(self, call_id: str) -> dict | None:
+        if self.traded is None:
+            return {"lab": False}
+        from desk.lab.report import trade_chart
+
+        chart = await trade_chart(self.db, call_id, datetime.now(UTC))
+        return {"lab": True, **chart} if chart else None
+
     async def lab_days(self) -> list[str]:
         """The UTC days on which the predictor made at least one call, newest first."""
         rows = await self._query(

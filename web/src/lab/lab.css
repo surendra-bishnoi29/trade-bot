@@ -1365,9 +1365,13 @@
   }
   .pl .detail,
   .pl-col.pl-side,
+  .pl .pl-col.chart,
   .pl .report,
   .pl .report-detail {
     overflow: visible;
+  }
+  .pl .pl-trades {
+    grid-template-columns: minmax(0, 1fr);
   }
   .pl .report-wrap.with-detail {
     grid-template-columns: minmax(0, 1fr);
@@ -1395,5 +1399,317 @@
   }
   .pl .line-events span {
     grid-column: 1 / 3;
+  }
+}
+
+/* ---- lines, minute by minute: the chart and its time runner ---- */
+.pl .pl-trades {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 14px;
+}
+.pl .pl-col.chart {
+  gap: 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #243044 transparent;
+}
+.pl .tc-head {
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.pl .tc-head h2 .name {
+  color: var(--pl-muted);
+  font-weight: 500;
+}
+.pl .held-chart {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--held-edge);
+  border-radius: 6px;
+  background: var(--held-bg);
+  color: var(--held);
+  font: 600 10.5px/1.2 var(--pl-mono);
+  cursor: pointer;
+}
+.pl .tc {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--pl-line);
+  border-radius: 12px;
+  background: var(--pl-panel);
+}
+.pl .tc-empty,
+.pl .calls-empty {
+  color: var(--pl-muted);
+}
+.pl .tc-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: crosshair;
+  font-family: var(--pl-mono);
+}
+.pl .tc-svg .zone-loss {
+  fill: var(--bear);
+  opacity: 0.06;
+}
+.pl .tc-svg .zone-profit {
+  fill: var(--bull);
+  opacity: 0.06;
+}
+.pl .tc-svg .tick line {
+  stroke: var(--pl-line);
+  stroke-width: 1;
+}
+.pl .tc-svg .tick text,
+.pl .tc-svg .cursor text,
+.pl .tc-svg .axis {
+  font-size: 10.5px;
+  fill: var(--pl-muted);
+  text-anchor: middle;
+}
+.pl .tc-svg .axis {
+  text-anchor: start;
+  font-weight: 600;
+}
+.pl .tc-svg .axis.bear {
+  fill: var(--bear);
+}
+.pl .tc-svg .axis.bull {
+  fill: var(--bull);
+}
+.pl .tc-svg .axis.base {
+  fill: var(--pl-ink);
+}
+.pl .tc-svg .axis.faint {
+  fill: var(--pl-muted);
+  font-weight: 400;
+}
+.pl .tc-svg .candle line {
+  stroke-width: 1;
+}
+.pl .tc-svg .candle.up line,
+.pl .tc-svg .candle.up rect {
+  stroke: var(--bull);
+  fill: var(--bull);
+}
+.pl .tc-svg .candle.down line,
+.pl .tc-svg .candle.down rect {
+  stroke: var(--bear);
+  fill: var(--bear);
+}
+.pl .tc-svg .candle rect.vol {
+  opacity: 0.22;
+  stroke: none;
+}
+.pl .tc-svg .candle.future {
+  opacity: 0.28;
+}
+.pl .tc-svg .ln {
+  fill: none;
+  stroke-width: 1.6;
+}
+.pl .tc-svg .ln.base {
+  stroke: var(--pl-ink);
+  stroke-dasharray: 2 4;
+}
+.pl .tc-svg .ln.stop {
+  stroke: var(--bear);
+  stroke-dasharray: 7 4;
+}
+.pl .tc-svg .ln.line {
+  stroke: var(--bull);
+  stroke-dasharray: 7 4;
+}
+.pl .tc-svg .ln.next {
+  stroke: var(--bull);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  opacity: 0.45;
+}
+.pl .tc-svg .mark circle {
+  fill: var(--pl-panel);
+  stroke-width: 2;
+}
+.pl .tc-svg .mark text {
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+.pl .tc-svg .mark.opened circle,
+.pl .tc-svg .mark.opened text {
+  stroke: var(--held);
+  fill: var(--held);
+}
+.pl .tc-svg .mark.opened circle {
+  fill: var(--pl-panel);
+}
+.pl .tc-svg .mark.base circle {
+  stroke: var(--amber);
+}
+.pl .tc-svg .mark.base text {
+  fill: var(--amber);
+}
+.pl .tc-svg .mark.ratchet circle {
+  stroke: var(--bull);
+}
+.pl .tc-svg .mark.ratchet text {
+  fill: var(--bull);
+}
+.pl .tc-svg .mark.exit circle {
+  stroke: var(--pl-ink);
+}
+.pl .tc-svg .mark.exit text {
+  fill: var(--pl-ink);
+}
+.pl .tc-svg .cursor line {
+  stroke: var(--amber);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.pl .tc-svg .cursor text {
+  fill: var(--amber);
+  font-weight: 700;
+}
+.pl .tc-runner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pl .tc-runner input[type="range"] {
+  flex: 1;
+  accent-color: var(--amber);
+}
+.pl .tc-runner button {
+  padding: 4px 10px;
+  border: 1px solid var(--pl-line);
+  border-radius: 6px;
+  background: var(--pl-panel-2);
+  color: var(--pl-soft);
+  font: 600 11px/1.2 var(--pl-mono);
+  cursor: pointer;
+}
+.pl .tc-runner button.on {
+  border-color: var(--amber-edge);
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+.pl .tc-read {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--pl-line);
+  border-radius: 10px;
+  background: var(--pl-panel-2);
+}
+.pl .tc-time {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+.pl .tc-time .mono {
+  color: var(--pl-soft);
+}
+.pl .tc-lines {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.pl .tc-lines > div {
+  display: grid;
+  gap: 2px;
+  padding: 6px 9px;
+  border-left: 3px solid var(--pl-line);
+  background: var(--pl-panel);
+  border-radius: 0 6px 6px 0;
+}
+.pl .tc-lines dt {
+  font: 600 10px/1.2 var(--pl-mono);
+  color: var(--pl-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pl .tc-lines dd {
+  margin: 0;
+  font: 700 15px/1.2 var(--pl-mono);
+}
+.pl .tc-lines > div.bear {
+  border-left-color: var(--bear);
+}
+.pl .tc-lines > div.bear dd {
+  color: var(--bear);
+}
+.pl .tc-lines > div.bull {
+  border-left-color: var(--bull);
+}
+.pl .tc-lines > div.bull dd {
+  color: var(--bull);
+}
+.pl .tc-lines > div.base {
+  border-left-color: var(--pl-ink);
+}
+.pl .tc-lines > div.faint dd {
+  color: var(--pl-muted);
+  font-weight: 500;
+}
+.pl .tc-state {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--pl-soft);
+}
+.pl .tc-moves {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pl .tc-moves button {
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--pl-line);
+  border-radius: 8px;
+  background: var(--pl-panel-2);
+  color: var(--pl-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.pl .tc-moves button .in {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  gap: 2px 10px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.pl .tc-moves time {
+  color: var(--pl-muted);
+  font-family: var(--pl-mono);
+}
+.pl .tc-moves .mono {
+  grid-column: 2;
+  color: var(--pl-muted);
+  font-size: 11px;
+}
+.pl .tc-moves li.base b {
+  color: var(--amber);
+}
+.pl .tc-moves li.ratchet b {
+  color: var(--bull);
+}
+.pl .tc-moves li.opened b {
+  color: var(--held);
+}
+@media (max-width: 1100px) {
+  .pl .pl-trades {
+    grid-template-columns: 1fr;
   }
 }

@@ -202,3 +202,68 @@ export const OUTCOME: Record<Outcome, { word: string; tone: string; what: string
   right: { word: "RIGHT", tone: "bull", what: "The position closed with a gain after costs." },
   wrong: { word: "WRONG", tone: "bear", what: "The position closed with a loss after costs." },
 };
+
+/** One position the lines engine held, for the list behind the charts. */
+export interface TradeRow {
+  call_id: string;
+  symbol: string;
+  name: string;
+  tile: TileKey;
+  market: string;
+  direction: "long" | "short";
+  opened_at: string;
+  closed_at: string | null;
+  base: number | null;
+  quantity: number | null;
+  armed: boolean;
+  steps: number;
+  moves: number;
+  open: boolean;
+  reason: string;
+  how: string;
+  realized_pct: number | null;
+  hit: boolean | null;
+}
+
+export interface ChartBar {
+  ts: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface LineMove {
+  at: string;
+  event: string;
+  base: number | null;
+  stop: number | null;
+  profit_line: number | null;
+  last: number | null;
+  steps: number;
+  armed: boolean;
+  quantity: number | null;
+}
+
+/** One position with the minute bars it lived through and every move of its lines. */
+export interface TradeChartData {
+  lab: boolean;
+  call_id: string;
+  symbol: string;
+  name: string;
+  tile: TileKey;
+  market: string;
+  direction: "long" | "short";
+  quantity: number | null;
+  opened_at: string;
+  closed_at: string | null;
+  open: boolean;
+  as_of: string;
+  call: Partial<Call>;
+  trigger: string;
+  confidence: number | null;
+  lines: LineMove[];
+  score: { hit: boolean | null; reason: string; how: string; realized_pct: number | null; entry: number | null; exit: number | null } | null;
+  bars: ChartBar[];
+}

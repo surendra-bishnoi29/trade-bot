@@ -830,3 +830,147 @@ async def report(db: Database, markets: dict[str, Market], day: date, now: datet
         "findings": findings(t, final),
         "stories": rows,
     }
+
+
+# ---- one position, bar by bar: the price and where its three lines stood at every minute ----
+
+
+def _line_rows(events: list[Event]) -> list[dict[str, Any]]:
+    return [
+        {
+            "at": _iso(x.occurred_at),
+            "event": x.payload.get("event"),
+            "base": _f(x.payload.get("base")),
+            "stop": _f(x.payload.get("stop")),
+            "profit_line": _f(x.payload.get("profit_line")),
+            "last": _f(x.payload.get("last")),
+            "steps": int(x.payload.get("steps") or 0),
+            "armed": bool(x.payload.get("armed")),
+            "quantity": _f(x.payload.get("quantity")),
+        }
+        for x in events
+    ]
+
+
+async def trades(db: Database, now: datetime, days: int = 7) -> list[dict[str, Any]]:
+    """Every position the lines engine has held in the last `days`, newest first: when it opened,
+    when and how it closed, and what it returned. The list behind the charts."""
+    since = now - timedelta(days=days)
+    lines = await db.recent_events([Topics.LINES_UPDATED], since, limit=8000, until=now)
+    scores = await db.recent_events([Topics.PREDICTION_SCORE], since, limit=4000, until=now)
+    score_of = {str(s.payload.get("call_id")): s for s in reversed(scores)}
+    by_call: dict[str, list[Event]] = defaultdict(list)
+    for e in reversed(lines):  # oldest first
+        by_call[str(e.payload.get("call_id"))].append(e)
+    out = []
+    for cid, evs in by_call.items():
+        first, last = evs[0], evs[-1]
+        symbol = str(first.symbol or first.payload.get("symbol"))
+        s = score_of.get(cid)
+        closed = last.payload.get("event") == "exit"
+        out.append(
+            {
+                "call_id": cid,
+                "symbol": symbol,
+                "name": NAMES.get(symbol, symbol),
+                "tile": tile_of(symbol),
+                "market": first.payload.get("market"),
+                "direction": first.payload.get("direction"),
+                "opened_at": _iso(first.occurred_at),
+                "closed_at": _iso(last.occurred_at) if closed else None,
+                "base": _f(first.payload.get("base")),
+                "quantity": _f(first.payload.get("quantity")),
+                "armed": bool(last.payload.get("armed")),
+                "steps": int(last.payload.get("steps") or 0),
+                "moves": len(evs),
+                "open": not closed,
+                "reason": (s.payload.get("reason") if s else None) or ("" if closed else "open"),
+                "how": EXIT_WORDS.get(str(s.payload.get("reason")), "") if s else "",
+                "realized_pct": _f(s.payload.get("realized_pct")) if s else None,
+                "hit": s.payload.get("hit") if s else None,
+            }
+        )
+    out.sort(key=lambda r: r["opened_at"], reverse=True)
+    return out
+
+
+async def trade_chart(db: Database, call_id: str, now: datetime) -> dict[str, Any] | None:
+    """One position with the minute bars it lived through and every move of its lines, so the
+    screen can replay it: at each minute, the price and where the base, the maximum-loss line and
+    the minimum-profit line stood. Bars run from twenty minutes before the fill to twenty after the
+    exit, or to now while the position is open."""
+    since = now - timedelta(days=14)
+    lines = [
+        e
+        for e in await db.recent_events([Topics.LINES_UPDATED], since, limit=8000, until=now)
+        if str(e.payload.get("call_id")) == call_id
+    ]
+    if not lines:
+        return None
+    lines.reverse()  # oldest first
+    first, last = lines[0], lines[-1]
+    symbol = str(first.symbol or first.payload.get("symbol"))
+    market = str(first.payload.get("market") or "stocks")
+    calls = [
+        e
+        for e in await db.recent_events(
+            [Topics.PREDICTION_CALL],
+            first.occurred_at - timedelta(hours=2),
+            symbol=symbol,
+            limit=200,
+            until=first.occurred_at + timedelta(minutes=1),
+        )
+        if str(e.payload.get("call_id")) == call_id
+    ]
+    scores = [
+        e
+        for e in await db.recent_events(
+            [Topics.PREDICTION_SCORE], first.occurred_at, symbol=symbol, limit=200, until=now
+        )
+        if str(e.payload.get("call_id")) == call_id
+    ]
+    closed = last.payload.get("event") == "exit"
+    pad = timedelta(minutes=20)
+    start = first.occurred_at - pad
+    end = (last.occurred_at + pad) if closed else now + timedelta(minutes=1)
+    bars = await db.bars_between([symbol], "1m", start, end)
+    call = calls[0].payload if calls else {}
+    score = scores[0].payload if scores else None
+    return {
+        "call_id": call_id,
+        "symbol": symbol,
+        "name": NAMES.get(symbol, symbol),
+        "tile": tile_of(symbol),
+        "market": market,
+        "direction": first.payload.get("direction"),
+        "quantity": _f(first.payload.get("quantity")),
+        "opened_at": _iso(first.occurred_at),
+        "closed_at": _iso(last.occurred_at) if closed else None,
+        "open": not closed,
+        "as_of": _iso(now),
+        "call": call.get("call") or {},
+        "trigger": call.get("trigger", ""),
+        "confidence": _f((call.get("call") or {}).get("confidence")),
+        "lines": _line_rows(lines),
+        "score": {
+            "hit": score.get("hit"),
+            "reason": score.get("reason", ""),
+            "how": EXIT_WORDS.get(str(score.get("reason")), str(score.get("reason") or "")),
+            "realized_pct": _f(score.get("realized_pct")),
+            "entry": _f(score.get("entry")),
+            "exit": _f(score.get("exit")),
+        }
+        if score
+        else None,
+        "bars": [
+            {
+                "ts": _iso(b["ts"]),
+                "open": float(b["open"]),
+                "high": float(b["high"]),
+                "low": float(b["low"]),
+                "close": float(b["close"]),
+                "volume": float(b.get("volume") or 0),
+            }
+            for b in bars
+        ],
+    }

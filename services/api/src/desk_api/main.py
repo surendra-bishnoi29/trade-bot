@@ -272,6 +272,19 @@ def create_app(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="bad day") from exc
 
+    @app.get("/api/lab/trades")
+    async def lab_trades(
+        request: Request, days: int = 7, user: User = Depends(current_user)
+    ) -> dict:
+        return await reader(request).lab_trades(max(1, min(days, 60)))
+
+    @app.get("/api/lab/trade/{call_id}")
+    async def lab_trade(request: Request, call_id: str, user: User = Depends(current_user)) -> dict:
+        out = await reader(request).lab_trade(call_id)
+        if out is None:
+            raise HTTPException(status_code=404, detail="no such position")
+        return out
+
     @app.get("/api/lab/days")
     async def lab_days(request: Request, user: User = Depends(current_user)) -> list[str]:
         return await reader(request).lab_days()

@@ -93,7 +93,7 @@ export function AgentFlow({ agents, now }: { agents: Agent[]; now: number }) {
 }
 
 /** The positions the lines engine holds right now, each drawn between its stop and its profit line. */
-export function OpenLines({ lines }: { lines: OpenLine[] }) {
+export function OpenLines({ lines, onOpen }: { lines: OpenLine[]; onOpen?: (callId: string) => void }) {
   if (!lines.length)
     return (
       <div className="held-empty">
@@ -128,6 +128,11 @@ export function OpenLines({ lines }: { lines: OpenLine[] }) {
               <span>base {l.base}</span>
               <span>now {l.last}</span>
               <span className="bull">line {l.profit_line ?? "n/a"}</span>
+              {onOpen && (
+                <button type="button" className="held-chart" onClick={() => onOpen(l.call_id)}>
+                  <span className="in">chart</span>
+                </button>
+              )}
             </footer>
           </li>
         );
