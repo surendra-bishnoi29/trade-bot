@@ -65,7 +65,7 @@ export function TradesPane({ picked, onPick, filter }: { picked: string | null; 
               <b className="sym">{row.symbol}</b> <span className="name">{row.name}</span> <span className={`dir ${row.direction}`}>{row.direction.toUpperCase()}</span>
             </h2>
             <span className="mute">
-              {TILE_WORD[row.tile]} · {row.quantity ?? "?"} at {row.base ?? "?"} (${row.notional.toLocaleString("en-US", { maximumFractionDigits: 0 })}) · opened {hms(row.opened_at)} UTC{row.closed_at ? ` · closed ${hms(row.closed_at)}` : " · still open, refreshes every 10s"}
+              {TILE_WORD[row.tile]} · {row.direction === "short" ? "sold short" : "bought"} {row.quantity ?? "?"} at {row.base ?? "?"} (${row.notional.toLocaleString("en-US", { maximumFractionDigits: 0 })}), {row.direction === "short" ? "profits if the price falls" : "profits if the price rises"} · opened {hms(row.opened_at)} UTC{row.closed_at ? ` · closed ${hms(row.closed_at)}` : " · still open, refreshes every 10s"}
               {row.how ? ` · ${row.how}` : ""}
             </span>
             <Result t={row} />

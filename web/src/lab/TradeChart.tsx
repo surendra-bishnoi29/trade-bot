@@ -58,7 +58,8 @@ function standings(chart: TradeChartData): Standing[] {
 function stateWords(s: Standing, direction: string): string {
   if (s.phase === "before") return "Not yet filled.";
   if (s.phase === "after") return "Closed.";
-  if (!s.armed) return `Waiting for the price to move one step in the trade's favour. The max loss line is ${direction === "long" ? "below" : "above"} the base.`;
+  const way = direction === "long" ? "A long: it was bought, so it profits if the price rises and loses if it falls. " : "A short: it was sold first and must be bought back, so it profits if the price falls and loses if it rises. ";
+  if (!s.armed) return `${way}Waiting for the price to move one step in its favour. The max loss line is ${direction === "long" ? "below" : "above"} the base.`;
   if (s.steps === 0) return "One step up: the max loss line now sits on the base, so the worst case is zero. One more step and the min profit line starts rising; it closes if the price comes back to the base first.";
   return `Min profit line raised ${s.steps}× (one step below the best price). It closes if the price comes back to the line.`;
 }
@@ -299,7 +300,10 @@ export function TradeChart({ chart }: { chart: TradeChartData }) {
           )}
           {chart.score && chart.score.realized_pct !== null && (
             <span className={`tc-result ${chart.score.hit ? "bull" : "bear"}`}>
-              Result: {pct(chart.score.realized_pct)}
+              {chart.direction === "short"
+                ? `Sold short at ${price(chart.score.entry)}, bought back at ${price(chart.score.exit)}`
+                : `Bought at ${price(chart.score.entry)}, sold at ${price(chart.score.exit)}`}
+              : {pct(chart.score.realized_pct)}
               {chart.score.pnl !== null ? `, ${money(chart.score.pnl)}` : ""} after costs on ${chart.notional.toLocaleString("en-US", { maximumFractionDigits: 0 })} · {chart.score.how}
             </span>
           )}
