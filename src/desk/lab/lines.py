@@ -23,6 +23,7 @@ from desk.core import calendar
 from desk.core.clock import Clock
 from desk.core.events import Event, Topics, parse_payload
 from desk.core.payloads import LinesUpdated, OrderIntent, OrderUpdate, PredictionScore
+from desk.funnel.markets import COMMODITIES
 from desk.storage.db import Database
 
 log = logging.getLogger(__name__)
@@ -158,6 +159,10 @@ class LinesAgent(BaseAgent):
         self.flat_minutes = flat_minutes
         self.step_bounds = step_bounds  # the ratchet step in percent, for stocks and funds
         self.cancel_wait_s = 0.25  # between looks at a stop being cancelled
+        self.cancel_looks = 24  # six seconds of looking before an exit waits for the next bar
+        self.unmanaged_since: dict[str, datetime] = {}  # positions no line owns, first seen
+        self.flattened_at: dict[str, datetime] = {}  # flatten orders sent, by symbol
+        self.flatten_after = timedelta(minutes=3)
         self.unmanaged: set[str] = set()  # broker positions no line holds, for the status line
         self.lines: dict[str, Line] = {}  # by symbol: one position per instrument
         self.pending: dict[str, Line] = {}  # by call id, until the entry fills
@@ -472,10 +477,19 @@ class LinesAgent(BaseAgent):
         }
         if unmanaged - self.unmanaged:
             log.error(
-                "lines: the broker holds %s with no line on it; nothing here will close it",
+                "lines: the broker holds %s with no line on it; it is flattened if still there "
+                "in %d minutes",
                 ", ".join(sorted(unmanaged - self.unmanaged)),
+                int(self.flatten_after.total_seconds() // 60),
             )
         self.unmanaged = unmanaged
+        for s in list(self.unmanaged_since):
+            if s not in unmanaged:
+                self.unmanaged_since.pop(s, None)
+        for s in unmanaged:
+            first = self.unmanaged_since.setdefault(s, taken)
+            if taken - first >= self.flatten_after:
+                await self._flatten(s, positions[s], taken, event)
         for symbol, line in list(self.lines.items()):
             if line.opened_at and line.opened_at > taken - timedelta(minutes=2):
                 continue  # the snapshot may be older than the fill: wait for the next one
@@ -491,6 +505,35 @@ class LinesAgent(BaseAgent):
                 await self._close(line, exit_px, "broker", event)
 
     # ---- actions ----
+
+    async def _flatten(self, symbol: str, qty: float, now: datetime, caused_by: Event) -> None:
+        """Close a position the lab holds without a line: the desk never meant to keep it (a stop
+        that fired beside the engine's own exit turns a position round, for one). Sent once, and
+        again only after a quarter of an hour if the broker still shows it."""
+        last = self.flattened_at.get(symbol)
+        if last is not None and now - last < timedelta(minutes=15):
+            return
+        market = (
+            "crypto" if "/" in symbol else ("commodities" if symbol in COMMODITIES else "stocks")
+        )
+        if not (market == "crypto" or calendar.is_open(self.clock.now())):
+            return  # nothing can be sold now; the first snapshot after the open does it
+        self.flattened_at[symbol] = now
+        intent = OrderIntent(
+            intent_id=str(ULID()),
+            symbol=symbol,
+            book=BOOK_OF_MARKET[market],  # type: ignore[arg-type]
+            side="sell" if qty > 0 else "buy",
+            quantity=Decimal(int(abs(qty))) if float(qty).is_integer() else Decimal(str(abs(qty))),
+            urgency="now",
+            rationale_event_ids=[caused_by.event_id],
+            call_id="flatten",
+            allow_fractional=market == "crypto",
+        )
+        log.error("lines: flattening %s %+g, held with no line on it", symbol, qty)
+        await self.emit(
+            Topics.ORDER_INTENT, intent, symbol=symbol, book=intent.book, caused_by=caused_by
+        )
 
     async def _broker_stop(self, line: Line) -> None:
         """Keep the broker's resting stop at our exit level, where the broker offers one."""
@@ -515,33 +558,58 @@ class LinesAgent(BaseAgent):
         except Exception as exc:  # noqa: BLE001 - the desk's own watch still protects the position
             log.warning("lines: broker stop for %s not updated: %s", line.symbol, exc)
 
-    async def _release_stop(self, line: Line) -> float | None:
+    async def _release_stop(self, line: Line) -> tuple[str, float | None]:
         """Cancel the broker's resting stop and wait until it is gone, because the shares it holds
-        cannot be sold by another order. Returns the fill price if the stop fired first."""
-        order_id, line.stop_order_id = line.stop_order_id, ""
+        cannot be sold by another order. Returns ("filled", price) if the stop fired first,
+        ("gone", None) once it is cancelled, and ("unknown", None) if the broker has not said
+        either way: then no exit may be sent, because a stop that is still alive would fill a
+        second time and turn the position round. If the stop had been replaced, its replacement
+        is the one to cancel."""
+        order_id = line.stop_order_id
         try:
             await self.trading.cancel_order(order_id)
         except Exception as exc:  # noqa: BLE001 - already filled or gone: the look below tells
             log.warning("lines: could not cancel the broker stop for %s: %s", line.symbol, exc)
-        for _ in range(8):
+        for _ in range(self.cancel_looks):
             try:
                 o = await self.trading.get_order(order_id)
             except Exception as exc:  # noqa: BLE001
                 log.warning("lines: stop order lookup failed for %s: %s", line.symbol, exc)
-                return None
+                return "unknown", None
             status = str(getattr(o, "status", "") or "")
             if status == "filled" and getattr(o, "filled_avg_price", None):
-                return float(o.filled_avg_price)
+                line.stop_order_id = ""
+                return "filled", float(o.filled_avg_price)
+            if status == "replaced" and getattr(o, "replaced_by", ""):
+                order_id = line.stop_order_id = str(o.replaced_by)
+                try:
+                    await self.trading.cancel_order(order_id)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("lines: could not cancel the stop for %s: %s", line.symbol, exc)
+                continue
             if status in ("canceled", "expired", "rejected", "replaced", "done_for_day", ""):
-                return None
+                line.stop_order_id = ""
+                return "gone", None
             await asyncio.sleep(self.cancel_wait_s)
-        return None
+        return "unknown", None
 
     async def _exit(self, line: Line, caused_by: Event | None) -> None:
         if line.stop_order_id:
-            stopped_at = await self._release_stop(line)
-            if stopped_at is not None:  # the broker's stop got there first: the position is gone
+            state, stopped_at = await self._release_stop(line)
+            if state == "filled" and stopped_at is not None:
+                # the broker's stop got there first: the position is gone
                 await self._close(line, stopped_at, "broker", caused_by)
+                return
+            if state == "unknown":
+                # the stop may still be alive: an exit now could fill twice. Decided, not sent;
+                # the next bar tries again.
+                line.exit_tries += 1
+                line.exit_retry_at = self.clock.now() + timedelta(seconds=5)
+                log.warning(
+                    "lines: exit %s (%s) waits: the broker has not confirmed its stop is gone",
+                    line.symbol,
+                    line.exit_reason,
+                )
                 return
         intent = OrderIntent(
             intent_id=str(ULID()),

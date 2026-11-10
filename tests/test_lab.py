@@ -1155,3 +1155,86 @@ async def test_the_broker_stop_keeps_the_id_of_its_latest_replacement():
     await bus.wait_idle()
     assert line.stop_order_id == "stop-b-i1++" and trading.stops["stop-b-i1+"] == Decimal("100.5")
     task.cancel()
+
+
+async def test_no_exit_is_sent_while_the_brokers_stop_may_still_be_alive():
+    """A stop that fires beside the engine's own exit turns the position round (BNO, GDX, GE,
+    GS and NVDA on 10 Nov). The exit waits until the broker confirms the stop is gone, and a
+    replaced stop is followed to its replacement."""
+    clock = SimClock(T0)
+    bus = InMemoryBus(clock)
+    trading = FakeTrading()
+    status = {"stop-b-i1": "pending_cancel"}
+
+    async def get_order(order_id):
+        return SimpleNamespace(
+            status=status.get(order_id, "canceled"),
+            filled_avg_price=None,
+            replaced_by="stop-b-i1-new" if status.get(order_id) == "replaced" else "",
+        )
+
+    trading.get_order = get_order
+    agent = LinesAgent(bus, clock, FakeDB(), trading, SimpleNamespace(book_of={}))
+    agent.cancel_wait_s = 0
+    agent.cancel_looks = 2
+    agent.start()
+    task = asyncio.create_task(bus.run())
+    line = await _open_line(agent, bus)
+    clock.advance_to(T0 + timedelta(minutes=1))
+    await bus.publish(bar("AAPL", clock.now(), 99.5, 98.8))  # through the max-loss line
+    await bus.wait_idle()
+    sells = lambda: [
+        e for e in bus.log if e.type == Topics.ORDER_INTENT and e.payload.get("side") == "sell"
+    ]
+    assert line.exit_reason == "stop" and not sells() and line.stop_order_id == "stop-b-i1"
+    assert trading.canceled == ["stop-b-i1"] and line.exit_retry_at is not None
+    # the broker then says the stop had been replaced: the replacement is cancelled and confirmed gone
+    status["stop-b-i1"] = "replaced"
+    clock.advance_to(T0 + timedelta(minutes=2))
+    await bus.publish(bar("AAPL", clock.now(), 99.4, 98.9))
+    await bus.wait_idle()
+    assert trading.canceled[-1] == "stop-b-i1-new" and len(sells()) == 1
+    assert line.stop_order_id == "" and line.exit_intent
+    task.cancel()
+
+
+async def test_a_position_no_line_owns_is_flattened_once():
+    clock = SimClock(T0)
+    bus = InMemoryBus(clock)
+    agent = LinesAgent(bus, clock, FakeDB(), FakeTrading(), SimpleNamespace(book_of={}))
+    agent.start()
+    task = asyncio.create_task(bus.run())
+
+    def snap(at, positions):
+        return ev(
+            Topics.PORTFOLIO_RECONCILED,
+            at,
+            {"equity": "100000", "positions": positions, "as_of": at.isoformat()},
+        )
+
+    held = [{"symbol": "GE", "qty": "-2"}, {"symbol": "BNO", "qty": "17"}]
+    await bus.publish(snap(T0, held))
+    await bus.wait_idle()
+    intents = lambda: [e for e in bus.log if e.type == Topics.ORDER_INTENT]
+    assert agent.unmanaged == {"GE", "BNO"} and not intents()  # first sight: wait
+    clock.advance_to(T0 + timedelta(minutes=4))
+    await bus.publish(snap(clock.now(), held))
+    await bus.wait_idle()
+    sent = {
+        (e.symbol, e.payload["side"], e.payload["quantity"], e.payload["call_id"])
+        for e in intents()
+    }
+    assert sent == {("GE", "buy", "2", "flatten"), ("BNO", "sell", "17", "flatten")}
+    clock.advance_to(T0 + timedelta(minutes=9))
+    await bus.publish(snap(clock.now(), held))  # the broker still shows them: not sent again yet
+    await bus.wait_idle()
+    assert len(intents()) == 2
+    clock.advance_to(T0 + timedelta(minutes=20))
+    await bus.publish(
+        snap(clock.now(), [{"symbol": "GE", "qty": "-2"}])
+    )  # BNO gone, GE still there
+    await bus.wait_idle()
+    assert (
+        len(intents()) == 3 and intents()[-1].symbol == "GE" and "BNO" not in agent.unmanaged_since
+    )
+    task.cancel()

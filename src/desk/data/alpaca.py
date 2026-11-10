@@ -172,6 +172,7 @@ class BrokerOrder:
     symbol: str = ""
     side: str = ""
     order_type: str = ""  # market, stop, stop_limit, ...
+    replaced_by: str = ""  # the order that took this one's place after a replacement
 
 
 class AlpacaTrading:
@@ -219,6 +220,7 @@ class AlpacaTrading:
                 or getattr(getattr(o, "type", None), "value", "")
                 or ""
             ),
+            replaced_by=str(getattr(o, "replaced_by", None) or ""),
         )
 
     async def submit_market_order(
