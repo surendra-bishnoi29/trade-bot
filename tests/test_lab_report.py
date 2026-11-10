@@ -137,11 +137,12 @@ def test_the_lines_run_on_paper_give_the_result_the_engine_would():
         "step_pct": 0.5,
         "horizon_minutes": 60,
     }
-    # up through the first line (101) and one step (101.5), then back to the line: sold at 101.5
-    up = bars("X", T0, [100.2, 100.6, 101.1, 101.6, 101.8, 101.4])
+    # steps of 0.5%: 100.6 arms, 101.1 clears 101.0 (line 100.5), 101.6 clears 101.5 (line
+    # 101.0), then back to the line: sold at 101.0
+    up = bars("X", T0, [100.2, 100.6, 101.1, 101.6, 101.8, 100.9])
     r = simulate(c, "stocks", 100.0, T0, up)
-    assert r["result"] == "right" and r["reason"] == "line" and r["exit"] == 101.5
-    assert r["realized_pct"] == 1.4 and r["steps"] == 1  # 1.5% less 0.1% costs
+    assert r["result"] == "right" and r["reason"] == "line" and r["exit"] == 101.0
+    assert r["realized_pct"] == 0.9 and r["steps"] == 2  # 1.0% less 0.1% costs
     # straight down through the maximum loss line
     down = bars("X", T0, [99.8, 99.4, 98.9])
     r = simulate(c, "stocks", 100.0, T0, down)
@@ -152,9 +153,9 @@ def test_the_lines_run_on_paper_give_the_result_the_engine_would():
     assert r["result"] == "pending" and r["armed"] and r["mark_pct"] == 1.1
     # and is bought back when the price comes back up to the line
     r = simulate(
-        {**c, "direction": "short"}, "stocks", 100.0, T0, bars("X", T0, [99.8, 99.4, 98.9, 99.2])
+        {**c, "direction": "short"}, "stocks", 100.0, T0, bars("X", T0, [99.8, 99.4, 98.9, 99.6])
     )
-    assert r["result"] == "right" and r["reason"] == "line" and r["realized_pct"] == 0.9
+    assert r["result"] == "right" and r["reason"] == "line" and r["realized_pct"] == 0.4
     # nothing decided before the bars end
     r = simulate(c, "stocks", 100.0, T0, bars("X", T0, [100.1, 100.2]))
     assert r["result"] == "pending" and r["mark_pct"] == 0.2
@@ -323,7 +324,7 @@ async def test_stories_grades_every_call_and_the_report_counts_right_and_wrong()
     assert rows[0]["call_id"] == "c5"  # newest first
     assert by["c1"]["outcome"] == "right" and by["c1"]["risk"]["decision"] == "approved"
     assert by["c1"]["fill"]["price"] == 100.0 and len(by["c1"]["lines"]) == 2
-    assert by["c1"]["score"]["how"] == "came back to the profit line"
+    assert by["c1"]["score"]["how"] == "came back to the min-profit line"
     assert by["c2"]["outcome"] == "wrong" and by["c2"]["tile"] == "gold"
     assert by["c3"]["outcome"] == "held_back" and by["c3"]["paper"]["result"] == "right"
     assert by["c4"]["paper"]["result"] == "wrong" and by["c4"]["paper"]["reason"] == "stop"
@@ -530,7 +531,7 @@ async def test_a_position_can_be_replayed_bar_by_bar_with_every_move_of_its_line
     rows = await trades(db, now, 7)  # type: ignore[arg-type]
     assert [r["call_id"] for r in rows] == ["c2", "c1"]  # newest first
     assert rows[1]["moves"] == 4 and rows[1]["hit"] is True and rows[1]["realized_pct"] == 1.4
-    assert rows[1]["how"] == "came back to the profit line" and rows[1]["closed_at"].endswith(
+    assert rows[1]["how"] == "came back to the min-profit line" and rows[1]["closed_at"].endswith(
         "+00:00"
     )
     assert rows[0]["open"] and rows[0]["reason"] == "open" and rows[0]["steps"] == 0
@@ -544,7 +545,7 @@ async def test_a_position_can_be_replayed_bar_by_bar_with_every_move_of_its_line
         c["bars"][0]["ts"] == (T0 - 17 * m).isoformat()
         and c["bars"][-1]["ts"] == (T0 + 28 * m).isoformat()
     )
-    assert c["score"]["how"] == "came back to the profit line" and c["confidence"] == 0.6
+    assert c["score"]["how"] == "came back to the min-profit line" and c["confidence"] == 0.6
     assert await trade_chart(db, "nope", now) is None  # type: ignore[arg-type]
     still = await trade_chart(db, "c2", now)  # type: ignore[arg-type]
     assert still is not None and still["open"] and still["bars"][-1]["ts"] <= now.isoformat()

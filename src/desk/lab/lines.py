@@ -71,12 +71,25 @@ class Line:
     def open(self, entry: float, at: datetime) -> None:
         self.base = entry
         self.stop = self.level(-self.max_loss_pct)
-        self.profit_line = self.level(self.first_profit_pct)
+        self.profit_line = self.level(self.step_pct)  # the first step: reaching it arms the line
         self.opened_at = at
         self.filled = True
 
+    def next_step(self) -> float | None:
+        """The price the trade must reach for the lines to move again."""
+        if self.base is None:
+            return None
+        cleared = self.steps + 1 if self.armed else 0
+        return self.level((cleared + 1) * self.step_pct)
+
     def watch(self, high: float, low: float) -> list[str]:
-        """Apply one bar. Returns the events that happened, 'exit' last if the position must close."""
+        """Apply one bar. Returns the events that happened, 'exit' last if the position must close.
+
+        The price moves in steps of `step_pct` from the base. One step in the trade's favour and
+        the maximum-loss line moves up to the base: from then on the trade cannot lose. Every
+        further step raises the minimum-profit line one step, so it always sits one step below
+        the best price seen. The position closes when the price comes back to the minimum-profit
+        line (or to the base before the line has risen), or at the maximum-loss line."""
         if self.base is None or self.stop is None or self.profit_line is None:
             return []
         long = self.sign > 0
@@ -91,19 +104,18 @@ class Line:
         if breached(against, self.stop):
             self.exit_reason = "base" if self.stop == self.base else "stop"
             return ["exit"]
-        if self.armed and breached(against, self.profit_line):
+        if self.armed and self.steps > 0 and breached(against, self.profit_line):
             self.exit_reason = "line"
             return ["exit"]
         out: list[str] = []
-        if not self.armed and reached(favour, self.profit_line):
+        if not self.armed and reached(favour, self.level(self.step_pct)):
             self.armed = True
-            self.stop = self.base  # above the base: the worst case is now zero
+            self.stop = self.base  # one step up: the worst case is now zero
+            self.profit_line = self.base
             out.append("base")
-        while self.armed and reached(
-            favour, self.level(self.first_profit_pct + (self.steps + 1) * self.step_pct)
-        ):
+        while self.armed and reached(favour, self.level((self.steps + 2) * self.step_pct)):
             self.steps += 1
-            self.profit_line = self.level(self.first_profit_pct + self.steps * self.step_pct)
+            self.profit_line = self.level(self.steps * self.step_pct)
             out.append("ratchet")
         return out
 
@@ -111,7 +123,7 @@ class Line:
         """Where the broker's resting stop should sit right now."""
         if self.base is None:
             return None
-        return self.profit_line if self.armed else self.stop
+        return self.profit_line if self.armed and self.steps > 0 else self.stop
 
 
 class LinesAgent(BaseAgent):
@@ -136,6 +148,7 @@ class LinesAgent(BaseAgent):
         back_office: Any = None,
         *,
         flat_minutes: int = 10,
+        step_bounds: tuple[float, float] = (0.15, 0.3),
     ) -> None:
         super().__init__(bus, clock)
         self.db = db
@@ -143,6 +156,7 @@ class LinesAgent(BaseAgent):
         self.back_office = back_office
         # stocks and funds are closed this many minutes before the bell; 0 holds them overnight
         self.flat_minutes = flat_minutes
+        self.step_bounds = step_bounds  # the ratchet step in percent, for stocks and funds
         self.cancel_wait_s = 0.25  # between looks at a stop being cancelled
         self.unmanaged: set[str] = set()  # broker positions no line holds, for the status line
         self.lines: dict[str, Line] = {}  # by symbol: one position per instrument
@@ -158,6 +172,13 @@ class LinesAgent(BaseAgent):
                 book_of[symbol] = book
             else:
                 book_of.pop(symbol, None)
+
+    def step_for(self, market: str, asked: float) -> float:
+        """The ratchet step the desk uses: the predictor's, held inside the book's bounds. The
+        bounds scale with the market's round-trip cost, so a step is never inside the costs."""
+        k = ROUND_TRIP.get(market, ROUND_TRIP["stocks"]) / ROUND_TRIP["stocks"]
+        lo, hi = self.step_bounds[0] * k, self.step_bounds[1] * k
+        return round(min(max(asked, lo), hi), 4)
 
     async def restore(self) -> int:
         """After a restart the open lines come back from the journal: the latest state of every
@@ -226,7 +247,7 @@ class LinesAgent(BaseAgent):
                     quantity=Decimal(0),
                     max_loss_pct=float(c["max_loss_pct"]),
                     first_profit_pct=float(c["first_profit_pct"]),
-                    step_pct=float(c["step_pct"]),
+                    step_pct=self.step_for(p["market"], float(c["step_pct"])),
                     horizon_minutes=int(c["horizon_minutes"]),
                 )
         elif event.type == Topics.ORDER_INTENT:

@@ -121,12 +121,12 @@ footer{font-family:var(--font-hand); font-size:14px; color:var(--ink-soft)}
 
 <section>
   <h2>One trade on its lines</h2>
-  <p>An example with round numbers, not a real trade. The predictor calls a stock long at 200.00 with a maximum loss of 0.6%, a first profit line of 0.9% and a step of 0.4%. Everything after the fill is arithmetic: no model is asked again.</p>
-  <div class="dia"><svg id="d-lines" viewBox="0 0 1000 470" role="img" aria-label="A price path from 200.00. The maximum loss line sits at 198.80 until the price reaches the first profit line at 201.80; then the stop moves up to the entry at 200.00. The price reaches 202.60 and the profit line steps up to it. The price peaks at 203.10 and comes back to 202.60, where the position is sold for plus 1.30 percent before costs."></svg></div>
+  <p>An example with round numbers, not a real trade. The predictor calls a stock long at 200.00 with a maximum loss of 0.6% and a step of 0.3%. The price is measured in steps from the entry: the first step moves the maximum-loss line up to the entry, and every further step raises the minimum-profit line one step. Everything after the fill is arithmetic: no model is asked again.</p>
+  <div class="dia"><svg id="d-lines" viewBox="0 0 1000 470" role="img" aria-label="A price path from 200.00. The maximum loss line sits at 198.80 until the price reaches the first step at 200.60; then it moves up to the entry at 200.00. Each further step of 0.30 percent raises the minimum-profit line one step, so it sits one step below the best price. The price peaks at 203.10 and comes back to 202.40, where the position is sold for plus 1.20 percent before costs."></svg></div>
   <div class="notes">
     <div class="note f-red"><b>If it falls first</b><strong>Sold at 198.80</strong>The maximum loss line. −0.60%, about −0.70% after costs. For stocks and funds the same stop also rests at the broker, so it holds even if the desk is down.</div>
-    <div class="note f-yellow"><b>If it touches 201.80 and turns</b><strong>Sold at 201.80</strong>Once the first profit line is reached, coming back to it sells. +0.90% before costs. The stop on the entry is the backstop behind that.</div>
-    <div class="note f-green"><b>If it keeps rising</b><strong>The line follows</strong>Every further 0.4% lifts the profit line one step. The position is sold when the price comes back to the latest line, so a run is kept and a reversal is not.</div>
+    <div class="note f-yellow"><b>If it touches 200.60 and turns</b><strong>Sold at 200.00</strong>One step up and the maximum-loss line sits on the entry: coming back to it sells at a scratch, about −0.10% after costs. The trade can no longer lose more than that.</div>
+    <div class="note f-green"><b>If it keeps rising</b><strong>The line follows</strong>Every further 0.3% lifts the minimum-profit line one step, one step behind the best price. The position is sold when the price comes back to the line, so a run is kept and a reversal is not.</div>
     <div class="note f-gray"><b>What the lines cannot do</b><strong>Pick the direction</strong>On 62 to 74 past sessions the lines alone lost about 0.1% a trade at any width. They keep a loss small; only the prediction can make the average positive.</div>
   </div>
 </section>
@@ -141,7 +141,7 @@ footer{font-family:var(--font-hand); font-size:14px; color:var(--ink-soft)}
       <tr><td>Markets</td><td>US stocks, 28 large caps</td><td>The same stocks, 10 oil and gold funds, 12 crypto pairs</td></tr>
       <tr><td>Direction</td><td>Buy only</td><td>Buy and short. Crypto is buy-then-sell only</td></tr>
       <tr><td>Holding time</td><td>Days, set by the thesis</td><td>Minutes to hours. Stocks and funds are closed 10 minutes before the bell</td></tr>
-      <tr><td>The exit</td><td>A stop and a target fixed at entry, or the time limit</td><td>The lines: maximum loss, then the stop moves to the entry and the profit line steps up</td></tr>
+      <tr><td>The exit</td><td>A stop and a target fixed at entry, or the time limit</td><td>The lines: maximum loss; one step up moves it to the entry; each further step raises the minimum-profit line</td></tr>
       <tr><td>Size</td><td>2% of equity a position</td><td>1% of equity a position; funds capped at 10% in total, crypto at 5%</td></tr>
       <tr><td>How it is judged</td><td>The Friday review and the graduation checklist</td><td>Every call scored after costs. The bar: above 55% hits over at least 60 calls</td></tr>
       <tr><td>The head trader</td><td>Makes the decisions</td><td>Answers questions only. Cannot place an order</td></tr>
@@ -339,8 +339,8 @@ footer{font-family:var(--font-hand); font-size:14px; color:var(--ink-soft)}
     var x0 = 70, x1 = 760, y0 = 30, y1 = 400, lo = 198.3, hi = 203.9, tmax = 100;
     function X(t){ return x0 + t / tmax * (x1 - x0); }
     function Y(p){ return y1 - (p - lo) / (hi - lo) * (y1 - y0); }
-    var P = [[0,200.0],[6,199.6],[12,199.3],[18,199.7],[25,200.4],[32,200.9],[38,200.7],[45,201.3],[52,201.9],[58,202.0],[64,202.3],[70,202.7],[76,202.9],[82,203.1],[88,202.85],[94,202.6]];
-    var ARM = 52, RATCHET = 70, EXIT = 94;
+    var P = [[0,200.0],[6,199.6],[12,199.3],[18,199.7],[25,200.4],[32,200.9],[38,200.7],[45,201.3],[52,201.9],[58,202.0],[64,202.3],[70,202.7],[76,202.9],[82,203.1],[88,202.85],[94,202.55],[98,202.35]];
+    var ARM = 28, S2 = 44, S3 = 50, S4 = 66, S5 = 80, EXIT = 97;
     svg.appendChild(rc.rectangle(x0, y0, x1 - x0, y1 - y0, base(T, { fill:T.paper, seed:11 })));
     [199, 200, 201, 202, 203].forEach(function(v){
       svg.appendChild(rc.line(x0, Y(v), x1, Y(v), base(T, { stroke:T.soft, strokeWidth:0.6, roughness:0.4, strokeLineDash:[2,7], seed:seedOf(20, v) })));
@@ -348,37 +348,42 @@ footer{font-family:var(--font-hand); font-size:14px; color:var(--ink-soft)}
     });
     function seg(t1, t2, v, o){ svg.appendChild(rc.line(X(t1), Y(v), X(t2), Y(v), base(T, { stroke:o.stroke, strokeWidth:o.sw || 2, strokeLineDash:o.dash, roughness:0.7, seed:seedOf(30, t1, v) }))); }
     function riser(t, v1, v2, stroke){ svg.appendChild(rc.line(X(t), Y(v1), X(t), Y(v2), base(T, { stroke:stroke, strokeWidth:1.6, strokeLineDash:[4,5], roughness:0.6, seed:seedOf(31, t, v1) }))); }
-    // the stop: maximum loss, then the entry
+    // the steps, faint: 200.60, 201.20, ... 203.60
+    [200.6, 201.2, 201.8, 202.4, 203.0, 203.6].forEach(function(v){
+      seg(0, tmax, v, { stroke:T.soft, sw:0.8, dash:[2,6] });
+    });
+    // the maximum-loss line: 198.80, then the entry from the first step on
     seg(0, ARM, 198.8, { stroke:T.accent, dash:[9,6] });
     riser(ARM, 198.8, 200.0, T.accent);
     seg(ARM, EXIT, 200.0, { stroke:T.accent, dash:[9,6] });
     // the entry line before it becomes the stop
     seg(0, ARM, 200.0, { stroke:T.soft, sw:1.1 });
-    // the profit line: first line, then one step up; the next step is never reached
-    seg(0, RATCHET, 201.8, { stroke:T.good });
-    riser(RATCHET, 201.8, 202.6, T.good);
-    seg(RATCHET, EXIT, 202.6, { stroke:T.good });
-    seg(RATCHET, tmax, 203.4, { stroke:T.soft, sw:1, dash:[3,7] });
+    // the minimum-profit line: one step below the best price, from the second step on
+    seg(S2, S3, 200.6, { stroke:T.good }); riser(S3, 200.6, 201.2, T.good);
+    seg(S3, S4, 201.2, { stroke:T.good }); riser(S4, 201.2, 201.8, T.good);
+    seg(S4, S5, 201.8, { stroke:T.good }); riser(S5, 201.8, 202.4, T.good);
+    seg(S5, EXIT, 202.4, { stroke:T.good });
     // the price
     svg.appendChild(rc.linearPath(P.map(function(q){ return [X(q[0]), Y(q[1])]; }), base(T, { strokeWidth:2.4, roughness:0.7, bowing:0.6, seed:41 })));
     function dot(t, p, fill){ svg.appendChild(rc.circle(X(t), Y(p), 13, base(T, { fill:fill, strokeWidth:1.4, roughness:0.6, seed:seedOf(50, t) }))); }
-    dot(0, 200.0, T.yellow); dot(ARM, 201.9, T.orange); dot(RATCHET, 202.7, T.orange); dot(EXIT, 202.6, T.green);
+    dot(0, 200.0, T.yellow); dot(ARM, 200.6, T.orange); dot(S4, 202.4, T.orange); dot(EXIT, 202.4, T.green);
     // labels on the right, at each level
     var rx = x1 + 14;
-    text(svg, rx, Y(203.4), 'next step 203.40, never reached', { size:12.5, anchor:'start', color:T.soft });
-    text(svg, rx, Y(202.6) - 9, 'profit line 202.60', { size:13.5, anchor:'start', weight:700, color:T.good });
-    text(svg, rx, Y(202.6) + 9, 'sold here: +1.30%', { size:12.5, anchor:'start', color:T.good });
-    text(svg, rx, Y(201.8), 'first profit line 201.80', { size:12.5, anchor:'start', color:T.good });
+    text(svg, rx, Y(203.6), 'next step 203.60, never reached', { size:12.5, anchor:'start', color:T.soft });
+    text(svg, rx, Y(202.4) - 9, 'min profit line 202.40', { size:13.5, anchor:'start', weight:700, color:T.good });
+    text(svg, rx, Y(202.4) + 9, 'sold here: +1.20%', { size:12.5, anchor:'start', color:T.good });
+    text(svg, rx, Y(201.2), 'steps of 0.30% from the entry', { size:12.5, anchor:'start', color:T.soft });
+    text(svg, rx, Y(200.6), 'first step 200.60', { size:12.5, anchor:'start', color:T.soft });
     text(svg, rx, Y(200.0) - 9, 'entry 200.00', { size:13.5, anchor:'start', weight:700 });
-    text(svg, rx, Y(200.0) + 9, 'the stop, once armed', { size:12.5, anchor:'start', color:T.accent });
+    text(svg, rx, Y(200.0) + 9, 'the max loss line, after the first step', { size:12.5, anchor:'start', color:T.accent });
     text(svg, rx, Y(198.8), 'maximum loss 198.80', { size:13.5, anchor:'start', weight:700, color:T.accent });
-    // the three moments
+    // the four moments
     text(svg, X(0) + 12, Y(200.0) - 20, '1 bought', { size:13, anchor:'start', weight:700, bg:T.paper });
-    text(svg, X(ARM) - 8, Y(201.9) - 22, '2 first line reached:', { size:13, anchor:'end', weight:700, bg:T.paper });
-    text(svg, X(ARM) - 8, Y(201.9) - 6, 'stop jumps to the entry', { size:12.5, anchor:'end', color:T.soft, bg:T.paper });
-    text(svg, X(RATCHET) - 6, Y(202.7) - 38, '3 one step higher:', { size:13, anchor:'end', weight:700, bg:T.paper });
-    text(svg, X(RATCHET) - 6, Y(202.7) - 22, 'the profit line follows', { size:12.5, anchor:'end', color:T.soft, bg:T.paper });
-    text(svg, X(EXIT) + 4, Y(202.6) + 26, '4 back to the line: sold', { size:13, anchor:'end', weight:700, bg:T.paper });
+    text(svg, X(ARM) - 8, Y(200.6) - 36, '2 first step reached:', { size:13, anchor:'end', weight:700, bg:T.paper });
+    text(svg, X(ARM) - 8, Y(200.6) - 20, 'max loss line moves to the entry', { size:12.5, anchor:'end', color:T.soft, bg:T.paper });
+    text(svg, X(S4) - 6, Y(202.4) - 38, '3 each further step:', { size:13, anchor:'end', weight:700, bg:T.paper });
+    text(svg, X(S4) - 6, Y(202.4) - 22, 'the line follows, one step behind', { size:12.5, anchor:'end', color:T.soft, bg:T.paper });
+    text(svg, X(EXIT) + 4, Y(202.4) + 26, '4 back to the line: sold', { size:13, anchor:'end', weight:700, bg:T.paper });
     // time axis
     [0, 25, 50, 75, 100].forEach(function(t){
       svg.appendChild(rc.line(X(t), y1, X(t), y1 + 6, base(T, { strokeWidth:1, roughness:0.5, seed:seedOf(60, t) })));

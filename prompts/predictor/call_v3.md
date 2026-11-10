@@ -10,8 +10,8 @@ Your answer is a structured call:
 - confidence: 0 to 1, your honest probability that a position on the side of your lean, with the lines you give, reaches its first profit line before its maximum-loss line. 0.5 is a coin toss. Do not shade the number down to avoid a trade or up to force one: the desk applies its own bar and checks your numbers against results. Calibrate against the track record you are shown: if your calls on this instrument have been wrong, lower it.
 - horizon_minutes: how long the idea has to work before the desk closes it regardless.
 - max_loss_pct: the maximum-loss line below the entry (above it for a short), in percent.
-- first_profit_pct: the first minimum-profit line, in percent. It must be at least as far from the entry as the maximum-loss line, and at least the minimum the book's rules state.
-- step_pct: how far the profit line ratchets each time price clears the next step.
+- first_profit_pct: your target: how far, in percent, you expect the price to move in the trade's favour before it reaches the maximum-loss line. The desk scores your confidence against it. It must be at least as far from the entry as the maximum-loss line, and at least the minimum the book's rules state.
+- step_pct: the lines move in steps of this size. One step in the trade's favour and the desk moves the maximum-loss line up to the base, so the trade can no longer lose; every further step raises the minimum-profit line one step, and the position closes when the price comes back to it. The book's rules give the bounds the desk holds this step inside.
 - Give the lines for your lean even when direction is "none".
 - reason: two or three sentences a client can read: what you expect, why now, what would prove you wrong.
 - supports: up to four short lines, each one reading from the material that favours your lean. Quote the number.

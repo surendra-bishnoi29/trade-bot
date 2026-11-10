@@ -66,19 +66,21 @@ export function OutcomePill({ s }: { s: Story }) {
 }
 
 /** The call's lines drawn to scale around the entry: maximum loss below (above for a short),
- * the first profit line, and the next two steps. */
-export function LineLadder({ call, entry }: { call: Call; entry: number | null }) {
+ * the first step that moves the max loss line to the base, the next steps, and the target. */
+export function LineLadder({ call, entry, step: stepUsed }: { call: Call; entry: number | null; step?: number }) {
   if (call.direction === "none" || !entry) return null;
   const sign = call.direction === "long" ? 1 : -1;
   const at = (p: number) => entry * (1 + (sign * p) / 100);
+  const step = stepUsed ?? call.step_pct;
   const rows = [
-    { key: "s2", label: "second step", p: call.first_profit_pct + 2 * call.step_pct, tone: "bull faint" },
-    { key: "s1", label: "first step", p: call.first_profit_pct + call.step_pct, tone: "bull faint" },
-    { key: "fp", label: "MIN PROFIT LINE", p: call.first_profit_pct, tone: "bull" },
+    { key: "fp", label: "TARGET", p: call.first_profit_pct, tone: "bull faint" },
+    { key: "s3", label: "third step: line at +2", p: 3 * step, tone: "bull faint" },
+    { key: "s2", label: "second step: line at +1", p: 2 * step, tone: "bull faint" },
+    { key: "s1", label: "FIRST STEP: MAX LOSS → BASE", p: step, tone: "bull" },
     { key: "base", label: "BASE (the fill)", p: 0, tone: "base" },
     { key: "ml", label: "MAX LOSS LINE", p: -call.max_loss_pct, tone: "bear" },
-  ];
-  const top = call.first_profit_pct + 2 * call.step_pct;
+  ].filter((r) => r.key !== "fp" || call.first_profit_pct > 3 * step);
+  const top = Math.max(call.first_profit_pct, 3 * step);
   const span = top + call.max_loss_pct;
   const H = 168;
   const y = (p: number) => 12 + ((top - p) / span) * (H - 24);
@@ -100,7 +102,7 @@ export function LineLadder({ call, entry }: { call: Call; entry: number | null }
       ))}
       <p className="ladder-note">
         {call.direction === "short" ? "A short: profit is below the base, loss above it. " : ""}
-        When the price reaches the min profit line the stop moves to the base, and every further {call.step_pct}% lifts the line one step. The position is closed when the price comes back to the latest line, at the max loss line, or after {call.horizon_minutes} minutes.
+        The lines move in steps of {step.toFixed(2)}%. One step in the trade's favour moves the max loss line to the base; every further step raises the min profit line one step, so it sits one step below the best price. The position is closed when the price comes back to the line (or to the base before the line has risen), at the max loss line, or after {call.horizon_minutes} minutes.
       </p>
     </div>
   );

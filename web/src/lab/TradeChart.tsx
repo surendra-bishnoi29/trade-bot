@@ -17,15 +17,13 @@ interface Standing {
 
 const EVENT_WORDS: Record<string, string> = {
   opened: "Opened: lines drawn from the fill",
-  base: "Min profit line reached: max loss line moved up to the base",
-  ratchet: "Price cleared the next step: min profit line raised",
+  base: "One step up: max loss line moved to the base",
+  ratchet: "Another step up: min profit line raised",
   exit: "Closed",
 };
 
 function standings(chart: TradeChartData): Standing[] {
   const sign = chart.direction === "long" ? 1 : -1;
-  const fp = Number(chart.call.first_profit_pct ?? 0);
-  const step = Number(chart.call.step_pct ?? 0);
   const moves = chart.lines;
   let k = -1; // the latest move applied
   let exited = false;
@@ -40,7 +38,9 @@ function standings(chart: TradeChartData): Standing[] {
     const m = k >= 0 ? moves[k] : null;
     if (!m) return { base: null, stop: null, profit_line: null, next_step: null, armed: false, steps: 0, move, phase: "before" };
     const wasExit = exited && !(move && move.event === "exit");
-    const next = m.base !== null && m.armed && fp && step ? m.base * (1 + (sign * (fp + (m.steps + 1) * step)) / 100) : null;
+    const step = Number(m.step_pct ?? chart.call.step_pct ?? 0);
+    const cleared = m.armed ? m.steps + 1 : 0;
+    const next = m.base !== null && step ? m.base * (1 + (sign * (cleared + 1) * step) / 100) : null;
     return {
       base: m.base,
       stop: m.stop,
@@ -57,9 +57,9 @@ function standings(chart: TradeChartData): Standing[] {
 function stateWords(s: Standing, direction: string): string {
   if (s.phase === "before") return "Not yet filled.";
   if (s.phase === "after") return "Closed.";
-  if (!s.armed) return `Waiting for the price to reach the min profit line. The max loss line is ${direction === "long" ? "below" : "above"} the base.`;
-  if (s.steps === 0) return "Min profit line reached: the max loss line now sits on the base, so the worst case is zero. It closes if the price comes back to the min profit line.";
-  return `Min profit line raised ${s.steps}×. It closes if the price comes back to the line.`;
+  if (!s.armed) return `Waiting for the price to move one step in the trade's favour. The max loss line is ${direction === "long" ? "below" : "above"} the base.`;
+  if (s.steps === 0) return "One step up: the max loss line now sits on the base, so the worst case is zero. One more step and the min profit line starts rising; it closes if the price comes back to the base first.";
+  return `Min profit line raised ${s.steps}× (one step below the best price). It closes if the price comes back to the line.`;
 }
 
 /** Candles, the three lines as they moved, and a time runner that reads every value at any minute. */
@@ -152,7 +152,7 @@ export function TradeChart({ chart }: { chart: TradeChartData }) {
   const lineVals = [
     { key: "stop", label: cur.armed ? "max loss line (on the base)" : "max loss line", v: cur.stop, cls: "bear" },
     { key: "base", label: "base (the fill)", v: cur.base, cls: "base" },
-    { key: "line", label: `min profit line${cur.steps ? ` (raised ${cur.steps}×)` : ""}`, v: cur.profit_line, cls: "bull" },
+    { key: "line", label: cur.armed ? `min profit line${cur.steps ? ` (raised ${cur.steps}×)` : " (on the base)"}` : "first step (arms the lines)", v: cur.profit_line, cls: "bull" },
     { key: "next", label: "next step", v: cur.next_step, cls: "faint" },
   ];
   const label = (iso: string) => iso.slice(11, 16);

@@ -133,6 +133,12 @@ class Settings(BaseSettings):
     lab_no_entry_minutes_before_close: int = 30
     lab_flat_minutes_before_close: int = 10
     lab_min_loss_pct: float = 0.5
+    # The lines move in steps of this size (percent of the base) for stocks and funds; crypto's
+    # bounds are five times these, as its round trip costs five times as much. One step in the
+    # trade's favour moves the maximum-loss line to the base; each further step raises the
+    # minimum-profit line. The predictor's step_pct is held inside these bounds.
+    lab_min_step_pct: float = 0.15
+    lab_max_step_pct: float = 0.3
     commodities_max_gross_pct: Decimal = Decimal("0.10")
     commodities_allow_short: bool = True
     crypto_max_gross_pct: Decimal = Decimal("0.05")

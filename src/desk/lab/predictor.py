@@ -90,6 +90,7 @@ class Predictor(BaseAgent):
         min_first_profit_pct: float = 0.5,
         min_loss_pct: float = 0.5,
         no_entry_minutes: int = 30,
+        step_bounds: tuple[float, float] = (0.15, 0.3),
         client: anthropic.AsyncAnthropic | None = None,
         cache: Any = None,
     ) -> None:
@@ -107,6 +108,7 @@ class Predictor(BaseAgent):
         self.min_first_profit_pct = min_first_profit_pct
         self.min_loss_pct = min_loss_pct
         self.no_entry_minutes = no_entry_minutes
+        self.step_bounds = step_bounds
         self._client = client
         self.cache = cache
         self.calls_at: list[datetime] = []
@@ -137,6 +139,7 @@ class Predictor(BaseAgent):
         )
         record = await record_of(self.db, t.symbol, now)
         book = BOOK_OF_MARKET[t.market]
+        k = ROUND_TRIP_PCT[t.market] / ROUND_TRIP_PCT["stocks"]
         limits = self.risk.limits.for_book(book) if self.risk is not None else None
         shorts = bool(limits.allow_short) if limits is not None else t.market != "crypto"
         parts = [
@@ -184,6 +187,7 @@ class Predictor(BaseAgent):
             f"BOOK RULES: shorts {'allowed' if shorts else 'not allowed'}; round-trip cost {ROUND_TRIP_PCT[t.market]:.2f}%; "
             f"first profit line at least {max(self.min_first_profit_pct, 3 * ROUND_TRIP_PCT[t.market]):.2f}% "
             f"and never nearer than the maximum loss; maximum loss at least {self.min_loss_pct:.2f}%; "
+            f"the lines move in steps of {self.step_bounds[0] * k:.2f}% to {self.step_bounds[1] * k:.2f}% of the base; "
             f"the desk trades a call at confidence {self.min_confidence:.2f} or more."
         )
         parts.append(f"TRACK RECORD on {t.symbol}: {render_record(record)}.")
@@ -233,6 +237,10 @@ class Predictor(BaseAgent):
                 ),
                 "min_loss_pct": self.min_loss_pct,
                 "min_confidence": self.min_confidence,
+                "step_bounds_pct": [
+                    round(self.step_bounds[0] * k, 3),
+                    round(self.step_bounds[1] * k, 3),
+                ],
             },
         }
         return "\n\n".join(parts), {

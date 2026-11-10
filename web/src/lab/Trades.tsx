@@ -43,8 +43,8 @@ export function TradesPane({ picked, onPick, filter }: { picked: string | null; 
                     <span className={`dir ${t.direction}`}>{t.direction.toUpperCase()}</span>
                   </span>
                   <span className="row-why">
-                    {t.moves > 1 ? `${t.moves - 1} line move${t.moves === 2 ? "" : "s"}` : t.open ? "waiting for the min profit line" : "no line move"}
-                    {t.armed ? ` · stop on the base${t.steps ? `, line raised ${t.steps}×` : ""}` : ""}
+                    {t.moves > 1 ? `${t.moves - 1} line move${t.moves === 2 ? "" : "s"}` : t.open ? "waiting for the first step up" : "no line move"}
+                    {t.armed ? ` · max loss on the base${t.steps ? `, line raised ${t.steps}×` : ""}` : ""}
                     {t.closed_at ? ` · closed ${hms(t.closed_at)}` : ""}
                   </span>
                   <Result t={t} />

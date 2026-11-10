@@ -330,6 +330,7 @@ class Desk:
                     trading,
                     back_office,
                     flat_minutes=settings.lab_flat_minutes_before_close,
+                    step_bounds=(settings.lab_min_step_pct, settings.lab_max_step_pct),
                 )
                 desk.lines.start()
                 desk.sentinel = Sentinel(
@@ -357,6 +358,7 @@ class Desk:
                     min_first_profit_pct=settings.lab_min_first_profit_pct,
                     min_loss_pct=settings.lab_min_loss_pct,
                     no_entry_minutes=settings.lab_no_entry_minutes_before_close,
+                    step_bounds=(settings.lab_min_step_pct, settings.lab_max_step_pct),
                 )
                 desk.predictor.start()
                 log.warning(

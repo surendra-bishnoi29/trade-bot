@@ -244,6 +244,7 @@ export interface LineMove {
   steps: number;
   armed: boolean;
   quantity: number | null;
+  step_pct?: number;
 }
 
 /** One position with the minute bars it lived through and every move of its lines. */

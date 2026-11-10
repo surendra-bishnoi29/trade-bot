@@ -35,8 +35,8 @@ TILES = (
 )
 BUCKETS = ((0.0, 0.4), (0.4, 0.5), (0.5, 0.55), (0.55, 0.65), (0.65, 0.8), (0.8, 1.01))
 EXIT_WORDS = {
-    "line": "came back to the profit line",
-    "base": "came back to the entry after the first profit line",
+    "line": "came back to the min-profit line",
+    "base": "came back to the base after the max-loss line had moved there",
     "stop": "reached the maximum loss line",
     "horizon": "ran out of time",
     "close": "closed before the bell",
@@ -847,6 +847,7 @@ def _line_rows(events: list[Event]) -> list[dict[str, Any]]:
             "steps": int(x.payload.get("steps") or 0),
             "armed": bool(x.payload.get("armed")),
             "quantity": _f(x.payload.get("quantity")),
+            "step_pct": _f(x.payload.get("step_pct")),
         }
         for x in events
     ]

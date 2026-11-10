@@ -115,7 +115,7 @@ export function OpenLines({ lines, onOpen }: { lines: OpenLine[]; onOpen?: (call
               <b>{l.symbol}</b>
               <span className={`dir ${l.direction}`}>{l.direction.toUpperCase()}</span>
               <span className={gain >= 0 ? "bull" : "bear"}>{pct(gain)}</span>
-              <small>{l.armed ? (l.steps > 0 ? `line raised ${l.steps}×: cannot lose` : "stop on the base: cannot lose") : "waiting for the min profit line"}</small>
+              <small>{l.armed ? (l.steps > 0 ? `line raised ${l.steps}×: cannot lose` : "max loss on the base: cannot lose") : "waiting for the first step up"}</small>
             </header>
             <div className="held-bar">
               <i className="stop" style={{ left: x(l.stop) }} title={`stop ${l.stop}`} />

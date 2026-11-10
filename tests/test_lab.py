@@ -62,47 +62,59 @@ def bar(symbol: str, when: datetime, high: float, low: float, close: float | Non
     )
 
 
-def test_long_lines_ratchet_then_exit_on_the_line():
+def test_long_lines_step_up_then_exit_on_the_line():
+    # steps of 0.5%: one step up moves the max-loss line to the base, each further step raises
+    # the min-profit line, and the position closes when the price comes back to it
     line = Line("c1", "AAPL", "stocks", "long", 0.7, Decimal(10), 1.0, 1.0, 0.5, 240)
     line.open(100.0, T0)
-    assert (line.stop, line.profit_line) == (99.0, 101.0) and not line.armed
-    assert line.watch(100.8, 100.2) == [] and line.exit_level() == 99.0
+    assert (line.stop, line.profit_line) == (99.0, pytest.approx(100.5)) and not line.armed
+    assert line.next_step() == pytest.approx(100.5)
+    assert line.watch(100.4, 100.2) == [] and line.exit_level() == 99.0
+    assert line.watch(100.6, 100.3) == ["base"] and line.armed and line.stop == 100.0
+    assert line.profit_line == 100.0 and line.exit_level() == 100.0  # cannot lose from here
+    assert line.next_step() == pytest.approx(101.0)
+    assert line.watch(100.9, 100.1) == []  # not back to the base, not yet the next step
     assert (
-        line.watch(101.2, 100.9) == ["base"] and line.armed and line.stop == 100.0
-    )  # above the base: stop to the base
-    assert (
-        line.watch(102.1, 101.5) == ["ratchet", "ratchet"]
+        line.watch(101.6, 100.9) == ["ratchet", "ratchet"]
         and line.steps == 2
-        and line.profit_line == pytest.approx(102.0)
-    )
-    assert line.exit_level() == pytest.approx(102.0)
-    assert line.watch(102.4, 102.2) == []
+        and line.profit_line == pytest.approx(101.0)
+    )  # cleared 101.0 and 101.5: the line sits one step below the best price
+    assert line.exit_level() == pytest.approx(101.0) and line.next_step() == pytest.approx(102.0)
+    assert line.watch(101.8, 101.2) == []
     assert (
-        line.watch(102.3, 101.9) == ["exit"] and line.exit_reason == "line"
+        line.watch(101.4, 100.95) == ["exit"] and line.exit_reason == "line"
     )  # back to the latest line
 
 
 def test_long_lines_stop_and_base_exits_and_short_mirror():
     line = Line("c1", "AAPL", "stocks", "long", 0.7, Decimal(10), 1.0, 1.0, 0.5, 240)
     line.open(100.0, T0)
-    assert line.watch(100.5, 98.9) == ["exit"] and line.exit_reason == "stop"
+    assert line.watch(100.4, 98.9) == ["exit"] and line.exit_reason == "stop"
     line = Line("c2", "AAPL", "stocks", "long", 0.7, Decimal(10), 1.0, 1.0, 0.5, 240)
     line.open(100.0, T0)
-    line.watch(101.1, 100.5)
+    assert line.watch(100.7, 100.1) == ["base"]
     assert line.watch(100.6, 99.95) == ["exit"] and line.exit_reason == "base"
     short = Line("c3", "XOM", "commodities", "short", 0.6, Decimal(10), 1.0, 1.0, 0.5, 240)
     short.open(100.0, T0)
-    assert (short.stop, short.profit_line) == (101.0, 99.0)
+    assert (short.stop, short.profit_line) == (101.0, pytest.approx(99.5))
     assert (
-        short.watch(99.5, 98.9) == ["base"] and short.stop == 100.0 and short.exit_level() == 99.0
+        short.watch(99.8, 99.4) == ["base"] and short.stop == 100.0 and short.exit_level() == 100.0
     )
-    assert short.watch(98.6, 97.9) == ["ratchet", "ratchet"] and short.profit_line == pytest.approx(
-        98.0
+    assert short.watch(99.3, 98.4) == ["ratchet", "ratchet"] and short.profit_line == pytest.approx(
+        99.0
     )
-    assert short.watch(98.1, 97.95) == ["exit"] and short.exit_reason == "line"
+    assert short.exit_level() == pytest.approx(99.0)
+    assert short.watch(99.05, 98.7) == ["exit"] and short.exit_reason == "line"
     bad = Line("c4", "XOM", "commodities", "short", 0.6, Decimal(10), 1.0, 1.0, 0.5, 240)
     bad.open(100.0, T0)
     assert bad.watch(101.2, 100.4) == ["exit"] and bad.exit_reason == "stop"
+
+
+def test_the_step_is_held_inside_the_books_bounds():
+    agent = LinesAgent(None, None, None, None, None, step_bounds=(0.15, 0.3))  # type: ignore[arg-type]
+    assert agent.step_for("stocks", 0.5) == 0.3 and agent.step_for("stocks", 0.05) == 0.15
+    assert agent.step_for("commodities", 0.2) == 0.2
+    assert agent.step_for("crypto", 0.5) == 0.75 and agent.step_for("crypto", 2.0) == 1.5
 
 
 class FakeTrading:
@@ -206,7 +218,7 @@ async def test_lines_agent_opens_on_the_fill_ratchets_the_broker_stop_and_scores
     bus = InMemoryBus(clock)
     trading = FakeTrading()
     office = SimpleNamespace(book_of={})
-    agent = LinesAgent(bus, clock, FakeDB(), trading, office)
+    agent = LinesAgent(bus, clock, FakeDB(), trading, office, step_bounds=(0.5, 0.5))
     agent.start()
     task = asyncio.create_task(bus.run())
     await bus.publish(call_event(T0))
@@ -218,15 +230,17 @@ async def test_lines_agent_opens_on_the_fill_ratchets_the_broker_stop_and_scores
     line = agent.lines["AAPL"]
     assert line.filled and line.base == 100.0 and office.book_of == {"AAPL": "swing"}
     assert trading.stops["stop-b-i1"] == Decimal("99.00")  # the broker holds the maximum-loss line
+    # steps of 0.5%: 100.6 arms (max loss to the base), 101.2 clears 101.0 (line to 100.5),
+    # 102.2 clears 101.5 and 102.0 (line to 101.5)
     for i, (h, lo) in enumerate([(100.6, 100.1), (101.2, 100.8), (102.2, 101.6)], start=1):
         clock.advance_to(T0 + timedelta(minutes=i))
         await bus.publish(bar("AAPL", clock.now(), h, lo))
     await bus.wait_idle()
-    assert line.armed and line.steps == 2 and trading.stops["stop-b-i1"] == Decimal("102.00")
+    assert line.armed and line.steps == 3 and trading.stops["stop-b-i1"] == Decimal("101.50")
     kinds = [e.payload["event"] for e in bus.log if e.type == Topics.LINES_UPDATED]
-    assert kinds == ["opened", "base", "ratchet", "ratchet"]
+    assert kinds == ["opened", "base", "ratchet", "ratchet", "ratchet"]
     clock.advance_to(T0 + timedelta(minutes=4))
-    await bus.publish(bar("AAPL", clock.now(), 102.3, 101.9))  # back to the line: exit
+    await bus.publish(bar("AAPL", clock.now(), 102.0, 101.4))  # back to the line: exit
     await bus.wait_idle()
     exits = [
         e for e in bus.log if e.type == Topics.ORDER_INTENT and e.payload.get("side") == "sell"
