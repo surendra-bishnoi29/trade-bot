@@ -1,5 +1,8 @@
 import { pct } from "../funnel/format";
+import { gradeOf, howOf } from "./Filters";
 import { Confidence, Direction, Graded, gradedOf, hms, OutcomePill, rate, RightWrong, Who } from "./Pieces";
+
+const avg = (xs: number[]): string => (xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(2) : "–");
 import { Counts, DayReport, Story, Tally } from "./types";
 
 const signed = (v: number | null | undefined): string => (v === null || v === undefined ? "n/a" : pct(v));
@@ -14,6 +17,12 @@ export function Scoreboard({ tally, findings, title, stories = [], onPick }: { t
   const traded = sided.filter((g) => g.traded);
   const onPaper = sided.filter((g) => !g.traded);
   const leaned = gradedOf(stories, "only");
+  const conf = (pick: (s: Story) => boolean) => stories.filter(pick).map((s) => s.call.confidence);
+  const cTraded = conf((s) => howOf(s) === "traded");
+  const cPaper = conf((s) => howOf(s) === "paper");
+  const cPassed = conf((s) => howOf(s) === "passed");
+  const cRight = conf((s) => gradeOf(s) === "right" && howOf(s) !== "passed");
+  const cWrong = conf((s) => gradeOf(s) === "wrong" && howOf(s) !== "passed");
   return (
     <section className="score" aria-label={title}>
       <h2>{title}</h2>
@@ -92,6 +101,25 @@ export function Scoreboard({ tally, findings, title, stories = [], onPick }: { t
           <div>
             <dt title="Triggers the predictor never looked at because the hourly call budget was spent. They are not passes.">Not looked at</dt>
             <dd>{t.unanswered} · the hourly call budget was spent</dd>
+          </div>
+        )}
+        {stories.length > 0 && (
+          <div className="conf-row">
+            <dt title="The predictor's own confidence, averaged. If right calls were not more confident than wrong ones, its confidence carries no information.">How sure it was</dt>
+            <dd>
+              <span className="conf-grid">
+                <span>traded</span>
+                <b>{avg(cTraded)}</b>
+                <span>on paper</span>
+                <b>{avg(cPaper)}</b>
+                <span>passed</span>
+                <b>{avg(cPassed)}</b>
+                <span className="bull">when right</span>
+                <b className="bull">{avg(cRight)}</b>
+                <span className="bear">when wrong</span>
+                <b className="bear">{avg(cWrong)}</b>
+              </span>
+            </dd>
           </div>
         )}
       </dl>
