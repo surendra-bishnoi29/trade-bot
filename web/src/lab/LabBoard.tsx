@@ -2,28 +2,30 @@ import { useEffect, useMemo, useState } from "react";
 import { CallDetail, CallList } from "./Calls";
 import "./lab.css";
 import { AgentFlow, MarketTiles, OpenLines } from "./Overview";
-import { hms } from "./Pieces";
+import { Graded, hms } from "./Pieces";
 import { ReportView, Scoreboard } from "./Scoreboard";
-import { Story, TileKey } from "./types";
+import { Story, Tile, TileKey } from "./types";
 import { useDays, useLive, useReport } from "./useLab";
 
 type Tab = "live" | "report";
-type Show = "all" | "sided" | "traded";
+type Show = "all" | "sided" | "traded" | "picked";
 
 /** The predictor at work: what it is shown, how it reasons, what the other agents do with its
- * calls, and how often it turns out right. Live, with a graded report for each day. */
+ * calls, and how often it turns out right. Live for today; any earlier day on the same screen. */
 export function LabBoard() {
   const { live, error, fetchedAt } = useLive();
   const [tab, setTab] = useState<Tab>("live");
   const [filter, setFilter] = useState<TileKey | null>(null);
   const [show, setShow] = useState<Show>("all");
   const [picked, setPicked] = useState<string | null>(null);
+  const [pickedSet, setPickedSet] = useState<{ ids: Set<string>; label: string } | null>(null);
   const [follow, setFollow] = useState(true);
   const [now, setNow] = useState(Date.now());
   const days = useDays();
   const today = new Date().toISOString().slice(0, 10);
   const [day, setDay] = useState<string>(today);
-  const { report, loading } = useReport(tab === "report" ? day : null);
+  const past = day !== today;
+  const { report, loading } = useReport(past || tab === "report" ? day : null);
   const [opened, setOpened] = useState<Story | null>(null);
 
   useEffect(() => {
@@ -32,15 +34,44 @@ export function LabBoard() {
   }, []);
 
   const bar = live?.stories.find((s) => s.inputs?.rules)?.inputs.rules?.min_confidence ?? 0.55;
+  // what the live tab shows: today from the live feed, an earlier day from its graded report
+  const dayReady = !past || (report !== null && report.day === day);
+  const dayStories: Story[] = useMemo(() => (past ? (report && report.day === day ? report.stories : []) : (live?.stories ?? [])), [past, report, day, live]);
+  const dayTally = past ? report?.tally ?? null : live?.tally ?? null;
+  const dayFindings = past ? report?.findings ?? [] : live?.findings ?? [];
+  const dayTiles: Tile[] | undefined = useMemo(() => {
+    if (!past || !live || !report || report.day !== day) return undefined;
+    return live.tiles.map((t) => {
+      const c = report.tally.tiles.find((x) => x.key === t.key);
+      return c ? { ...t, ...c, on_lines: [], mood: null } : { ...t, on_lines: [] };
+    });
+  }, [past, live, report, day]);
+
   const stories = useMemo(() => {
-    const rows = live?.stories ?? [];
-    return rows.filter((s) => (filter === null || s.tile === filter) && (show === "all" || (show === "sided" && s.call.direction !== "none") || (show === "traded" && s.acted)));
-  }, [live, filter, show]);
+    return dayStories.filter(
+      (s) =>
+        (filter === null || s.tile === filter) &&
+        (show === "all" || (show === "sided" && s.call.direction !== "none") || (show === "traded" && s.acted) || (show === "picked" && pickedSet !== null && pickedSet.ids.has(s.call_id))),
+    );
+  }, [dayStories, filter, show, pickedSet]);
   const current = useMemo(() => {
     if (!stories.length) return null;
     if (follow || !picked) return stories[0];
-    return stories.find((s) => s.call_id === picked) ?? (live?.stories ?? []).find((s) => s.call_id === picked) ?? stories[0];
-  }, [stories, picked, follow, live]);
+    return stories.find((s) => s.call_id === picked) ?? dayStories.find((s) => s.call_id === picked) ?? stories[0];
+  }, [stories, picked, follow, dayStories]);
+
+  const pick = (items: Graded[], label: string) => {
+    setPickedSet({ ids: new Set(items.map((g) => g.s.call_id)), label: items[0]?.grade ?? label });
+    setShow("picked");
+    setFollow(true);
+    setTab("live");
+  };
+  const chooseDay = (d: string) => {
+    setDay(d);
+    setOpened(null);
+    setPickedSet(null);
+    if (show === "picked") setShow("all");
+  };
 
   if (live && live.lab === false)
     return (
@@ -61,26 +92,38 @@ export function LabBoard() {
         <h1>Predictor</h1>
         <div className="pl-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={tab === "live"} className={tab === "live" ? "on" : ""} onClick={() => setTab("live")}>
-            Live
+            {past ? "The day" : "Live"}
           </button>
           <button type="button" role="tab" aria-selected={tab === "report"} className={tab === "report" ? "on" : ""} onClick={() => setTab("report")}>
             Right / wrong report
           </button>
         </div>
+        <label className="pl-day">
+          <span>Day (UTC)</span>
+          <select id="pl-day" value={day} onChange={(e) => chooseDay(e.target.value)}>
+            {dayOptions.map((d) => (
+              <option key={d} value={d}>
+                {d}
+                {d === today ? " (today)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <span className="pl-rule" title="The predictor only trades a call at or above this confidence">
           trades at confidence ≥ {bar.toFixed(2)}
         </span>
         <span className={`pl-clock${stale || error ? " stale" : ""}`}>
-          {error ? `not updating: ${error}` : live ? `as of ${hms(live.as_of)} UTC · refreshes every 10s` : "loading…"}
+          {error ? `not updating: ${error}` : past ? `${day} · ${report && report.day === day ? (report.final ? "the day is over" : "still running") : "loading…"}` : live ? `as of ${hms(live.as_of)} UTC · refreshes every 10s` : "loading…"}
         </span>
       </header>
 
       {!live && !error && <div className="pl-empty">Loading the lab's journal…</div>}
+      {live && past && !dayReady && <div className="pl-empty">Grading {day}…</div>}
 
-      {live && tab === "live" && (
+      {live && tab === "live" && dayReady && dayTally && (
         <>
-          <MarketTiles live={live} filter={filter} onFilter={setFilter} />
-          <AgentFlow agents={live.agents} now={now} />
+          <MarketTiles live={live} filter={filter} onFilter={setFilter} tiles={dayTiles} stories={dayStories} />
+          {past ? <p className="pl-note">Showing {day}. The agents' activity and the open lines are only shown for today; the counts, the calls and the right/wrong grades below are that day's.</p> : <AgentFlow agents={live.agents} now={now} />}
           <div className="pl-main">
             <section className="pl-col list" aria-label="Calls">
               <header className="col-head">
@@ -97,6 +140,11 @@ export function LabBoard() {
                       {label}
                     </button>
                   ))}
+                  {pickedSet && (
+                    <button type="button" className={show === "picked" ? "on picked" : "picked"} onClick={() => setShow("picked")} title="The calls behind the number you clicked">
+                      {pickedSet.ids.size} {pickedSet.label}
+                    </button>
+                  )}
                 </div>
               </header>
               <CallList
@@ -113,17 +161,19 @@ export function LabBoard() {
               <header className="col-head">
                 <h2>How it thought</h2>
                 <label className="follow">
-                  <input id="pl-follow" type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> follow the newest call
+                  <input id="pl-follow" type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> {past ? "newest first" : "follow the newest call"}
                 </label>
               </header>
-              {current ? <CallDetail s={current} bar={bar} /> : <div className="calls-empty">Waiting for the first call.</div>}
+              {current ? <CallDetail s={current} bar={bar} /> : <div className="calls-empty">{show === "picked" ? "None of those calls is in the chosen market." : "Waiting for the first call."}</div>}
             </section>
             <aside className="pl-col pl-side">
-              <Scoreboard tally={live.tally} findings={live.findings} title="Today so far (UTC)" />
-              <section className="held-box">
-                <h2>On lines now</h2>
-                <OpenLines lines={live.lines} onOpen={(id) => window.location.assign(`/lines?call=${encodeURIComponent(id)}`)} />
-              </section>
+              <Scoreboard tally={dayTally} findings={dayFindings} title={past ? `${day} (UTC)` : "Today so far (UTC)"} stories={dayStories} onPick={pick} />
+              {!past && (
+                <section className="held-box">
+                  <h2>On lines now</h2>
+                  <OpenLines lines={live.lines} onOpen={(id) => window.location.assign(`/lines?call=${encodeURIComponent(id)}`)} />
+                </section>
+              )}
             </aside>
           </div>
         </>
@@ -132,16 +182,7 @@ export function LabBoard() {
       {tab === "report" && (
         <div className="pl-report">
           <div className="report-pick">
-            <label htmlFor="pl-day">Day (UTC)</label>
-            <select id="pl-day" value={day} onChange={(e) => { setDay(e.target.value); setOpened(null); }}>
-              {dayOptions.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                  {d === today ? " (today)" : ""}
-                </option>
-              ))}
-            </select>
-            <span className="mute">A day runs midnight to midnight UTC. The New York session, 14:30 to 21:00, sits inside it.</span>
+            <span className="mute">A day runs midnight to midnight UTC. The New York session, 14:30 to 21:00, sits inside it. Change the day at the top.</span>
           </div>
           {loading && !report && <div className="pl-empty">Grading the day…</div>}
           {report && report.day === day && (

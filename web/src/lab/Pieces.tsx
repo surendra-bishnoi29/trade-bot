@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { pct, price } from "../funnel/format";
 import { Call, Counts, Outcome, OUTCOME, Story } from "./types";
 
@@ -133,4 +134,82 @@ export const rate = (v: number | null | undefined): string => (v === null || v =
 
 export function outcomeTone(o: Outcome): string {
   return OUTCOME[o].tone;
+}
+
+
+/** One graded call: right or wrong, traded or on paper, and the side it took. */
+export interface Graded {
+  s: Story;
+  grade: "right" | "wrong";
+  traded: boolean;
+  pct: number | null;
+  side: string;
+}
+
+/** The calls behind a right/wrong count. Traded calls by their real result, untraded calls that
+ * named a side by their paper result; passes only when `passes` is set (their lean's paper result). */
+export function gradedOf(stories: Story[], passes: "exclude" | "only" | "include" = "exclude"): Graded[] {
+  const out: Graded[] = [];
+  for (const s of stories) {
+    if (s.outcome === "right" || s.outcome === "wrong") {
+      if (passes === "only") continue;
+      out.push({ s, grade: s.outcome, traded: true, pct: s.score?.realized_pct ?? null, side: s.call.direction });
+      continue;
+    }
+    const p = s.paper;
+    if (!p || p.result === "pending") continue;
+    const isPass = s.outcome === "passed";
+    if ((isPass && passes === "exclude") || (!isPass && passes === "only")) continue;
+    out.push({ s, grade: p.result, traded: false, pct: p.realized_pct ?? null, side: s.call.direction !== "none" ? s.call.direction : s.call.lean ?? "?" });
+  }
+  return out;
+}
+
+/** A count that shows, on hover or focus, which calls it is made of; click it to show them in the list. */
+export function Who({ n, kind, items, onPick, big = false, title }: { n: number; kind: "right" | "wrong"; items: Graded[]; onPick?: (items: Graded[], label: string) => void; big?: boolean; title?: string }) {
+  const mine = items.filter((g) => g.grade === kind);
+  const label = title ?? `${kind}`;
+  // the list floats over the page (fixed), so a scrolling column cannot clip it
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const place = (e: React.SyntheticEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const width = Math.min(380, window.innerWidth - 24);
+    setPos({ left: Math.max(12, Math.min(r.left, window.innerWidth - width - 12)), top: r.bottom + 6 });
+  };
+  const hide = () => setPos(null);
+  const inner = (
+    <>
+      <b>{n}</b>
+      {mine.length > 0 && pos && (
+        <span className="who-pop" role="tooltip" style={{ left: pos.left, top: pos.top }}>
+          <span className="who-head">
+            {mine.length} {label}
+            {onPick ? " · click to list them" : ""}
+          </span>
+          {mine.slice(0, 14).map((g) => (
+            <span key={g.s.call_id} className="who-row">
+              <time>{g.s.at.slice(5, 10)} {hms(g.s.at)}</time>
+              <b className="sym">{g.s.symbol}</b>
+              <i className={`dir ${g.side}`}>{g.side.toUpperCase()}</i>
+              <em className={g.grade === "right" ? "bull" : "bear"}>{pct(g.pct)}</em>
+              <small>{g.traded ? "traded" : "on paper"}</small>
+            </span>
+          ))}
+          {mine.length > 14 && <span className="who-more">and {mine.length - 14} more</span>}
+        </span>
+      )}
+    </>
+  );
+  const cls = `who ${kind}${big ? " big" : ""}${mine.length ? " has" : ""}`;
+  if (onPick && mine.length)
+    return (
+      <button type="button" className={cls} onClick={() => onPick(mine, label)} onMouseEnter={place} onMouseLeave={hide} onFocus={place} onBlur={hide} aria-label={`${n} ${label}: show which`}>
+        {inner}
+      </button>
+    );
+  return (
+    <span className={cls} tabIndex={mine.length ? 0 : -1} onMouseEnter={place} onMouseLeave={hide} onFocus={place} onBlur={hide}>
+      {inner}
+    </span>
+  );
 }

@@ -1,25 +1,30 @@
 import { pct } from "../funnel/format";
-import { Confidence, Direction, hms, OutcomePill, rate, RightWrong } from "./Pieces";
+import { Confidence, Direction, Graded, gradedOf, hms, OutcomePill, rate, RightWrong, Who } from "./Pieces";
 import { Counts, DayReport, Story, Tally } from "./types";
 
 const signed = (v: number | null | undefined): string => (v === null || v === undefined ? "n/a" : pct(v));
 
 /** Right and wrong, counted three ways: real trades, untraded calls checked on paper, and passes. */
-export function Scoreboard({ tally, findings, title }: { tally: Tally; findings: string[]; title: string }) {
+export function Scoreboard({ tally, findings, title, stories = [], onPick }: { tally: Tally; findings: string[]; title: string; stories?: Story[]; onPick?: (items: Graded[], label: string) => void }) {
   const t = tally.total;
   const done = t.right + t.wrong;
   const paper = t.paper_right + t.paper_wrong;
   const leans = t.lean_right + t.lean_wrong;
+  const sided = gradedOf(stories, "exclude");
+  const traded = sided.filter((g) => g.traded);
+  const onPaper = sided.filter((g) => !g.traded);
+  const leaned = gradedOf(stories, "only");
   return (
     <section className="score" aria-label={title}>
       <h2>{title}</h2>
+      <p className="score-hint">Hover a number to see which calls it counts; click it to list them.</p>
       <div className="score-big">
         <div className="bull">
-          <b>{t.all_right}</b>
+          <Who n={t.all_right} kind="right" items={sided} onPick={onPick} big title="right (traded or on paper)" />
           <span>right</span>
         </div>
         <div className="bear">
-          <b>{t.all_wrong}</b>
+          <Who n={t.all_wrong} kind="wrong" items={sided} onPick={onPick} big title="wrong (traded or on paper)" />
           <span>wrong</span>
         </div>
         <div>
@@ -37,7 +42,7 @@ export function Scoreboard({ tally, findings, title }: { tally: Tally; findings:
           <dd>
             {done ? (
               <>
-                {t.right} right, {t.wrong} wrong · {rate(t.hit_rate)} · <b className={(t.avg_pct ?? 0) >= 0 ? "bull" : "bear"}>{signed(t.avg_pct)}</b> a trade after costs
+                <Who n={t.right} kind="right" items={traded} onPick={onPick} title="right, traded" /> right, <Who n={t.wrong} kind="wrong" items={traded} onPick={onPick} title="wrong, traded" /> wrong · {rate(t.hit_rate)} · <b className={(t.avg_pct ?? 0) >= 0 ? "bull" : "bear"}>{signed(t.avg_pct)}</b> a trade after costs
               </>
             ) : (
               "none yet"
@@ -53,7 +58,7 @@ export function Scoreboard({ tally, findings, title }: { tally: Tally; findings:
           <dd>
             {paper || t.paper_pending ? (
               <>
-                {t.paper_right} right, {t.paper_wrong} wrong on paper
+                <Who n={t.paper_right} kind="right" items={onPaper} onPick={onPick} title="right on paper (named a side, not traded)" /> right, <Who n={t.paper_wrong} kind="wrong" items={onPaper} onPick={onPick} title="wrong on paper (named a side, not traded)" /> wrong on paper
                 {paper ? ` · ${rate(t.paper_hit_rate)} · ${signed(t.paper_avg_pct)} each` : ""}
                 {t.paper_pending ? ` · ${t.paper_pending} still running` : ""}
               </>
@@ -74,7 +79,7 @@ export function Scoreboard({ tally, findings, title }: { tally: Tally; findings:
           <dd>
             {leans || t.lean_pending ? (
               <>
-                {t.lean_right} right, {t.lean_wrong} wrong on paper
+                <Who n={t.lean_right} kind="right" items={leaned} onPick={onPick} title="passes whose lean was right on paper" /> right, <Who n={t.lean_wrong} kind="wrong" items={leaned} onPick={onPick} title="passes whose lean was wrong on paper" /> wrong on paper
                 {leans ? ` · ${rate(t.lean_hit_rate)} · ${signed(t.lean_avg_pct)} each` : ""}
                 {t.lean_pending ? ` · ${t.lean_pending} still running` : ""}
               </>

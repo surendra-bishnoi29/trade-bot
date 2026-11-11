@@ -1,23 +1,25 @@
 import { pct } from "../funnel/format";
-import { ago, hm, rate, RightWrong } from "./Pieces";
-import { Agent, Live, OpenLine, Tile, TileKey } from "./types";
+import { ago, Graded, gradedOf, hm, rate, RightWrong, Who } from "./Pieces";
+import { Agent, Live, OpenLine, Story, Tile, TileKey } from "./types";
 
-/** The four markets the lab trades: whether each is open, its mood, and today's count. */
-export function MarketTiles({ live, filter, onFilter }: { live: Live; filter: TileKey | null; onFilter: (k: TileKey | null) => void }) {
+/** The four markets the lab trades: whether each is open, its mood, and the day's count. */
+export function MarketTiles({ live, filter, onFilter, tiles, stories = [] }: { live: Live; filter: TileKey | null; onFilter: (k: TileKey | null) => void; tiles?: Tile[]; stories?: Story[] }) {
+  const graded = gradedOf(stories, "exclude");
   return (
     <div className="tiles">
-      {live.tiles.map((t) => (
-        <MarketTile key={t.key} t={t} on={filter === t.key} dim={filter !== null && filter !== t.key} onClick={() => onFilter(filter === t.key ? null : t.key)} nextOpen={live.next_open} />
+      {(tiles ?? live.tiles).map((t) => (
+        <MarketTile key={t.key} t={t} on={filter === t.key} dim={filter !== null && filter !== t.key} onClick={() => onFilter(filter === t.key ? null : t.key)} nextOpen={live.next_open} graded={graded.filter((g) => g.s.tile === t.key)} />
       ))}
     </div>
   );
 }
 
-function MarketTile({ t, on, dim, onClick, nextOpen }: { t: Tile; on: boolean; dim: boolean; onClick: () => void; nextOpen: string | null }) {
+function MarketTile({ t, on, dim, onClick, nextOpen, graded }: { t: Tile; on: boolean; dim: boolean; onClick: () => void; nextOpen: string | null; graded: Graded[] }) {
   const mood = t.mood?.verdict;
   return (
-    <button type="button" className={`tile ${t.key}${on ? " on" : ""}${dim ? " dim" : ""}`} onClick={onClick} aria-pressed={on} title={`Show only ${t.label}`}>
-      <span className="in">
+    <div className={`tile ${t.key}${on ? " on" : ""}${dim ? " dim" : ""}`}>
+      <button type="button" className="tile-pick" onClick={onClick} aria-pressed={on} title={`Show only ${t.label}`}>
+        <span className="in">
         <span className="tile-head">
           <b>{t.label}</b>
           <span className={`state ${t.is_open ? "open" : "closed"}`}>{t.is_open ? "OPEN" : nextOpen ? `CLOSED · opens ${hm(nextOpen)} UTC` : "CLOSED"}</span>
@@ -46,19 +48,22 @@ function MarketTile({ t, on, dim, onClick, nextOpen }: { t: Tile; on: boolean; d
             <b>{t.traded}</b>
             <small>traded</small>
           </span>
-          <span className="bull">
-            <b>{t.all_right}</b>
-            <small>right</small>
-          </span>
-          <span className="bear">
-            <b>{t.all_wrong}</b>
-            <small>wrong</small>
-          </span>
         </span>
         <RightWrong c={t} />
         <span className="tile-foot">{t.on_lines.length ? `On lines now: ${t.on_lines.join(", ")}` : t.calls ? "Nothing on lines right now" : "No trigger yet today"}</span>
       </span>
-    </button>
+      </button>
+      <span className="tile-rw">
+        <span className="bull">
+          <Who n={t.all_right} kind="right" items={graded} title={`right in ${t.label}`} />
+          <small>right</small>
+        </span>
+        <span className="bear">
+          <Who n={t.all_wrong} kind="wrong" items={graded} title={`wrong in ${t.label}`} />
+          <small>wrong</small>
+        </span>
+      </span>
+    </div>
   );
 }
 

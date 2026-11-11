@@ -1767,3 +1767,166 @@
   flex-basis: 100%;
   font-weight: 700;
 }
+
+/* ---- which calls are behind a number: hover or focus a count, click it to list them ---- */
+.pl .who {
+  position: relative;
+  display: inline-grid;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+.pl .who.has {
+  cursor: pointer;
+}
+.pl .who > b {
+  border-bottom: 1px dotted transparent;
+}
+.pl .who.has > b {
+  border-bottom-color: currentColor;
+}
+.pl .who.big > b {
+  font: 700 34px/1 var(--pl-mono);
+  font-variant-numeric: tabular-nums;
+}
+.pl .who .who-pop {
+  display: grid;
+  gap: 3px;
+  position: fixed;
+  z-index: 30;
+  box-sizing: border-box;
+  width: min(380px, calc(100vw - 24px));
+  padding: 8px 10px;
+  border: 1px solid var(--pl-line);
+  border-radius: 10px;
+  background: var(--pl-panel-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  color: var(--pl-ink);
+  font: 400 11.5px/1.35 var(--pl-mono);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pl .who .who-pop b,
+.pl .who .who-pop time,
+.pl .who .who-pop em,
+.pl .who .who-pop small,
+.pl .who .who-pop span {
+  font: 400 11.5px/1.35 var(--pl-mono);
+  border: 0;
+}
+.pl .who .who-pop b {
+  font-weight: 700;
+}
+.pl .who .who-head {
+  color: var(--pl-muted);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 3px;
+}
+.pl .who .who-row {
+  display: grid;
+  grid-template-columns: 92px 54px 52px 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+.pl .who .who-row time {
+  color: var(--pl-muted);
+}
+.pl .who .who-row .sym {
+  color: var(--pl-ink);
+}
+.pl .who .who-row i.dir {
+  font-style: normal;
+  justify-self: start;
+}
+.pl .who .who-row em {
+  font-style: normal;
+  font-weight: 700;
+}
+.pl .who .who-row small {
+  color: var(--pl-muted);
+}
+.pl .who .who-more {
+  color: var(--pl-muted);
+}
+.pl .score-hint {
+  margin: 0;
+  color: var(--pl-muted);
+  font-size: 11px;
+}
+.pl .score-rows .who > b {
+  font: inherit;
+  font-weight: 700;
+}
+/* the tile: a button to filter, with the right/wrong counts beside it as their own hover targets */
+.pl .tile {
+  position: relative;
+}
+.pl .tile .tile-pick {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pl .tile .tile-rw {
+  position: absolute;
+  right: 14px;
+  top: 40px;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 14px;
+  font-family: var(--pl-mono);
+}
+.pl .tile .tile-rw > span {
+  display: grid;
+  justify-items: start;
+}
+.pl .tile .tile-rw small {
+  font-size: 9.5px;
+  color: var(--pl-muted);
+}
+.pl .tile .tile-rw .who > b {
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.pl .tile .tile-nums {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-right: 110px;
+}
+.pl .pl-day {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pl-muted);
+  font: 600 11px/1 var(--pl-mono);
+}
+.pl .pl-day select {
+  padding: 4px 8px;
+  border: 1px solid var(--pl-line);
+  border-radius: 6px;
+  background: var(--pl-panel);
+  color: var(--pl-ink);
+  font: 600 11.5px/1.2 var(--pl-mono);
+}
+.pl .pl-note {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--pl-line);
+  border-radius: 8px;
+  color: var(--pl-soft);
+  font-size: 12px;
+}
+.pl .seg button.picked {
+  color: var(--amber);
+}
