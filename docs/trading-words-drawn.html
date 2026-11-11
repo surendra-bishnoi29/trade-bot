@@ -1,0 +1,593 @@
+<title>Trading Words, Drawn</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Patrick+Hand&display=swap">
+<style>
+/* Layout: a whiteboard lesson on a dotted grid: one idea per section, a rough.js drawing of it, then sticky notes with the words and a worked example in money. Same tokens as the lab explainer. */
+:root{
+  --paper:#fffdf6; --ink:#1e1e1e; --ink-soft:#5f5b52; --grid:#d9d5c8; --shadow:rgba(30,30,30,.18);
+  --c-red:#ffc9c9; --c-orange:#ffd8a8; --c-yellow:#fff3bf; --c-green:#b2f2bb; --c-teal:#c3fae8;
+  --c-blue:#a5d8ff; --c-violet:#d0bfff; --c-pink:#fcc2d7; --c-gray:#e9ecef; --accent:#e03131; --good:#2b8a3e;
+  --font-hand:'Kalam','Segoe Print','Bradley Hand','Comic Sans MS',cursive;
+  --font-body:'Patrick Hand','Segoe Print','Comic Sans MS',cursive;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#141414; --ink:#e6e6ea; --ink-soft:#b3b3bb; --grid:#2b2b2b; --shadow:rgba(0,0,0,.55);
+    --c-red:#5a2a2a; --c-orange:#5a4324; --c-yellow:#56501f; --c-green:#24472e; --c-teal:#1f4640;
+    --c-blue:#243d57; --c-violet:#3a2f5c; --c-pink:#55293c; --c-gray:#2f3338; --accent:#ff6b6b; --good:#69db7c; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#141414; --ink:#e6e6ea; --ink-soft:#b3b3bb; --grid:#2b2b2b; --shadow:rgba(0,0,0,.55);
+  --c-red:#5a2a2a; --c-orange:#5a4324; --c-yellow:#56501f; --c-green:#24472e; --c-teal:#1f4640;
+  --c-blue:#243d57; --c-violet:#3a2f5c; --c-pink:#55293c; --c-gray:#2f3338; --accent:#ff6b6b; --good:#69db7c; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; color:var(--ink); background-color:var(--paper);
+  background-image:radial-gradient(var(--grid) 1.3px, transparent 1.5px); background-size:24px 24px;
+  font-family:var(--font-body); font-size:18px; line-height:1.45;
+  padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); padding-block:28px 56px;
+}
+.page{max-width:1240px; margin:0 auto; display:grid; gap:56px}
+h1,h2,h3{font-family:var(--font-hand); font-weight:700; line-height:1.15; margin:0; text-wrap:balance}
+h1{font-size:clamp(36px, 6vw, 60px)}
+h2{font-size:clamp(26px, 4vw, 34px)}
+h3{font-size:20px}
+p{margin:0; max-width:70ch}
+.hl{background:linear-gradient(transparent 58%, var(--c-yellow) 58%, var(--c-yellow) 92%, transparent 92%); padding:0 .15em}
+.eyebrow{font-family:var(--font-hand); font-size:14px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-soft)}
+header{display:grid; gap:14px}
+.sub{font-size:20px; max-width:74ch}
+section{display:grid; gap:20px}
+.dia{overflow-x:auto; padding-bottom:6px}
+.dia svg{width:100%; min-width:940px; height:auto; display:block}
+.dia.narrow svg{min-width:680px}
+svg text{font-family:var(--font-hand); fill:var(--ink)}
+.notes{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:18px; align-items:start}
+.notes.wide{grid-template-columns:repeat(auto-fit, minmax(300px, 1fr))}
+.note{
+  font-family:var(--font-hand); font-size:15.5px; line-height:1.34; padding:14px 16px; min-width:0;
+  border:2px solid var(--ink); border-radius:255px 15px 225px 15px/15px 225px 15px 255px;
+  box-shadow:3px 4px 0 var(--shadow); background:var(--c-yellow);
+}
+.note b{display:block; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; margin-bottom:5px}
+.note strong{font-size:19px; display:block; margin-bottom:4px}
+.note ul{margin:4px 0 0; padding-left:18px}
+.note li{margin:4px 0}
+.notes > :nth-child(3n+1){transform:rotate(-.9deg)}
+.notes > :nth-child(3n+2){transform:rotate(.7deg)}
+.notes > :nth-child(3n){transform:rotate(-.4deg)}
+.f-red{background:var(--c-red)} .f-orange{background:var(--c-orange)} .f-yellow{background:var(--c-yellow)} .f-green{background:var(--c-green)}
+.f-teal{background:var(--c-teal)} .f-blue{background:var(--c-blue)} .f-violet{background:var(--c-violet)} .f-pink{background:var(--c-pink)} .f-gray{background:var(--c-gray)}
+.stats{display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:16px}
+.stat{font-family:var(--font-hand); border:2px solid var(--ink); border-radius:15px 225px 15px 255px/255px 15px 225px 15px; box-shadow:3px 4px 0 var(--shadow); background:var(--paper); padding:12px 16px; min-width:0}
+.stat b{display:block; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); font-weight:400}
+.stat .v{font-size:30px; font-weight:700; line-height:1.1; font-variant-numeric:tabular-nums}
+.stat small{display:block; font-size:13px; color:var(--ink-soft); margin-top:2px}
+.tbl-wrap{overflow-x:auto}
+.sk-table{border:2px solid var(--ink); border-radius:12px 255px 14px 225px/225px 14px 255px 12px; box-shadow:3px 4px 0 var(--shadow); background:var(--paper); overflow:hidden; min-width:720px}
+table{border-collapse:collapse; width:100%; font-family:var(--font-hand); font-size:15.5px}
+th,td{border-bottom:1.5px dashed var(--ink-soft); padding:10px 14px; text-align:left; vertical-align:top}
+tr:last-child td{border-bottom:none}
+th{background:var(--c-gray); font-weight:700; font-size:13.5px; letter-spacing:.06em; text-transform:uppercase}
+td:first-child{font-weight:700; white-space:nowrap; width:1%}
+th.main{background:var(--c-blue)} th.lab{background:var(--c-orange)}
+.legend{display:flex; flex-wrap:wrap; gap:8px 18px; font-family:var(--font-hand); font-size:14px; color:var(--ink-soft)}
+.legend i{display:inline-block; width:14px; height:14px; border:1.5px solid var(--ink); border-radius:4px 2px 5px 2px; vertical-align:-2px; margin-right:6px}
+.tag{display:inline-block; font-family:var(--font-hand); font-size:12px; letter-spacing:.06em; text-transform:uppercase; padding:1px 8px; border:1.5px solid var(--ink); border-radius:12px 4px 10px 5px/5px 10px 4px 12px; background:var(--c-gray); vertical-align:1px; margin-right:4px}
+.tag.ok{background:var(--c-green)} .tag.bad{background:var(--c-red)} .tag.open{background:var(--c-violet)}
+.fix{display:grid; gap:10px; font-family:var(--font-hand); font-size:15.5px; line-height:1.36}
+.fix > div{display:grid; grid-template-columns:auto 1fr; gap:10px; align-items:start}
+.fix b{font-weight:700}
+.cols{display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:26px; align-items:start}
+.cols > *{min-width:0; display:grid; gap:12px}
+footer{font-family:var(--font-hand); font-size:14px; color:var(--ink-soft)}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <filter id="wobble" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.2"/></filter>
+</defs></svg>
+
+
+<style>
+.lesson{display:grid; gap:18px}
+.lesson .kicker{font-family:var(--font-hand); font-size:15px; color:var(--ink-soft)}
+.ex{font-family:var(--font-hand); font-size:16px; line-height:1.4; border:2px solid var(--ink); border-radius:12px 255px 14px 225px/225px 14px 255px 12px; box-shadow:3px 4px 0 var(--shadow); background:var(--paper); padding:14px 18px}
+.ex b{display:block; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px}
+.ex .sum{display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin-top:8px}
+.ex .sum span:nth-child(odd){color:var(--ink-soft)}
+.ex .sum .num{font-variant-numeric:tabular-nums; font-weight:700}
+.good{color:var(--good)} .bad{color:var(--accent)}
+.toc{display:flex; flex-wrap:wrap; gap:8px}
+.toc a{font-family:var(--font-hand); font-size:14px; text-decoration:none; color:var(--ink); border:1.5px solid var(--ink); border-radius:12px 4px 10px 5px/5px 10px 4px 12px; padding:3px 10px; background:var(--c-gray)}
+.toc a:hover,.toc a:focus-visible{background:var(--c-yellow); outline:none}
+.quiz{display:grid; gap:10px}
+.q{font-family:var(--font-hand); font-size:16px; border:2px solid var(--ink); border-radius:255px 15px 225px 15px/15px 225px 15px 255px; background:var(--c-teal); padding:12px 16px; box-shadow:3px 4px 0 var(--shadow)}
+.q button{font-family:var(--font-hand); font-size:15px; margin:6px 8px 0 0; padding:4px 12px; border:1.5px solid var(--ink); border-radius:10px 4px 12px 5px/5px 12px 4px 10px; background:var(--paper); color:var(--ink); cursor:pointer}
+.q button:focus-visible{outline:2px solid var(--accent)}
+.q .a{display:block; margin-top:8px; min-height:1.4em}
+@media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+
+
+<div class="page">
+
+<header>
+  <div class="eyebrow">bot-trading · the lab desk · a lesson for a beginner · 11 Nov 2026</div>
+  <h1>Trading Words, Drawn</h1>
+  <p class="sub">Everything the lab's screens say, explained from zero with small drawings and real numbers from your own trades. Read it top to bottom once; after that, use the word list at the end.</p>
+  <nav class="toc" aria-label="Sections">
+    <a href="#buy">1 Buying</a><a href="#short">2 Short selling</a><a href="#candle">3 Reading a candle</a><a href="#lines">4 The three lines</a><a href="#short-lines">5 Lines on a short</a><a href="#exits">6 Ways a trade ends</a><a href="#money">7 Percent, money and costs</a><a href="#desk">8 Who does what</a><a href="#score">9 Right and wrong</a><a href="#quiz">10 Check yourself</a><a href="#words">Word list</a>
+  </nav>
+</header>
+
+<section class="lesson" id="buy">
+  <h2>1. Buying, also called "going long"</h2>
+  <p class="kicker">The one everyone already understands.</p>
+  <p>You buy a share for 100. Later you sell it. If you sell above 100 you made money; below 100 you lost money. The desk calls this a <span class="hl">long</span>, and the price you paid is the <span class="hl">base</span>.</p>
+  <div class="dia narrow"><svg id="d-long" viewBox="0 0 760 300" role="img" aria-label="A price line rising from 100 to 103. Bought at 100, sold at 103, plus 3 a share."></svg></div>
+  <div class="notes">
+    <div class="note f-blue"><b>Long</b><strong>Buy first, sell later</strong>Profits when the price goes <em>up</em>. Loses when it goes down. The blue LONG tag on the screens means this.</div>
+    <div class="note f-yellow"><b>Base</b><strong>The price you paid</strong>Every line is measured from it. On the chart it is the white dotted line with the "fill" mark.</div>
+    <div class="note f-gray"><b>Fill</b><strong>The moment the order went through</strong>You ask to buy; the broker finds a seller; the trade "fills". The fill price becomes the base.</div>
+  </div>
+  <div class="ex"><b>Real example from your lab · AMZN, 10 Nov</b>Bought 3 shares at 269.77 (the base). Later the price was 272.18, so each share was up 2.41, about +0.9%, and the 3 shares together were up about $7.
+    <div class="sum"><span>Bought</span><span class="num">3 × 269.77 = $809</span><span>Price later</span><span class="num">272.18</span><span>Gain so far</span><span class="num good">+0.89% · about +$7</span></div></div>
+</section>
+
+<section class="lesson" id="short">
+  <h2>2. Short selling, "going short"</h2>
+  <p class="kicker">The one that trips everybody up at first.</p>
+  <p>A short is the same trade done in the opposite order. You <span class="hl">sell first</span> shares you borrow from the broker, and you must <span class="hl">buy them back</span> later to return them. If you buy back cheaper than you sold, you keep the difference. If you have to buy back dearer, you lose.</p>
+  <div class="dia narrow"><svg id="d-short" viewBox="0 0 760 330" role="img" aria-label="Two price paths from 100. One falls to 97: sold at 100, bought back at 97, plus 3. One rises to 102: sold at 100, bought back at 102, minus 2."></svg></div>
+  <div class="notes">
+    <div class="note f-violet"><b>Short</b><strong>Sell first, buy back later</strong>Profits when the price goes <em>down</em>. Loses when it goes up. The violet SHORT tag means this.</div>
+    <div class="note f-yellow"><b>Why it exists</b><strong>To make money from a fall</strong>Without shorts the desk could only wait when it thinks a price will drop. With them it can act on that too.</div>
+    <div class="note f-red"><b>The catch</b><strong>Up is bad for a short</strong>A chart that looks nice (price going up) is a losing chart for a short. Always check the tag first.</div>
+  </div>
+  <div class="ex"><b>Real example from your lab · GLD, 10 Nov</b>Sold short 2 shares at 368.03. Later bought them back at 369.22. It paid 1.19 more per share than it had received, so it lost.
+    <div class="sum"><span>Sold short</span><span class="num">2 × 368.03 = $736</span><span>Bought back</span><span class="num">369.22</span><span>Result</span><span class="num bad">−0.43% after costs · −$3.14</span></div>
+    This is the trade you asked about: "bought low, sold high" was the wrong way round, because it was a short. (It also closed by mistake at a restart; the price never reached its max-loss line.)</div>
+</section>
+
+<section class="lesson" id="candle">
+  <h2>3. Reading a candle</h2>
+  <p class="kicker">One candle is one minute on the lab's charts.</p>
+  <p>Each candle shows four prices for its minute: where it <span class="hl">opened</span>, the <span class="hl">highest</span> and <span class="hl">lowest</span> it reached, and where it <span class="hl">closed</span>. The thick part runs from open to close; the thin wick marks the high and the low.</p>
+  <div class="dia narrow"><svg id="d-candle" viewBox="0 0 760 300" role="img" aria-label="Two candles drawn large. A green one that closed above its open, a red one that closed below, with the open, high, low and close labelled."></svg></div>
+  <div class="notes">
+    <div class="note f-green"><b>Green candle</b><strong>Closed higher than it opened</strong>The price went up during that minute.</div>
+    <div class="note f-red"><b>Red candle</b><strong>Closed lower than it opened</strong>The price went down during that minute.</div>
+    <div class="note f-gray"><b>O H L C</b><strong>Open, High, Low, Close</strong>The readout under the chart shows these four for the minute under the time runner.</div>
+    <div class="note f-yellow"><b>Volume</b><strong>The small bars at the bottom</strong>How many shares changed hands that minute. Tall bars mean a busy minute.</div>
+  </div>
+  <p>The lines watch the <em>high</em> and the <em>low</em> of each minute, not only the close. If the low of a minute touched the max-loss line, the line counts as hit even if the minute closed above it.</p>
+</section>
+
+<section class="lesson" id="lines">
+  <h2>4. The three lines on a long</h2>
+  <p class="kicker">Your rule, drawn. Steps of 0.3% from the base.</p>
+  <p>The moment a trade fills, the desk draws a <span class="hl">base</span> at the fill price and a <span class="hl">max-loss line</span> below it. Then it measures the price in <span class="hl">steps</span> (0.3% of the base each) going up. One step up and the max-loss line jumps to the base: from then on the trade cannot lose. Every further step raises the <span class="hl">min-profit line</span> one step, so it always sits one step below the best price seen. The trade closes when the price comes back to the line.</p>
+  <div class="dia"><svg id="d-lines" viewBox="0 0 1000 470" role="img" aria-label="A price path from 200.00. The max-loss line sits at 198.80 until the price reaches the first step at 200.60; then it moves up to the entry at 200.00. Each further step of 0.30 percent raises the min-profit line one step. The price peaks at 203.10 and comes back to 202.40, where the position is sold for plus 1.20 percent."></svg></div>
+  <div class="notes">
+    <div class="note f-red"><b>Max-loss line</b><strong>The most you can lose</strong>Starts below the base (0.5% to 1.5% below, the predictor chooses). If the price falls to it, the trade is closed. For stocks the same line also rests at the broker as a stop order, so it holds even if the desk is down.</div>
+    <div class="note f-orange"><b>First step</b><strong>Max-loss line → base</strong>One step (0.3%) above the base and the max-loss line moves up to the base. Worst case from now on: a scratch, about −0.1% after costs.</div>
+    <div class="note f-green"><b>Min-profit line</b><strong>The profit you have locked in</strong>Starts rising from the second step on, one step at a time, always one step below the best price. If the price comes back to it, the trade is closed with that profit.</div>
+    <div class="note f-yellow"><b>Ratchet</b><strong>A line that only moves one way</strong>The lines go up, never down. That is what "ratchet" means on the screens: the line was raised another step.</div>
+  </div>
+  <div class="ex"><b>Real example from your lab · AMZN, 10 Nov</b>
+    <div class="sum"><span>19:44</span><span>Price one step up (270.58): max-loss line moved to the base 269.77</span><span>19:48</span><span>Price two steps up (271.39): min-profit line raised to 270.58</span><span>19:58</span><span>Three steps up (272.20): min-profit line raised to 271.39</span></div>
+    If the price now falls back to 271.39 the trade closes with +0.6% locked in (about +$4.80 on $809, before costs). If it keeps rising, the line keeps following.</div>
+</section>
+
+<section class="lesson" id="short-lines">
+  <h2>5. The same lines on a short</h2>
+  <p class="kicker">Everything mirrored: "up" means down.</p>
+  <p>On a short the max-loss line sits <span class="hl">above</span> the base, because a rising price is the danger. The steps count <span class="hl">downward</span>: one step below the base and the max-loss line drops to the base; every further step down pushes the min-profit line down, one step above the lowest price seen. The red zone is on top and the green zone below, which is what you saw on GLD and NFLX.</p>
+  <div class="dia"><svg id="d-short-lines" viewBox="0 0 1000 440" role="img" aria-label="A short from 100.00 with the max-loss line above at 100.70 and the steps below. The price falls, the max-loss line drops to the base, the min-profit line steps down behind the price, and the trade closes when the price comes back up to the line."></svg></div>
+  <div class="notes">
+    <div class="note f-violet"><b>Short, max-loss line</b><strong>Above the base</strong>If the price rises to it, the trade is closed with a loss.</div>
+    <div class="note f-violet"><b>Short, min-profit line</b><strong>Below the base</strong>Moves down behind a falling price. The trade closes when the price bounces back up to it.</div>
+    <div class="note f-red"><b>NFLX, 10 Nov</b><strong>Why nothing moved</strong>A short at 62.61 that only went up. Not a single step in its favour, so the lines stayed put, and the max-loss line at 62.99 closed it at −0.72%.</div>
+  </div>
+</section>
+
+<section class="lesson" id="exits">
+  <h2>6. The ways a trade ends</h2>
+  <p class="kicker">Every closed position names one of these on the screen.</p>
+  <div class="tbl-wrap"><div class="sk-table"><table>
+    <thead><tr><th>Word on the screen</th><th>What happened</th><th>Usually means</th></tr></thead>
+    <tbody>
+      <tr><td>reached the maximum loss line</td><td>The price went against the trade all the way to the max-loss line.</td><td>A loss, the biggest one allowed.</td></tr>
+      <tr><td>came back to the base</td><td>One step up had moved the max-loss line to the base, then the price fell back to it.</td><td>A scratch: about −0.1% after costs.</td></tr>
+      <tr><td>came back to the min-profit line</td><td>The price had risen several steps, then came back to the locked-in line.</td><td>A profit, the locked-in amount.</td></tr>
+      <tr><td>ran out of time</td><td>The predictor gave the idea a time limit (the horizon, often 3 hours) and it passed.</td><td>Small gain or loss, wherever the price was.</td></tr>
+      <tr><td>closed before the bell</td><td>Stocks and funds are sold 10 minutes before the New York close so nothing is held overnight.</td><td>Wherever the price was at 20:50 UTC.</td></tr>
+      <tr><td>the broker's stop fired</td><td>The stop order resting at the broker closed it before the desk's own order did.</td><td>Same as reaching the max-loss line (or the base, once moved).</td></tr>
+      <tr><td>flattened</td><td>The desk found a position at the broker that no line owned and closed it.</td><td>A clean-up, not a prediction.</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<section class="lesson" id="money">
+  <h2>7. Percent, money and costs</h2>
+  <p class="kicker">Why "+0.5%" on the screen is a few dollars.</p>
+  <div class="notes wide">
+    <div class="note f-yellow"><b>Notional</b><strong>What the position was worth at the fill</strong>Shares × price. 2 GLD at 368.03 = $736. Each lab position is about 1% of the account, so about $1,000.</div>
+    <div class="note f-yellow"><b>Percent</b><strong>Change in price from the base</strong>From 368.03 to 369.22 is +0.32%. For a short that is a loss of 0.32%, because it had to buy back dearer.</div>
+    <div class="note f-gray"><b>Round trip</b><strong>Buying and selling once</strong>Every trade costs a little on the way in and the way out: about 0.1% for stocks and funds, 0.5% for crypto (its fees are higher).</div>
+    <div class="note f-gray"><b>After costs</b><strong>What is really left</strong>GLD: −0.32% from the price, minus the 0.1% round trip, is −0.43%. On $736 that is −$3.14. The screens always show numbers after costs.</div>
+    <div class="note f-blue"><b>Paper account</b><strong>Pretend money, real prices</strong>The lab trades a practice account at the broker. The fills and prices are real; the dollars are not. That is how the rule is tested before any real money.</div>
+    <div class="note f-green"><b>Why 0.3% steps</b><strong>Bigger than the costs, smaller than a day's move</strong>A step must be worth more than a round trip (0.1%), and small enough that a normal day crosses several of them. Crypto steps are five times bigger because its costs are.</div>
+  </div>
+</section>
+
+<section class="lesson" id="desk">
+  <h2>8. Who does what</h2>
+  <p class="kicker">The agents, in the order a trade passes through them.</p>
+  <div class="dia"><svg id="d-desk" viewBox="0 0 1000 260" role="img" aria-label="Seven boxes in a row joined by arrows: Sentinel, Predictor, Skeptic, Risk officer, Execution, Broker, Lines engine, each with one line about its job."></svg></div>
+  <div class="notes wide">
+    <div class="note f-blue"><b>Sentinel</b><strong>The eye on every instrument</strong>Looks at all 50 instruments every minute. No thinking of its own: when something changes (a surge, a flip of mood, fresh news) it raises a trigger.</div>
+    <div class="note f-orange"><b>Predictor</b><strong>The one that makes the call</strong>Reads everything known about the instrument and answers: long, short or none, how sure it is (confidence), and where the lines go. Uses the Claude model.</div>
+    <div class="note f-pink"><b>Skeptic</b><strong>Argues against the call</strong>Looks for what is wrong with it. "Blocking" stops the trade; "concern" is written down beside it.</div>
+    <div class="note f-red"><b>Risk officer</b><strong>Checks the rules</strong>Is the market open, is the size allowed, is there already a position? Every order passes here, and a closing order always gets through.</div>
+    <div class="note f-gray"><b>Execution and the broker</b><strong>Sends the order, gets the fill</strong>Alpaca is the broker. It fills the order and holds the stop order for stocks and funds.</div>
+    <div class="note f-green"><b>Lines engine</b><strong>Holds the position by your rule</strong>From the fill to the exit: watches every minute, moves the lines, sends the closing order, writes the score.</div>
+  </div>
+  <div class="notes">
+    <div class="note f-yellow"><b>Trigger</b><strong>"Look at this one now"</strong>Examples: "surge: strength 47 to 59", "side flip: bear to bull", "review: bull 57 for 45 minutes".</div>
+    <div class="note f-yellow"><b>Confidence</b><strong>The predictor's own odds</strong>Its honest guess that the trade reaches its target before the max-loss line. 0.5 is a coin toss. The desk trades at 0.55 or more.</div>
+    <div class="note f-yellow"><b>Lean</b><strong>The side it would pick anyway</strong>Even when it says "no trade" it names the side it leans to, so the report can check it later on paper.</div>
+  </div>
+</section>
+
+<section class="lesson" id="score">
+  <h2>9. Right and wrong</h2>
+  <p class="kicker">How the right/wrong report keeps score.</p>
+  <div class="notes wide">
+    <div class="note f-green"><b>Right</b><strong>Closed with a gain after costs</strong>Even a small one. +0.10% counts as right.</div>
+    <div class="note f-red"><b>Wrong</b><strong>Closed with a loss after costs</strong>Including a scratch at the base (−0.1%) and a close at the bell that was slightly down.</div>
+    <div class="note f-gray"><b>On paper</b><strong>Checked without trading</strong>When the predictor named a side but the desk did not trade, the same lines are run over the real prices that followed, so you still learn whether it would have been right.</div>
+    <div class="note f-blue"><b>The bar for the predictor</b><strong>55% right over 60 calls</strong>Below that, the predictions (not the lines) need to change. The report counts toward this every day.</div>
+  </div>
+</section>
+
+<section class="lesson" id="quiz">
+  <h2>10. Check yourself</h2>
+  <p class="kicker">Three questions. Click an answer.</p>
+  <div class="quiz">
+    <div class="q" data-ok="b"><span>A SHORT was sold at 50.00. The price is now 49.00. Is the trade winning or losing?</span><br><button type="button" data-k="a">Losing</button><button type="button" data-k="b">Winning</button><span class="a" aria-live="polite"></span></div>
+    <div class="q" data-ok="a"><span>A LONG filled at 100.00 with 0.3% steps. The price reaches 100.60. Where is the max-loss line now?</span><br><button type="button" data-k="a">On the base, 100.00</button><button type="button" data-k="b">Still below, 99.30</button><button type="button" data-k="c">At 100.30</button><span class="a" aria-live="polite"></span></div>
+    <div class="q" data-ok="c"><span>On a short, where does the max-loss line sit?</span><br><button type="button" data-k="a">Below the base</button><button type="button" data-k="b">On the base</button><button type="button" data-k="c">Above the base</button><span class="a" aria-live="polite"></span></div>
+  </div>
+</section>
+
+<section class="lesson" id="words">
+  <h2>Word list</h2>
+  <div class="tbl-wrap"><div class="sk-table"><table>
+    <thead><tr><th>Word</th><th>In plain words</th></tr></thead>
+    <tbody>
+      <tr><td>Long</td><td>Bought first. Wins if the price rises.</td></tr>
+      <tr><td>Short</td><td>Sold first (borrowed shares), bought back later. Wins if the price falls.</td></tr>
+      <tr><td>Base</td><td>The fill price. All lines are measured from it.</td></tr>
+      <tr><td>Max-loss line</td><td>The price at which the trade is closed to cap the loss. Below the base on a long, above it on a short. Moves to the base after the first step.</td></tr>
+      <tr><td>Min-profit line</td><td>The profit already locked in. Rises one step at a time behind the price (falls, on a short). The trade closes when the price comes back to it.</td></tr>
+      <tr><td>Step</td><td>0.3% of the base for stocks and funds (five times that for crypto). The unit the lines move in.</td></tr>
+      <tr><td>Ratchet</td><td>A move of the min-profit line by one step. Only ever in the trade's favour.</td></tr>
+      <tr><td>Target</td><td>How far the predictor expected the price to go. Used to judge its confidence; not a line.</td></tr>
+      <tr><td>Horizon</td><td>The time limit the predictor gave the idea. The trade closes when it passes.</td></tr>
+      <tr><td>Fill</td><td>The order going through at the broker. The fill price becomes the base.</td></tr>
+      <tr><td>Stop order</td><td>An order left at the broker that sells (or buys back) by itself at the max-loss line, so the position is protected even if the desk is down.</td></tr>
+      <tr><td>Notional</td><td>Shares × price at the fill. The money in the position.</td></tr>
+      <tr><td>Round trip</td><td>The cost of one buy and one sell: about 0.1% for stocks and funds, 0.5% for crypto.</td></tr>
+      <tr><td>After costs</td><td>The result with the round trip taken off. Every number on the screens is after costs.</td></tr>
+      <tr><td>Paper account</td><td>A practice account: real prices and fills, pretend money.</td></tr>
+      <tr><td>Trigger</td><td>The sentinel saying "look at this instrument now".</td></tr>
+      <tr><td>Call</td><td>The predictor's answer to a trigger: long, short or none, with confidence and lines.</td></tr>
+      <tr><td>Confidence</td><td>The predictor's own odds of reaching its target before the max-loss line. The desk trades at 0.55 or more.</td></tr>
+      <tr><td>Lean</td><td>The side the predictor would pick even when it does not trade. Graded on paper.</td></tr>
+      <tr><td>Pass</td><td>A call of "none": the predictor saw no side with better than even odds.</td></tr>
+      <tr><td>On paper</td><td>A call that was not traded but is scored as if it had been, on the real prices that followed.</td></tr>
+      <tr><td>Right / Wrong</td><td>Gain or loss after costs when the trade closed.</td></tr>
+      <tr><td>Flat / flattened</td><td>Holding nothing in an instrument. "Flattened": the desk closed a position no line owned.</td></tr>
+      <tr><td>Market hours</td><td>New York stocks and funds: 14:30 to 21:00 UTC, Monday to Friday. Crypto: all day, every day.</td></tr>
+      <tr><td>Candle, O H L C</td><td>One minute of prices: open, high, low, close. Green closed up, red closed down.</td></tr>
+      <tr><td>Time runner</td><td>The slider under the chart. Drag it to read the price and all three lines at any minute.</td></tr>
+    </tbody>
+  </table></div></div>
+</section>
+
+<footer>Drawn from the lab's own journal on 10 and 11 Nov 2026. The examples are real positions from your paper account; the round numbers in the drawings are made up to keep the arithmetic easy.</footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script>
+(function(){
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs){ var e = document.createElementNS(NS, tag); for (var k in attrs) if (attrs[k] !== undefined) e.setAttribute(k, attrs[k]); return e; }
+
+  // Fallback if rough.js did not load: plain shapes through a displacement filter.
+  function makeShim(){
+    function mk(d, o){
+      var p = el('path', { d:d, stroke:o.stroke || '#000', 'stroke-width':o.strokeWidth || 1.5, fill:(o.fill && o.fillStyle !== 'none') ? o.fill : 'none', 'stroke-linejoin':'round', 'stroke-linecap':'round', filter:'url(#wobble)' });
+      if (o.strokeLineDash) p.setAttribute('stroke-dasharray', o.strokeLineDash.join(' '));
+      var g = el('g', {}); g.appendChild(p); return g;
+    }
+    return { svg:function(){ return {
+      rectangle:function(x,y,w,h,o){ return mk('M'+x+' '+y+'h'+w+'v'+h+'h'+(-w)+'Z', o); },
+      line:function(x1,y1,x2,y2,o){ return mk('M'+x1+' '+y1+'L'+x2+' '+y2, o); },
+      polygon:function(pts,o){ return mk('M'+pts.map(function(p){ return p.join(' '); }).join('L')+'Z', o); },
+      circle:function(x,y,d,o){ return mk('M'+(x-d/2)+' '+y+'a'+(d/2)+' '+(d/2)+' 0 1 0 '+d+' 0a'+(d/2)+' '+(d/2)+' 0 1 0 '+(-d)+' 0', o); },
+      curve:function(pts,o){ var d = 'M'+pts[0].join(' '); for (var i=1;i<pts.length;i++) d += 'L'+pts[i].join(' '); return mk(d, o); },
+      linearPath:function(pts,o){ return this.curve(pts, o); }
+    }; } };
+  }
+  var R = window.rough || makeShim();
+
+  function tokens(){
+    var cs = getComputedStyle(document.documentElement);
+    function g(n){ return cs.getPropertyValue(n).trim(); }
+    return { ink:g('--ink'), soft:g('--ink-soft'), paper:g('--paper'), accent:g('--accent'), good:g('--good'),
+      red:g('--c-red'), orange:g('--c-orange'), yellow:g('--c-yellow'), green:g('--c-green'), teal:g('--c-teal'),
+      blue:g('--c-blue'), violet:g('--c-violet'), pink:g('--c-pink'), gray:g('--c-gray') };
+  }
+  function seedOf(){ var h = 2166136261; for (var i=0;i<arguments.length;i++){ h ^= Math.floor(arguments[i]*7+13); h = Math.imul(h, 16777619) >>> 0; } return (h % 100000) + 1; }
+  function base(T, extra){ var o = { roughness:1.1, bowing:1, stroke:T.ink, strokeWidth:1.5, fillStyle:'solid', hachureGap:7, fillWeight:0.9, hachureAngle:-41 }; for (var k in extra) if (extra[k] !== undefined) o[k] = extra[k]; return o; }
+  function text(svg, x, y, str, o){
+    o = o || {};
+    var t = el('text', { x:x, y:y, 'font-size':o.size || 13, 'text-anchor':o.anchor || 'middle', 'font-weight':o.weight || 400, 'dominant-baseline':'middle' });
+    if (o.color) t.setAttribute('fill', o.color);
+    t.textContent = str; svg.appendChild(t);
+    if (o.bg){ try { var b = t.getBBox(); var r = el('rect', { x:b.x-4, y:b.y-2, width:b.width+8, height:b.height+4, fill:o.bg, rx:3, opacity:0.94 }); svg.insertBefore(r, t); } catch(e){} }
+    return t;
+  }
+  // a block of centred lines: a bold title, then smaller lines
+  function label(svg, cx, cy, title, lines, o){
+    o = o || {}; lines = lines || [];
+    var ts = o.ts || 14.5, ls = o.ls || 12.5, th = title ? ts + 5 : 0, lh = ls + 4.5;
+    var y = cy - (th + lines.length * lh) / 2;
+    if (title){ text(svg, cx, y + th/2, title, { size:ts, weight:700, color:o.color }); y += th; }
+    lines.forEach(function(s){ text(svg, cx, y + lh/2, s, { size:ls, color:o.sub }); y += lh; });
+  }
+  function box(rc, svg, T, x, y, w, h, o){
+    o = o || {};
+    svg.appendChild(rc.rectangle(x, y, w, h, base(T, { fill:o.fill || T.gray, fillStyle:o.fillStyle || 'solid', strokeLineDash:o.dashed ? [7,5] : undefined, strokeWidth:o.sw, seed:seedOf(x,y,w,h) })));
+    if (o.title || o.lines) label(svg, x + w/2, y + h/2, o.title, o.lines, { ts:o.ts, ls:o.ls });
+  }
+  function head(rc, svg, T, x, y, ang, L){ L = L || 11; var A = Math.PI/7; svg.appendChild(rc.polygon([[x,y],[x - L*Math.cos(ang-A), y - L*Math.sin(ang-A)],[x - L*Math.cos(ang+A), y - L*Math.sin(ang+A)]], base(T, { fill:T.ink, fillStyle:'solid', roughness:0.6, seed:seedOf(x,y,L) }))); }
+  function arrow(rc, svg, T, x1, y1, x2, y2, o){
+    o = o || {};
+    var opts = base(T, { strokeWidth:o.width || 1.6, strokeLineDash:o.dashed ? [7,6] : undefined, stroke:o.stroke, seed:seedOf(x1,y1,x2,y2) });
+    var dx, dy;
+    if (o.via){ svg.appendChild(rc.curve([[x1,y1]].concat(o.via).concat([[x2,y2]]), opts)); var last = o.via[o.via.length-1]; dx = x2 - last[0]; dy = y2 - last[1]; }
+    else { svg.appendChild(rc.line(x1,y1,x2,y2,opts)); dx = x2 - x1; dy = y2 - y1; }
+    head(rc, svg, T, x2, y2, Math.atan2(dy, dx));
+    if (o.label) text(svg, o.lx, o.ly, o.label, { size:o.lsize || 12, color:T.soft, bg:T.paper, anchor:o.lanchor });
+  }
+
+
+  var D = {};
+
+  // ---- 1: a long ----
+  D['d-long'] = function(rc, svg, T){
+    var x0 = 70, x1 = 560, y0 = 30, y1 = 250, lo = 98.5, hi = 104, tmax = 60;
+    function X(t){ return x0 + t / tmax * (x1 - x0); }
+    function Y(p){ return y1 - (p - lo) / (hi - lo) * (y1 - y0); }
+    svg.appendChild(rc.rectangle(x0, y0, x1 - x0, y1 - y0, base(T, { fill:T.paper, seed:11 })));
+    [99, 100, 101, 102, 103].forEach(function(v){
+      svg.appendChild(rc.line(x0, Y(v), x1, Y(v), base(T, { stroke:T.soft, strokeWidth:0.6, roughness:0.4, strokeLineDash:[2,7], seed:seedOf(20, v) })));
+      text(svg, x0 - 10, Y(v), v.toFixed(2), { size:12, anchor:'end', color:T.soft });
+    });
+    var P = [[0,100],[8,99.6],[16,100.3],[24,101.1],[32,100.8],[40,101.9],[48,102.6],[56,103.0]];
+    svg.appendChild(rc.linearPath(P.map(function(q){ return [X(q[0]), Y(q[1])]; }), base(T, { strokeWidth:2.4, roughness:0.7, bowing:0.6, seed:41 })));
+    svg.appendChild(rc.circle(X(0), Y(100), 13, base(T, { fill:T.yellow, roughness:0.6, seed:51 })));
+    svg.appendChild(rc.circle(X(56), Y(103), 13, base(T, { fill:T.green, roughness:0.6, seed:52 })));
+    text(svg, X(0) + 10, Y(100) + 22, '1 bought at 100.00', { size:13.5, anchor:'start', weight:700, bg:T.paper });
+    text(svg, X(56) - 10, Y(103) - 18, '2 sold at 103.00', { size:13.5, anchor:'end', weight:700, bg:T.paper });
+    label(svg, 660, 120, 'Long', ['buy first,', 'sell later'], { ts:16 });
+    text(svg, 660, 175, '+3.00 a share', { size:15, weight:700, color:T.good });
+    text(svg, 660, 196, '+3% on 100', { size:13, color:T.soft });
+    text(svg, (x0 + x1) / 2, y1 + 24, 'time, left to right', { size:12, color:T.soft });
+  };
+
+  // ---- 2: a short, both ways ----
+  D['d-short'] = function(rc, svg, T){
+    var x0 = 70, x1 = 560, y0 = 30, y1 = 280, lo = 96, hi = 103, tmax = 60;
+    function X(t){ return x0 + t / tmax * (x1 - x0); }
+    function Y(p){ return y1 - (p - lo) / (hi - lo) * (y1 - y0); }
+    svg.appendChild(rc.rectangle(x0, y0, x1 - x0, y1 - y0, base(T, { fill:T.paper, seed:12 })));
+    [97, 98, 99, 100, 101, 102].forEach(function(v){
+      svg.appendChild(rc.line(x0, Y(v), x1, Y(v), base(T, { stroke:T.soft, strokeWidth:0.6, roughness:0.4, strokeLineDash:[2,7], seed:seedOf(21, v) })));
+      text(svg, x0 - 10, Y(v), v.toFixed(2), { size:12, anchor:'end', color:T.soft });
+    });
+    var down = [[0,100],[10,99.5],[20,99.8],[30,98.6],[40,97.8],[50,97.3],[56,97.0]];
+    var up = [[0,100],[10,100.4],[20,100.2],[30,101.1],[40,101.6],[50,101.8],[56,102.0]];
+    svg.appendChild(rc.linearPath(down.map(function(q){ return [X(q[0]), Y(q[1])]; }), base(T, { strokeWidth:2.4, stroke:T.good, roughness:0.7, bowing:0.6, seed:42 })));
+    svg.appendChild(rc.linearPath(up.map(function(q){ return [X(q[0]), Y(q[1])]; }), base(T, { strokeWidth:2.4, stroke:T.accent, roughness:0.7, bowing:0.6, seed:43 })));
+    svg.appendChild(rc.circle(X(0), Y(100), 13, base(T, { fill:T.yellow, roughness:0.6, seed:53 })));
+    svg.appendChild(rc.circle(X(56), Y(97), 13, base(T, { fill:T.green, roughness:0.6, seed:54 })));
+    svg.appendChild(rc.circle(X(56), Y(102), 13, base(T, { fill:T.red, roughness:0.6, seed:55 })));
+    text(svg, X(0) + 10, Y(100) - 20, '1 sold (borrowed) at 100.00', { size:13.5, anchor:'start', weight:700, bg:T.paper });
+    text(svg, X(56) - 10, Y(97) + 20, '2 bought back at 97.00', { size:13.5, anchor:'end', weight:700, bg:T.paper, color:T.good });
+    text(svg, X(56) - 10, Y(102) - 18, '2 bought back at 102.00', { size:13.5, anchor:'end', weight:700, bg:T.paper, color:T.accent });
+    label(svg, 660, 90, 'Short', ['sell first,', 'buy back later'], { ts:16 });
+    text(svg, 660, 150, 'price fell: +3.00', { size:14, weight:700, color:T.good });
+    text(svg, 660, 170, 'sold 100, paid 97', { size:12.5, color:T.soft });
+    text(svg, 660, 215, 'price rose: −2.00', { size:14, weight:700, color:T.accent });
+    text(svg, 660, 235, 'sold 100, paid 102', { size:12.5, color:T.soft });
+  };
+
+  // ---- 3: one candle, large ----
+  D['d-candle'] = function(rc, svg, T){
+    function candle(cx, o, c, h, l, fill, name){
+      var y0 = 40, y1 = 260, lo = 99.4, hi = 101.1;
+      function Y(p){ return y1 - (p - lo) / (hi - lo) * (y1 - y0); }
+      svg.appendChild(rc.line(cx, Y(h), cx, Y(l), base(T, { strokeWidth:2, seed:seedOf(cx, 1) })));
+      svg.appendChild(rc.rectangle(cx - 26, Math.min(Y(o), Y(c)), 52, Math.abs(Y(o) - Y(c)), base(T, { fill:fill, seed:seedOf(cx, 2) })));
+      var lx = cx + 50;
+      text(svg, lx, Y(h), 'high ' + h.toFixed(2), { size:12.5, anchor:'start', color:T.soft });
+      text(svg, lx, Y(l), 'low ' + l.toFixed(2), { size:12.5, anchor:'start', color:T.soft });
+      text(svg, cx - 50, Y(o), 'open ' + o.toFixed(2), { size:12.5, anchor:'end' });
+      text(svg, cx - 50, Y(c), 'close ' + c.toFixed(2), { size:12.5, anchor:'end' });
+      text(svg, cx, 286, name, { size:14, weight:700 });
+    }
+    candle(230, 100.00, 100.80, 101.00, 99.70, T.green, 'green: closed higher than it opened');
+    candle(560, 100.80, 100.10, 100.95, 99.50, T.red, 'red: closed lower than it opened');
+  };
+
+  // ---- 4: the three lines on a long (the step rule) ----
+  D['d-lines'] = function(rc, svg, T){
+    var x0 = 70, x1 = 760, y0 = 30, y1 = 400, lo = 198.3, hi = 203.9, tmax = 100;
+    function X(t){ return x0 + t / tmax * (x1 - x0); }
+    function Y(p){ return y1 - (p - lo) / (hi - lo) * (y1 - y0); }
+    var P = [[0,200.0],[6,199.6],[12,199.3],[18,199.7],[25,200.4],[32,200.9],[38,200.7],[45,201.3],[52,201.9],[58,202.0],[64,202.3],[70,202.7],[76,202.9],[82,203.1],[88,202.85],[94,202.55],[98,202.35]];
+    var ARM = 28, S2 = 44, S3 = 50, S4 = 66, S5 = 80, EXIT = 97;
+    svg.appendChild(rc.rectangle(x0, y0, x1 - x0, y1 - y0, base(T, { fill:T.paper, seed:11 })));
+    [199, 200, 201, 202, 203].forEach(function(v){
+      svg.appendChild(rc.line(x0, Y(v), x1, Y(v), base(T, { stroke:T.soft, strokeWidth:0.6, roughness:0.4, strokeLineDash:[2,7], seed:seedOf(20, v) })));
+      text(svg, x0 - 10, Y(v), v.toFixed(2), { size:12, anchor:'end', color:T.soft });
+    });
+    function seg(t1, t2, v, o){ svg.appendChild(rc.line(X(t1), Y(v), X(t2), Y(v), base(T, { stroke:o.stroke, strokeWidth:o.sw || 2, strokeLineDash:o.dash, roughness:0.7, seed:seedOf(30, t1, v) }))); }
+    function riser(t, v1, v2, stroke){ svg.appendChild(rc.line(X(t), Y(v1), X(t), Y(v2), base(T, { stroke:stroke, strokeWidth:1.6, strokeLineDash:[4,5], roughness:0.6, seed:seedOf(31, t, v1) }))); }
+    [200.6, 201.2, 201.8, 202.4, 203.0, 203.6].forEach(function(v){ seg(0, tmax, v, { stroke:T.soft, sw:0.8, dash:[2,6] }); });
+    seg(0, ARM, 198.8, { stroke:T.accent, dash:[9,6] });
+    riser(ARM, 198.8, 200.0, T.accent);
+    seg(ARM, EXIT, 200.0, { stroke:T.accent, dash:[9,6] });
+    seg(0, ARM, 200.0, { stroke:T.soft, sw:1.1 });
+    seg(S2, S3, 200.6, { stroke:T.good }); riser(S3, 200.6, 201.2, T.good);
+    seg(S3, S4, 201.2, { stroke:T.good }); riser(S4, 201.2, 201.8, T.good);
+    seg(S4, S5, 201.8, { stroke:T.good }); riser(S5, 201.8, 202.4, T.good);
+    seg(S5, EXIT, 202.4, { stroke:T.good });
+    svg.appendChild(rc.linearPath(P.map(function(q){ return [X(q[0]), Y(q[1])]; }), base(T, { strokeWidth:2.4, roughness:0.7, bowing:0.6, seed:41 })));
+    function dot(t, p, fill){ svg.appendChild(rc.circle(X(t), Y(p), 13, base(T, { fill:fill, strokeWidth:1.4, roughness:0.6, seed:seedOf(50, t) }))); }
+    dot(0, 200.0, T.yellow); dot(ARM, 200.6, T.orange); dot(S4, 202.4, T.orange); dot(EXIT, 202.4, T.green);
+    var rx = x1 + 14;
+    text(svg, rx, Y(203.6), 'next step 203.60, never reached', { size:12.5, anchor:'start', color:T.soft });
+    text(svg, rx, Y(202.4) - 9, 'min-profit line 202.40', { size:13.5, anchor:'start', weight:700, color:T.good });
+    text(svg, rx, Y(202.4) + 9, 'sold here: +1.20%', { size:12.5, anchor:'start', color:T.good });
+    text(svg, rx, Y(201.2), 'steps of 0.30% from the base', { size:12.5, anchor:'start', color:T.soft });
+    text(svg, rx, Y(200.6), 'first step 200.60', { size:12.5, anchor:'start', color:T.soft });
+    text(svg, rx, Y(200.0) - 9, 'base 200.00', { size:13.5, anchor:'start', weight:700 });
+    text(svg, rx, Y(200.0) + 9, 'max-loss line, after the first step', { size:12.5, anchor:'start', color:T.accent });
+    text(svg, rx, Y(198.8), 'max-loss line 198.80', { size:13.5, anchor:'start', weight:700, color:T.accent });
+    text(svg, X(0) + 12, Y(200.0) - 20, '1 bought', { size:13, anchor:'start', weight:700, bg:T.paper });
+    text(svg, X(ARM) - 8, Y(200.6) - 36, '2 first step reached:', { size:13, anchor:'end', weight:700, bg:T.paper });
+    text(svg, X(ARM) - 8, Y(200.6) - 20, 'max-loss line moves to the base', { size:12.5, anchor:'end', color:T.soft, bg:T.paper });
+    text(svg, X(S4) - 6, Y(202.4) - 38, '3 each further step:', { size:13, anchor:'end', weight:700, bg:T.paper });
+    text(svg, X(S4) - 6, Y(202.4) - 22, 'the line follows, one step behind', { size:12.5, anchor:'end', color:T.soft, bg:T.paper });
+    text(svg, X(EXIT) + 4, Y(202.4) + 26, '4 back to the line: sold', { size:13, anchor:'end', weight:700, bg:T.paper });
+    [0, 25, 50, 75, 100].forEach(function(t){
+      svg.appendChild(rc.line(X(t), y1, X(t), y1 + 6, base(T, { strokeWidth:1, roughness:0.5, seed:seedOf(60, t) })));
+      text(svg, X(t), y1 + 18, t + ' min', { size:11.5, color:T.soft });
+    });
+  };
+
+  // ---- 5: the same on a short ----
+  D['d-short-lines'] = function(rc, svg, T){
+    var x0 = 70, x1 = 760, y0 = 30, y1 = 380, lo = 98.2, hi = 101.0, tmax = 100;
+    function X(t){ return x0 + t / tmax * (x1 - x0); }
+    function Y(p){ return y1 - (p - lo) / (hi - lo) * (y1 - y0); }
+    var P = [[0,100.0],[6,100.2],[12,100.35],[18,100.1],[25,99.8],[32,99.55],[38,99.7],[45,99.35],[52,99.05],[58,99.0],[64,98.85],[70,98.65],[76,98.55],[82,98.45],[88,98.6],[94,98.75],[98,98.85]];
+    var ARM = 28, S2 = 44, S3 = 50, S4 = 66, S5 = 80, EXIT = 97;
+    svg.appendChild(rc.rectangle(x0, y0, x1 - x0, y1 - y0, base(T, { fill:T.paper, seed:13 })));
+    [99, 100].forEach(function(v){
+      svg.appendChild(rc.line(x0, Y(v), x1, Y(v), base(T, { stroke:T.soft, strokeWidth:0.6, roughness:0.4, strokeLineDash:[2,7], seed:seedOf(22, v) })));
+      text(svg, x0 - 10, Y(v), v.toFixed(2), { size:12, anchor:'end', color:T.soft });
+    });
+    function seg(t1, t2, v, o){ svg.appendChild(rc.line(X(t1), Y(v), X(t2), Y(v), base(T, { stroke:o.stroke, strokeWidth:o.sw || 2, strokeLineDash:o.dash, roughness:0.7, seed:seedOf(32, t1, v) }))); }
+    function riser(t, v1, v2, stroke){ svg.appendChild(rc.line(X(t), Y(v1), X(t), Y(v2), base(T, { stroke:stroke, strokeWidth:1.6, strokeLineDash:[4,5], roughness:0.6, seed:seedOf(33, t, v1) }))); }
+    [99.7, 99.4, 99.1, 98.8, 98.5].forEach(function(v){ seg(0, tmax, v, { stroke:T.soft, sw:0.8, dash:[2,6] }); });
+    seg(0, ARM, 100.6, { stroke:T.accent, dash:[9,6] });
+    riser(ARM, 100.6, 100.0, T.accent);
+    seg(ARM, EXIT, 100.0, { stroke:T.accent, dash:[9,6] });
+    seg(0, ARM, 100.0, { stroke:T.soft, sw:1.1 });
+    seg(S2, S3, 99.7, { stroke:T.good }); riser(S3, 99.7, 99.4, T.good);
+    seg(S3, S4, 99.4, { stroke:T.good }); riser(S4, 99.4, 99.1, T.good);
+    seg(S4, S5, 99.1, { stroke:T.good }); riser(S5, 99.1, 98.8, T.good);
+    seg(S5, EXIT, 98.8, { stroke:T.good });
+    svg.appendChild(rc.linearPath(P.map(function(q){ return [X(q[0]), Y(q[1])]; }), base(T, { strokeWidth:2.4, roughness:0.7, bowing:0.6, seed:44 })));
+    function dot(t, p, fill){ svg.appendChild(rc.circle(X(t), Y(p), 13, base(T, { fill:fill, strokeWidth:1.4, roughness:0.6, seed:seedOf(56, t) }))); }
+    dot(0, 100.0, T.yellow); dot(ARM, 99.7, T.orange); dot(S4, 98.8, T.orange); dot(EXIT, 98.8, T.green);
+    var rx = x1 + 14;
+    text(svg, rx, Y(100.6), 'max-loss line 100.60, above', { size:13.5, anchor:'start', weight:700, color:T.accent });
+    text(svg, rx, Y(100.0) - 9, 'base 100.00 (sold here)', { size:13.5, anchor:'start', weight:700 });
+    text(svg, rx, Y(100.0) + 9, 'max-loss line, after the first step', { size:12.5, anchor:'start', color:T.accent });
+    text(svg, rx, Y(99.7), 'first step 99.70', { size:12.5, anchor:'start', color:T.soft });
+    text(svg, rx, Y(99.4), 'steps of 0.30% downward', { size:12.5, anchor:'start', color:T.soft });
+    text(svg, rx, Y(98.8) - 9, 'min-profit line 98.80, below', { size:13.5, anchor:'start', weight:700, color:T.good });
+    text(svg, rx, Y(98.8) + 9, 'bought back here: +1.20%', { size:12.5, anchor:'start', color:T.good });
+    text(svg, X(0) + 12, Y(100.0) + 22, '1 sold short', { size:13, anchor:'start', weight:700, bg:T.paper });
+    text(svg, X(ARM) - 8, Y(99.7) + 36, '2 first step down:', { size:13, anchor:'end', weight:700, bg:T.paper });
+    text(svg, X(ARM) - 8, Y(99.7) + 52, 'max-loss line drops to the base', { size:12.5, anchor:'end', color:T.soft, bg:T.paper });
+    text(svg, X(S4) - 6, Y(98.8) + 38, '3 each further step down:', { size:13, anchor:'end', weight:700, bg:T.paper });
+    text(svg, X(S4) - 6, Y(98.8) + 54, 'the line follows, one step above', { size:12.5, anchor:'end', color:T.soft, bg:T.paper });
+    text(svg, X(EXIT) + 4, Y(98.8) - 24, '4 back up to the line: bought back', { size:13, anchor:'end', weight:700, bg:T.paper });
+    [0, 25, 50, 75, 100].forEach(function(t){
+      svg.appendChild(rc.line(X(t), y1, X(t), y1 + 6, base(T, { strokeWidth:1, roughness:0.5, seed:seedOf(61, t) })));
+      text(svg, X(t), y1 + 18, t + ' min', { size:11.5, color:T.soft });
+    });
+  };
+
+  // ---- 8: who does what ----
+  D['d-desk'] = function(rc, svg, T){
+    var steps = [
+      [T.blue, 'Sentinel', ['looks every minute,', 'raises a trigger']],
+      [T.orange, 'Predictor', ['long, short or none,', 'confidence, lines']],
+      [T.pink, 'Skeptic', ['argues against it;', 'can block']],
+      [T.red, 'Risk officer', ['checks the rules', 'on every order']],
+      [T.gray, 'Execution', ['sends the order', 'to Alpaca']],
+      [T.green, 'Lines engine', ['holds it by your rule', 'until the exit']],
+      [T.yellow, 'Score', ['right or wrong,', 'after costs']]
+    ];
+    var w = 124, h = 86, gap = 18, x = 30, y = 60;
+    steps.forEach(function(s, i){
+      box(rc, svg, T, x, y, w, h, { fill:s[0], title:s[1], lines:s[2], ts:14.5, ls:11.5 });
+      if (i < steps.length - 1) arrow(rc, svg, T, x + w + 2, y + h/2, x + w + gap - 2, y + h/2, { width:1.6 });
+      x += w + gap;
+    });
+    text(svg, 500, 190, 'a trigger becomes a call, a call becomes an order, an order becomes a position on lines, and the exit becomes a score', { size:13, color:T.soft });
+    text(svg, 500, 214, 'the whole path for one trade takes about ten seconds; the position then lives for minutes to hours', { size:12.5, color:T.soft });
+  };
+
+  function drawAll(){
+    var T = tokens();
+    Object.keys(D).forEach(function(id){
+      var svg = document.getElementById(id); if (!svg) return;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      D[id](R.svg(svg), svg, T);
+    });
+  }
+  function start(){ drawAll(); }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(start); else start();
+  drawAll();
+  // redraw when the theme flips, so fills follow the tokens
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  if (mq.addEventListener) mq.addEventListener('change', drawAll);
+  new MutationObserver(drawAll).observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
+})();
+</script>
+
+<script>
+(function(){
+  var words = { ok:'Right. ', no:'Not quite. ' };
+  var why = {
+    0: 'A short sold at 50.00 can be bought back at 49.00: it keeps 1.00 a share. Down is good for a short.',
+    1: 'One step is 0.3% of 100.00, which is 100.30; 100.60 is two steps. The first step moved the max-loss line to the base (100.00), and the second raised the min-profit line to 100.30.',
+    2: 'A short loses when the price rises, so the line that caps the loss sits above the base.'
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('.q'), function(q, i){
+    var ok = q.getAttribute('data-ok'), out = q.querySelector('.a');
+    Array.prototype.forEach.call(q.querySelectorAll('button'), function(b){
+      b.addEventListener('click', function(){
+        var hit = b.getAttribute('data-k') === ok;
+        out.textContent = (hit ? words.ok : words.no) + why[i];
+        out.style.color = hit ? 'var(--good)' : 'var(--accent)';
+      });
+    });
+  });
+})();
+</script>
+
