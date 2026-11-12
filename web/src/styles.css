@@ -156,6 +156,26 @@ input {
   margin-left: auto;
   white-space: nowrap;
 }
+.day-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.day-pick select {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 12.5px/1.2 var(--mono);
+}
+.banner.day {
+  background: var(--mark);
+  color: var(--ink);
+}
 .strip {
   display: flex;
   flex-wrap: wrap;

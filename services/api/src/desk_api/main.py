@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -154,29 +154,53 @@ def create_app(
 
     # ---- reads ----
 
+    def day_of(day: str | None) -> str | None:
+        """A past UTC day for the desk screen, or None for now; a bad date is a 400."""
+        if day is None or day == "":
+            return None
+        try:
+            return date.fromisoformat(day).isoformat()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="bad day") from exc
+
     @app.get("/api/state")
-    async def state(request: Request, user: User = Depends(current_user)) -> dict[str, Any]:
+    async def state(
+        request: Request, day: str | None = None, user: User = Depends(current_user)
+    ) -> dict[str, Any]:
         r = reader(request)
-        book, health = await asyncio.gather(r.book(), r.health())
+        book, health = await asyncio.gather(r.book(day_of(day)), r.health())
         return {"book": book, "health": health, "user": {"name": user.name, "role": user.role}}
+
+    @app.get("/api/days")
+    async def days(request: Request, user: User = Depends(current_user)) -> list[str]:
+        return await reader(request).days()
 
     @app.get("/api/trades")
     async def trades(
-        request: Request, limit: int = 30, user: User = Depends(current_user)
+        request: Request,
+        limit: int = 30,
+        day: str | None = None,
+        user: User = Depends(current_user),
     ) -> list[dict]:
-        return await reader(request).trades(limit=max(1, min(limit, 200)))
+        return await reader(request).trades(limit=max(1, min(limit, 200)), day=day_of(day))
 
     @app.get("/api/cycles")
     async def cycles(
-        request: Request, limit: int = 20, user: User = Depends(current_user)
+        request: Request,
+        limit: int = 20,
+        day: str | None = None,
+        user: User = Depends(current_user),
     ) -> list[dict]:
-        return await reader(request).cycles(limit=max(1, min(limit, 100)))
+        return await reader(request).cycles(limit=max(1, min(limit, 100)), day=day_of(day))
 
     @app.get("/api/journal")
     async def journal(
-        request: Request, limit: int = 100, user: User = Depends(current_user)
+        request: Request,
+        limit: int = 100,
+        day: str | None = None,
+        user: User = Depends(current_user),
     ) -> list[dict]:
-        return await reader(request).journal(limit=max(1, min(limit, 500)))
+        return await reader(request).journal(limit=max(1, min(limit, 500)), day=day_of(day))
 
     @app.get("/api/health")
     async def health(request: Request, user: User = Depends(current_user)) -> dict[str, Any]:

@@ -4,7 +4,7 @@ checked, assembled from the fill, the intent, the thesis, the cycle plan and the
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -85,18 +85,44 @@ class StateReader:
         )
         return rows[0] if rows else None
 
+    @staticmethod
+    def _day_window(day: str) -> tuple[datetime, datetime]:
+        """The UTC day as [start, end); raises ValueError on a bad date."""
+        start = datetime.combine(date.fromisoformat(day), datetime.min.time(), tzinfo=UTC)
+        return start, start + timedelta(days=1)
+
+    async def days(self) -> list[str]:
+        """The UTC days on which the desk ran (it took a broker snapshot), newest first."""
+        rows = await self._query(
+            "SELECT DISTINCT (occurred_at AT TIME ZONE 'UTC')::date AS d FROM events "
+            "WHERE type = %s AND occurred_at >= now() - interval '90 days' ORDER BY d DESC",
+            (Topics.PORTFOLIO_RECONCILED,),
+        )
+        return [r["d"].isoformat() for r in rows]
+
     # ---- the book ----
 
-    async def book(self) -> dict:
-        snap = await self._latest(Topics.PORTFOLIO_RECONCILED, days=7)
-        theses = {t.symbol: t for t in await self.db.open_theses()}
+    async def book(self, day: str | None = None) -> dict:
+        """The book now, or as the last broker snapshot of a past UTC day saw it."""
+        if day is None:
+            snap = await self._latest(Topics.PORTFOLIO_RECONCILED, days=7)
+            theses = {t.symbol: t for t in await self.db.open_theses()}
+        else:
+            start, end = self._day_window(day)
+            rows = await self._query(
+                f"SELECT {EVENT_COLS} FROM events WHERE type = %s AND occurred_at >= %s "
+                "AND occurred_at < %s ORDER BY occurred_at DESC LIMIT 1",
+                (Topics.PORTFOLIO_RECONCILED, start, end),
+            )
+            snap = rows[0] if rows else None
+            theses = {}
         positions = []
         p = snap["payload"] if snap else {}
         for pos in p.get("positions", []):
             symbol = pos["symbol"]
             qty = Decimal(str(pos["qty"]))
             entry = pos.get("avg_entry")
-            bars = await self.db.recent_bars(symbol, "1m", limit=1)
+            bars = await self.db.recent_bars(symbol, "1m", limit=1) if day is None else []
             last = bars[0] if bars else None
             if last is not None:
                 price, price_at = float(last["close"]), last["ts"]
@@ -140,24 +166,34 @@ class StateReader:
                 }
             )
         return {
+            "day": day,
             "as_of": p.get("as_of"),
             "broker": p.get("broker"),
             "equity": num(p.get("equity")),
             "cash": num(p.get("cash")),
             "buying_power": num(p.get("buying_power")),
-            "gross_exposure": sum(x["market_value"] or 0 for x in positions),
+            "gross_exposure": sum(abs(x["market_value"] or 0) for x in positions),
             "positions": positions,
             "open_theses": [t.model_dump(mode="json") for t in theses.values()],
         }
 
     # ---- trades with their reasons ----
 
-    async def trades(self, limit: int = 50) -> list[dict]:
-        fills = await self._query(
-            f"SELECT {EVENT_COLS} FROM events WHERE type = %s AND occurred_at >= now() - interval '90 days' "
-            "ORDER BY occurred_at DESC LIMIT %s",
-            (Topics.ORDER_FILLED, limit * 3),
-        )
+    async def trades(self, limit: int = 50, day: str | None = None) -> list[dict]:
+        """The latest fills with their reasons, or every fill of one UTC day."""
+        if day is None:
+            fills = await self._query(
+                f"SELECT {EVENT_COLS} FROM events WHERE type = %s AND occurred_at >= now() - interval '90 days' "
+                "ORDER BY occurred_at DESC LIMIT %s",
+                (Topics.ORDER_FILLED, limit * 3),
+            )
+        else:
+            start, end = self._day_window(day)
+            fills = await self._query(
+                f"SELECT {EVENT_COLS} FROM events WHERE type = %s AND occurred_at >= %s AND occurred_at < %s "
+                "ORDER BY occurred_at DESC LIMIT %s",
+                (Topics.ORDER_FILLED, start, end, limit * 3),
+            )
         seen: set[str] = set()
         cards: list[dict] = []
         for fill in fills:
@@ -385,11 +421,19 @@ class StateReader:
 
     # ---- cycles ----
 
-    async def cycles(self, limit: int = 20) -> list[dict]:
-        rows = await self._query(
-            f"SELECT {EVENT_COLS} FROM events WHERE type = %s ORDER BY occurred_at DESC LIMIT %s",
-            (Topics.CYCLE_PLAN, limit),
-        )
+    async def cycles(self, limit: int = 20, day: str | None = None) -> list[dict]:
+        if day is None:
+            rows = await self._query(
+                f"SELECT {EVENT_COLS} FROM events WHERE type = %s ORDER BY occurred_at DESC LIMIT %s",
+                (Topics.CYCLE_PLAN, limit),
+            )
+        else:
+            start, end = self._day_window(day)
+            rows = await self._query(
+                f"SELECT {EVENT_COLS} FROM events WHERE type = %s AND occurred_at >= %s AND occurred_at < %s "
+                "ORDER BY occurred_at DESC LIMIT %s",
+                (Topics.CYCLE_PLAN, start, end, limit),
+            )
         out = []
         for r in rows:
             p = r["payload"]
@@ -417,11 +461,19 @@ class StateReader:
 
     # ---- activity feed ----
 
-    async def journal(self, limit: int = 100) -> list[dict]:
-        rows = await self._query(
-            f"SELECT {EVENT_COLS} FROM events WHERE type = ANY(%s) ORDER BY occurred_at DESC LIMIT %s",
-            (JOURNAL_TYPES, limit * 2),
-        )
+    async def journal(self, limit: int = 100, day: str | None = None) -> list[dict]:
+        if day is None:
+            rows = await self._query(
+                f"SELECT {EVENT_COLS} FROM events WHERE type = ANY(%s) ORDER BY occurred_at DESC LIMIT %s",
+                (JOURNAL_TYPES, limit * 2),
+            )
+        else:
+            start, end = self._day_window(day)
+            rows = await self._query(
+                f"SELECT {EVENT_COLS} FROM events WHERE type = ANY(%s) AND occurred_at >= %s AND occurred_at < %s "
+                "ORDER BY occurred_at DESC LIMIT %s",
+                (JOURNAL_TYPES, start, end, limit * 2),
+            )
         out = []
         for r in rows:
             if r["type"] == Topics.WATCHER_ALERT and r["payload"].get("kind") not in (

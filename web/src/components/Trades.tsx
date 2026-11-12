@@ -119,17 +119,17 @@ function Card({ t }: { t: Trade }) {
   );
 }
 
-export function Trades({ trades }: { trades: Trade[] | null }) {
+export function Trades({ trades, day = null }: { trades: Trade[] | null; day?: string | null }) {
   return (
     <section className="card">
       <header className="card-head">
-        <h2>Trades, with their reasons</h2>
-        <span className="muted">{trades ? `${trades.length} fills` : ""}</span>
+        <h2>{day ? `Trades on ${day}` : "Trades, with their reasons"}</h2>
+        <span className="muted">{trades ? `${trades.length} fill${trades.length === 1 ? "" : "s"}` : ""}</span>
       </header>
       {!trades ? (
         <p className="muted">loading…</p>
       ) : trades.length === 0 ? (
-        <p className="muted">No fills yet.</p>
+        <p className="muted">{day ? "No fill that day." : "No fills yet."}</p>
       ) : (
         <div className="trades">
           {trades.map((t) => (

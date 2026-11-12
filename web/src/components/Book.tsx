@@ -1,5 +1,5 @@
 import { Book as BookT, Position } from "../api";
-import { ago, money, pct, signed } from "../format";
+import { ago, money, pct, signed, timeUTC } from "../format";
 
 function Ladder({ p }: { p: Position }) {
   const t = p.thesis;
@@ -22,14 +22,17 @@ function Ladder({ p }: { p: Position }) {
   );
 }
 
-export function Book({ book, now }: { book: BookT | null; now: number }) {
+export function Book({ book, now, day = null }: { book: BookT | null; now: number; day?: string | null }) {
   if (!book) return <section className="card">loading the book…</section>;
   const pl = book.positions.reduce((s, p) => s + (p.unrealized_pl ?? 0), 0);
+  const past = day !== null;
   return (
     <section className="card">
       <header className="card-head">
-        <h2>The book</h2>
-        <span className="muted">broker snapshot {ago(book.as_of, now)}</span>
+        <h2>{past ? `The book on ${day}` : "The book"}</h2>
+        <span className="muted">
+          {past ? (book.as_of ? `last broker snapshot of the day, ${timeUTC(book.as_of)}` : "no broker snapshot that day") : `broker snapshot ${ago(book.as_of, now)}`}
+        </span>
       </header>
       <div className="stats">
         <div>
@@ -50,7 +53,7 @@ export function Book({ book, now }: { book: BookT | null; now: number }) {
         </div>
       </div>
       {book.positions.length === 0 ? (
-        <p className="muted">No open positions. The desk is in cash.</p>
+        <p className="muted">{past ? (book.as_of ? "No open position at the end of that day; the desk was in cash." : "The desk took no broker snapshot that day.") : "No open positions. The desk is in cash."}</p>
       ) : (
         <div className="table-wrap">
           <table className="positions">
@@ -69,7 +72,7 @@ export function Book({ book, now }: { book: BookT | null; now: number }) {
                 <tr key={p.symbol}>
                   <td>
                     <b>{p.symbol}</b>
-                    <div className="muted small">{p.price_at ? ago(p.price_at, now) : ""}</div>
+                    <div className="muted small">{p.price_at ? (past ? `at ${timeUTC(p.price_at)}` : ago(p.price_at, now)) : ""}</div>
                   </td>
                   <td className="num">{p.qty}</td>
                   <td className="num">{money(p.avg_entry)}</td>

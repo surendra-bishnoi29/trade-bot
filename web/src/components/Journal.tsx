@@ -21,15 +21,17 @@ const ICON: Record<string, string> = {
   "console.answer": "🗣️",
 };
 
-export function Journal({ items }: { items: JournalItem[] | null }) {
+export function Journal({ items, day = null }: { items: JournalItem[] | null; day?: string | null }) {
   return (
     <section className="card">
       <header className="card-head">
-        <h2>Activity</h2>
+        <h2>{day ? `Activity on ${day}` : "Activity"}</h2>
         <span className="muted">everything the desk did, newest first</span>
       </header>
       {!items ? (
         <p className="muted">loading…</p>
+      ) : items.length === 0 ? (
+        <p className="muted">{day ? "Nothing in the journal that day." : "Nothing yet."}</p>
       ) : (
         <ul className="journal">
           {items.map((j) => (

@@ -89,14 +89,20 @@ function One({ c }: { c: Cycle }) {
 
 const rank = (s: string) => (s === "blocking" ? 2 : s === "concern" ? 1 : 0);
 
-export function Cycles({ cycles }: { cycles: Cycle[] | null }) {
+export function Cycles({ cycles, day = null }: { cycles: Cycle[] | null; day?: string | null }) {
   return (
     <section className="card">
       <header className="card-head">
-        <h2>Decision cycles</h2>
+        <h2>{day ? `Decision cycles on ${day}` : "Decision cycles"}</h2>
         <span className="muted">plan, challenge, outcome</span>
       </header>
-      {!cycles ? <p className="muted">loading…</p> : cycles.length === 0 ? <p className="muted">No cycles yet.</p> : cycles.map((c) => <One key={c.cycle_id} c={c} />)}
+      {!cycles ? (
+        <p className="muted">loading…</p>
+      ) : cycles.length === 0 ? (
+        <p className="muted">{day ? "No decision cycle ran that day." : "No cycles yet."}</p>
+      ) : (
+        cycles.map((c) => <One key={c.cycle_id} c={c} />)
+      )}
     </section>
   );
 }

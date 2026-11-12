@@ -41,6 +41,10 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [results, setResults] = useState<CommandResult[]>([]);
   const [tab, setTab] = useState<Tab>("research");
+  // the desk screen shows now, or one past UTC day: its book at the close, its fills, cycles and activity
+  const [day, setDayState] = useState<string | null>(null);
+  const dayRef = useRef<string | null>(null);
+  const [days, setDays] = useState<string[]>([]);
   const [view, setViewState] = useState<View>(() => viewOf(window.location.pathname));
   const setView = useCallback((v: View) => {
     if (window.location.pathname !== PATHS[v]) window.history.pushState(null, "", PATHS[v]);
@@ -74,11 +78,13 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [state, t, j, c, chat, briefs, agents, notes, research, reviews, analystScores, weeklyReview, grad] = await Promise.all([
-        api.get<{ book: BookT; health: Health }>("/api/state"),
-        api.get<Trade[]>("/api/trades?limit=40"),
-        api.get<JournalItem[]>("/api/journal?limit=120"),
-        api.get<Cycle[]>("/api/cycles?limit=20"),
+      const d = dayRef.current;
+      const on = d ? `&day=${d}` : "";
+      const [state, t, j, c, chat, briefs, agents, notes, research, reviews, analystScores, weeklyReview, grad, ds] = await Promise.all([
+        api.get<{ book: BookT; health: Health }>(`/api/state?${d ? `day=${d}` : ""}`),
+        api.get<Trade[]>(`/api/trades?limit=${d ? 200 : 40}${on}`),
+        api.get<JournalItem[]>(`/api/journal?limit=${d ? 500 : 120}${on}`),
+        api.get<Cycle[]>(`/api/cycles?limit=${d ? 100 : 20}${on}`),
         api.get<ChatPair[]>("/api/chat/history?limit=20"),
         api.get<BriefT[]>("/api/brief?limit=1"),
         api.get<{ agent: string; last_type: string; last_at: string; last_text: string; events_10m: number }[]>("/api/agents"),
@@ -88,7 +94,10 @@ export default function App() {
         api.get<AnalystScores | null>("/api/reviews/analysts"),
         api.get<WeeklyReview | null>("/api/reviews/weekly"),
         api.get<Graduation>("/api/graduation"),
+        api.get<string[]>("/api/days"),
       ]);
+      if (dayRef.current !== d) return; // the day changed while this load was in flight
+      setDays(ds);
       setWeekly(weeklyReview);
       setGraduation(grad);
       setReports(research);
@@ -127,6 +136,19 @@ export default function App() {
     if (user) void loadAll();
   }, [user, loadAll]);
 
+  const setDay = useCallback(
+    (d: string | null) => {
+      dayRef.current = d;
+      setDayState(d);
+      setBook(null);
+      setTrades(null);
+      setJournal(null);
+      setCycles(null);
+      void loadAll();
+    },
+    [loadAll],
+  );
+
   const refreshSoon = useCallback(() => {
     if (refreshTimer.current) return;
     refreshTimer.current = window.setTimeout(() => {
@@ -157,6 +179,7 @@ export default function App() {
       }
       switch (m.type) {
         case "market.bar.1m":
+          if (dayRef.current) break; // a past day's book keeps the prices of its last snapshot
           setBook((b) => {
             if (!b || !m.symbol) return b;
             const positions = b.positions.map((pos) => {
@@ -307,6 +330,7 @@ export default function App() {
   }, []);
 
   const busy = messages.some((m) => m.streaming);
+  const today = new Date().toISOString().slice(0, 10);
 
   if (user === undefined) return <main className="login muted">loading…</main>;
   if (user === null) return <Login onLogin={setUser} />;
@@ -383,6 +407,24 @@ export default function App() {
           <h1>Trading Desk</h1>
           <span className="muted">paper account · US equities · autonomous</span>
         </div>
+        <label className="day-pick" title="Show the book at the close, the fills, the decision cycles and the activity of one past day (UTC)">
+          <span>Day (UTC)</span>
+          <select value={day ?? ""} onChange={(e) => setDay(e.target.value || null)}>
+            <option value="">today, live</option>
+            {days
+              .filter((d) => d !== today)
+              .map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+          </select>
+          {day && (
+            <button type="button" className="link" onClick={() => setDay(null)}>
+              back to live
+            </button>
+          )}
+        </label>
         <HealthStrip health={health} socket={socket} now={now} />
         <div className="who">
           {user.name} <span className="muted">({user.role})</span>
@@ -403,15 +445,21 @@ export default function App() {
           The bot is not running. Prices, questions and controls resume when it is back; the interface keeps showing the journal.
         </div>
       )}
+      {day && (
+        <div className="banner day">
+          Showing <b>{day}</b> (UTC): the book as the last broker snapshot of that day saw it, and every fill, decision cycle and activity line of that day. The agents, chat and
+          controls stay live.
+        </div>
+      )}
       <main className="grid">
         <div className="wide">
           <Agents team={team} now={now} botAlive={!!health?.bot.alive} />
         </div>
         <div className="col">
-          <Book book={book} now={now} />
+          <Book book={book} now={now} day={day} />
           <MorningNote note={note} />
           <Brief brief={brief} user={user} onSent={(id) => setResults((rs) => [{ request_id: id, command: "brief", ok: null, text: null }, ...rs])} />
-          <Trades trades={trades} />
+          <Trades trades={trades} day={day} />
         </div>
         <div className="col">
           <Chat messages={messages} onAsk={ask} busy={busy} />
@@ -435,9 +483,9 @@ export default function App() {
           {tab === "research" ? (
             <Research reports={reports} now={now} />
           ) : tab === "activity" ? (
-            <Journal items={journal} />
+            <Journal items={journal} day={day} />
           ) : tab === "cycles" ? (
-            <Cycles cycles={cycles} />
+            <Cycles cycles={cycles} day={day} />
           ) : (
             <Reviews postmortems={postmortems} scores={scores} weekly={weekly} graduation={graduation} />
           )}

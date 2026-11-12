@@ -158,6 +158,21 @@ async def seed(db: Database, clock: SimClock) -> None:
     )
     await db.insert_event(
         make_event(
+            clock,  # the same snapshot as the day saw it, for the past-day screen
+            type=Topics.PORTFOLIO_RECONCILED,
+            payload={
+                "equity": "100000",
+                "cash": "98191",
+                "buying_power": "390000",
+                "positions": [
+                    {"symbol": "CVX", "qty": "8", "avg_entry": "226.06", "market_value": "1794"}
+                ],
+                "as_of": T0.isoformat(),
+            },
+        )
+    )
+    await db.insert_event(
+        make_event(
             SimClock(datetime.now(UTC)),  # the book is only trusted when the snapshot is recent
             type=Topics.PORTFOLIO_RECONCILED,
             payload={
@@ -256,6 +271,27 @@ def test_state_trades_journal_and_cycles(api):
     assert cycles[0]["trigger"] == "cli" and cycles[0]["decisions"][0]["symbol"] == "CVX"
     bars = client.get("/api/bars?symbol=CVX&interval=1d&n=5").json()
     assert isinstance(bars, list)
+
+
+def test_the_desk_screen_can_show_a_past_day(api):
+    client, _, _ = api
+    login(client, "client", "viewer-pass!")
+    day = T0.date().isoformat()
+    assert day in client.get("/api/days").json()
+
+    state = client.get(f"/api/state?day={day}").json()
+    assert state["book"]["day"] == day and state["book"]["equity"] == 100000
+    assert any(p["symbol"] == "CVX" for p in state["book"]["positions"])
+    assert [t["symbol"] for t in client.get(f"/api/trades?day={day}").json()] == ["CVX"]
+    assert client.get(f"/api/cycles?day={day}").json()[0]["trigger"] == "cli"
+    journal = client.get(f"/api/journal?day={day}").json()
+    assert any(j["type"] == Topics.ORDER_FILLED for j in journal)
+
+    before = (T0 - timedelta(days=1)).date().isoformat()
+    assert client.get(f"/api/trades?day={before}").json() == []
+    assert client.get(f"/api/cycles?day={before}").json() == []
+    assert client.get(f"/api/state?day={before}").json()["book"]["positions"] == []
+    assert client.get("/api/trades?day=yesterday").status_code == 400
 
 
 def test_commands_are_relayed_to_the_bus_with_roles(api):

@@ -33,6 +33,7 @@ export interface Position {
 }
 
 export interface Book {
+  day: string | null;
   as_of: string | null;
   broker: string | null;
   equity: number | null;
