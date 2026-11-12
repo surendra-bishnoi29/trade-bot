@@ -853,10 +853,17 @@ def _line_rows(events: list[Event]) -> list[dict[str, Any]]:
     ]
 
 
-async def trades(db: Database, now: datetime, days: int = 7) -> list[dict[str, Any]]:
-    """Every position the lines engine has held in the last `days`, newest first: when it opened,
-    when and how it closed, and what it returned. The list behind the charts."""
-    since = now - timedelta(days=days)
+async def trades(
+    db: Database, now: datetime, days: int = 7, day: str | None = None
+) -> list[dict[str, Any]]:
+    """Every position the lines engine has held in the last `days`, or every position opened on
+    one UTC `day`, newest first: when it opened, when and how it closed, and what it returned.
+    The list behind the charts."""
+    if day is None:
+        since, opened_before = now - timedelta(days=days), now
+    else:
+        since = datetime.combine(date.fromisoformat(day), datetime.min.time(), tzinfo=UTC)
+        opened_before = since + timedelta(days=1)
     lines = await db.recent_events([Topics.LINES_UPDATED], since, limit=8000, until=now)
     scores = await db.recent_events([Topics.PREDICTION_SCORE], since, limit=4000, until=now)
     score_of = {str(s.payload.get("call_id")): s for s in reversed(scores)}
@@ -866,6 +873,10 @@ async def trades(db: Database, now: datetime, days: int = 7) -> list[dict[str, A
     out = []
     for cid, evs in by_call.items():
         first, last = evs[0], evs[-1]
+        if day is not None and (
+            first.payload.get("event") != "opened" or first.occurred_at >= opened_before
+        ):
+            continue  # opened before the day (its opening lies outside the window) or after it
         symbol = str(first.symbol or first.payload.get("symbol"))
         s = score_of.get(cid)
         closed = last.payload.get("event") == "exit"

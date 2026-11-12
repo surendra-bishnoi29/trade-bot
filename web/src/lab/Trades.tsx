@@ -21,8 +21,8 @@ function Result({ t }: { t: TradeRow }) {
 }
 
 /** Every position the lines engine has held: pick one and replay it minute by minute. */
-export function TradesPane({ picked, onPick, filter }: { picked: string | null; onPick: (id: string | null) => void; filter: TileKey | null }) {
-  const { trades, error } = useTrades(7);
+export function TradesPane({ picked, onPick, filter, day = null }: { picked: string | null; onPick: (id: string | null) => void; filter: TileKey | null; day?: string | null }) {
+  const { trades, error } = useTrades(7, day);
   const rows = trades.filter((t) => filter === null || t.tile === filter);
   const current = picked && rows.some((t) => t.call_id === picked) ? picked : rows[0]?.call_id ?? null;
   const { chart, error: chartError } = useTrade(current);
@@ -31,11 +31,16 @@ export function TradesPane({ picked, onPick, filter }: { picked: string | null; 
     <div className="pl-trades">
       <section className="pl-col list" aria-label="Positions">
         <header className="col-head">
-          <h2>Positions, last 7 days</h2>
-          <span className="mute">{rows.filter((t) => t.open).length} open</span>
+          <h2>{day ? `Positions, ${day}` : "Positions, last 7 days"}</h2>
+          <span className="mute">
+            {rows.length} position{rows.length === 1 ? "" : "s"}
+            {rows.some((t) => t.open) ? ` · ${rows.filter((t) => t.open).length} open` : ""}
+          </span>
         </header>
         {error && <div className="calls-empty">not updating: {error}</div>}
-        {!rows.length && !error && <div className="calls-empty">No position yet. The first one appears here when a call clears the bar and fills.</div>}
+        {!rows.length && !error && (
+          <div className="calls-empty">{day ? "No position was opened that day." : "No position yet. The first one appears here when a call clears the bar and fills."}</div>
+        )}
         <ul className="calls" aria-label="Positions, newest first">
           {rows.map((t) => (
             <li key={t.call_id}>

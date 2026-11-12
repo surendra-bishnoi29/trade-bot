@@ -312,9 +312,12 @@ def create_app(
 
     @app.get("/api/lab/trades")
     async def lab_trades(
-        request: Request, days: int = 7, user: User = Depends(current_user)
+        request: Request,
+        days: int = 7,
+        day: str | None = None,
+        user: User = Depends(current_user),
     ) -> dict:
-        return await reader(request).lab_trades(max(1, min(days, 60)))
+        return await reader(request).lab_trades(max(1, min(days, 60)), day_of(day))
 
     @app.get("/api/lab/trade/{call_id}")
     async def lab_trade(request: Request, call_id: str, user: User = Depends(current_user)) -> dict:

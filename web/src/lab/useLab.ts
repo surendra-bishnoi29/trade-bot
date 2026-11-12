@@ -69,15 +69,16 @@ export function useDays(): string[] {
   return days;
 }
 
-/** The positions of the last `days`, refreshed every half minute. */
-export function useTrades(days = 7): { trades: TradeRow[]; error: string | null } {
+/** The positions of the last `days`, or those opened on one UTC `day`, refreshed every half minute. */
+export function useTrades(days = 7, day: string | null = null): { trades: TradeRow[]; error: string | null } {
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let stop = false;
+    setTrades([]);
     const load = async () => {
       try {
-        const next = await api.get<{ lab: boolean; trades: TradeRow[] }>(`/api/lab/trades?days=${days}`);
+        const next = await api.get<{ lab: boolean; trades: TradeRow[] }>(day ? `/api/lab/trades?day=${day}` : `/api/lab/trades?days=${days}`);
         if (!stop) {
           setTrades(next.trades);
           setError(null);
@@ -92,7 +93,7 @@ export function useTrades(days = 7): { trades: TradeRow[]; error: string | null 
       stop = true;
       window.clearInterval(id);
     };
-  }, [days]);
+  }, [days, day]);
   return { trades, error };
 }
 

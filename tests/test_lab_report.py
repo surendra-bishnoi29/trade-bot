@@ -536,6 +536,11 @@ async def test_a_position_can_be_replayed_bar_by_bar_with_every_move_of_its_line
         "+00:00"
     )
     assert rows[0]["open"] and rows[0]["reason"] == "open" and rows[0]["steps"] == 0
+    # one day's positions: those opened on it, none from the day before or after
+    today = T0.date().isoformat()
+    assert [r["call_id"] for r in await trades(db, now, day=today)] == ["c2", "c1"]  # type: ignore[arg-type]
+    before = (T0 - timedelta(days=1)).date().isoformat()
+    assert await trades(db, now, day=before) == []  # type: ignore[arg-type]
 
     c = await trade_chart(db, "c1", now)  # type: ignore[arg-type]
     assert c is not None and c["symbol"] == "KO" and c["open"] is False

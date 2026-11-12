@@ -751,12 +751,12 @@ class StateReader:
         chosen = date.fromisoformat(day) if day else now.date()
         return {"lab": True, **await report(self.db, self._markets(), chosen, now)}
 
-    async def lab_trades(self, days: int = 7) -> dict:
+    async def lab_trades(self, days: int = 7, day: str | None = None) -> dict:
         if self.traded is None:
             return {"lab": False, "trades": []}
         from desk.lab.report import trades
 
-        return {"lab": True, "trades": await trades(self.db, datetime.now(UTC), days)}
+        return {"lab": True, "trades": await trades(self.db, datetime.now(UTC), days, day)}
 
     async def lab_trade(self, call_id: str) -> dict | None:
         if self.traded is None:
